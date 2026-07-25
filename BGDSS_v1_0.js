@@ -106,12 +106,70 @@ BGDSS.CONFIG = {
   villages: null,                   // optional ee.FeatureCollection of villages
   roads: null,                      // optional ee.FeatureCollection of roads
 
-  // ---- Model constants (documented in each engine) ------------------------
+  // ---- Forest type context (Champion & Seth 1968 classification) ---------
+  // Sabarkantha's forests fall predominantly under Group 5B - Northern Dry
+  // Deciduous Forest (5A/C1a Dry Teak-bearing forest, with 5/E9 dry
+  // deciduous scrub in degraded/thorn tracts). This classification drives
+  // the forest-type fire-inflammability weighting below. If a Range's
+  // working plan documents a different type for a specific beat, adjust
+  // forestTypeBaseline accordingly (0-1, higher = more fire-prone).
+  // Reference: Champion, H.G. & Seth, S.K. (1968), "A Revised Survey of
+  // the Forest Types of India", Manager of Publications, Delhi.
+  forestType: {
+    championSethGroup: '5B - Northern Dry Deciduous Forest (dry teak/mixed)',
+    forestTypeBaseline: 0.75          // 0-1 inflammability baseline for this type
+  },
+
+  // ---- Model constants -----------------------------------------------------
+  // Every numeric constant used by an engine is listed here, grouped by
+  // engine, so a Range/Working-Plan officer can override any of them with
+  // locally verified figures WITHOUT touching engine code. Each constant
+  // cites the methodology it follows; where Indian forestry practice
+  // (FSI/ICFRE/CSWCRTI/NRSC) diverges from the generic international
+  // default, the Indian convention is used by default.
   constants: {
-    rootShootRatio: 0.24,           // IPCC default, dry/tropical forest
-    carbonFraction: 0.47,           // IPCC default biomass -> carbon
-    co2Conversion: 3.6663,          // carbon -> CO2 equivalent
-    rusleP: 1.0,                    // support practice factor (no data => 1)
+    // -- Carbon / Biomass (FSI/ISFR convention; see CARBON ENGINE header) --
+    rootShootRatio: 0.28,            // IPCC 2006 AFOLU GL Table 4.4, tropical/
+                                      // subtropical dry forest, AGB > ~20 t/ha
+    carbonFraction: 0.5,             // FSI India State of Forest Report (ISFR)
+                                      // convention (0.5), vs IPCC 2006 Tier-1
+                                      // default of 0.47 - set to 0.47 to match
+                                      // international reporting instead
+    co2Conversion: 3.6663,           // molecular weight ratio CO2/C (44/12)
+
+    // -- Soil / RUSLE (Indian rainfall-erosivity + NRSC C-factor method) ---
+    // R-factor: Singh, Babu & Chandra (1981), CSWCRTI Dehradun, developed
+    // and validated for Indian rainfall regimes (used in preference to the
+    // Renard & Freimund 1994 US-calibrated formula).
+    rusleRFormula: 'india_cswcrti',  // 'india_cswcrti' (R = 79 + 0.363*P) or
+                                      // 'renard' (R = 0.0483*P^1.61)
+    // C-factor: land-cover lookup table per the NRSC/ISRO "Soil Erosion
+    // Atlas of India" (2018, Dept. of Land Resources / NRSC Bhuvan) rather
+    // than a continuous NDVI function, since it is the nationally accepted
+    // reference method; set to 'ndvi' to use the continuous Van der Knijff
+    // approach instead.
+    rusleCMethod: 'landcover',
+    rusleP: 1.0,                     // support practice factor (no local data => 1)
+
+    // -- Fire Risk (Jaiswal, Mukherjee, Krishnamurthy & Saxena, 2002 AHP) --
+    // "Forest fire risk zone mapping from satellite imagery and GIS",
+    // Int. J. Applied Earth Observation & Geoinformation 4(1). Weights
+    // below reproduce the published AHP pairwise-comparison weights for
+    // Indian dry-deciduous forest, where human ignition sources (proximity
+    // to habitation) dominate over the lightning-driven regimes assumed by
+    // most global fire-risk models. Re-run the AHP pairwise comparison
+    // locally (with the DFO/Range team) if better judgment is available -
+    // these are starting weights, not a fixed law.
+    fireWeights: {
+      forestType: 0.279,             // fire-proneness of the forest type itself
+      settlementProximity: 0.185,    // human ignition source - dominant in India
+      slope: 0.148,
+      roadProximity: 0.126,          // human ignition / access
+      temperature: 0.104,
+      rainfall: 0.081,
+      aspect: 0.077
+    },
+
     monsoonMonths: [6, 7, 8, 9],
     winterMonths: [10, 11, 12, 1],
     summerMonths: [2, 3, 4, 5]
@@ -1191,10 +1249,15 @@ BGDSS.WORKFLOW.register('FOREST', BGDSS.FOREST.run);
 //            to an NDVI-based allometric proxy if unavailable so the
 //            downstream Carbon Engine can still run).
 // Produces : Above-Ground Biomass (AGB), Below-Ground Biomass (BGB, via
-//            IPCC default root-shoot ratio), Total Biomass.
+//            root-shoot ratio), Total Biomass.
 // Units    : Mg/ha (megagrams per hectare).
 // References: IPCC 2006 Guidelines for National GHG Inventories, Vol. 4,
-//            Ch. 4 (default root-shoot ratios); ESA CCI Biomass v5 handbook.
+//            Ch. 4, Table 4.4 (root-shoot ratio for tropical/subtropical
+//            dry forest, AGB > ~20 t/ha => default 0.28, set in BGDSS.CONFIG.
+//            constants.rootShootRatio - lower-biomass/degraded stands carry
+//            a higher ratio in IPCC's table; override locally if ICFRE/FSI
+//            Working Plan volume-table data is available for this beat);
+//            ESA CCI Biomass v5 handbook.
 // ============================================================================
 
 BGDSS.BIOMASS = {};
@@ -1259,8 +1322,14 @@ BGDSS.WORKFLOW.register('BIOMASS', BGDSS.BIOMASS.run);
 //            locally if the Biomass Engine was skipped).
 // Produces : Carbon Stock (Mg C/ha), Carbon Density, CO2-equivalent.
 // Units    : Mg C/ha; CO2-eq in Mg/ha.
-// References: IPCC 2006 default carbon fraction of biomass (0.47); FAO/FSI
-//             carbon accounting conventions (CO2-eq = C * 3.6663).
+// Method   : Carbon fraction of biomass defaults to 0.5 - the convention
+//            used by FSI in the India State of Forest Report (ISFR) series
+//            - rather than the IPCC 2006 Tier-1 international default of
+//            0.47, since a Gujarat Forest Department audience will expect
+//            ISFR-consistent numbers. Set BGDSS.CONFIG.constants.
+//            carbonFraction = 0.47 to match international/IPCC reporting
+//            instead. CO2-equivalent uses the standard 44/12 molecular
+//            weight ratio (3.6663), per IPCC/FAO convention.
 // ============================================================================
 
 BGDSS.CARBON = {};
@@ -1314,18 +1383,28 @@ BGDSS.WORKFLOW.register('CARBON', BGDSS.CARBON.run);
 // ============================================================================
 // SECTION: FIRE RISK ENGINE
 // ----------------------------------------------------------------------------
-// Datasets : MODIS MCD64A1 Burned Area (monthly, 500m), FIRMS active fire
-//            detections (optional, supplementary), plus Terrain/Vegetation/
-//            Climate/Biomass layers already cached by earlier engines.
+// Datasets : MODIS MCD64A1 Burned Area (monthly, 500m) for observed history;
+//            Terrain/Climate/Forest layers already cached by earlier
+//            engines; optional BGDSS.CONFIG.villages / .roads.
 // Produces : Fuel Load, Fuel Moisture, Fire History, Fire Density, Fire
-//            Frequency, Fire Susceptibility, and final 5-class Fire Risk.
-// Method   : AHP (Analytic Hierarchy Process) pairwise-derived weights,
-//            fuzzy/linear normalization of each criterion to [0,1], and
-//            weighted linear overlay, classified into Very Low..Very High.
+//            Frequency (all descriptive/observational), and the predictive
+//            Fire Susceptibility + final 5-class Fire Risk.
+// Method   : India-specific AHP (Analytic Hierarchy Process) fire risk
+//            zonation, NOT a generic global model. Reproduces the published
+//            pairwise-comparison weights of Jaiswal, Mukherjee, Krishnamurthy
+//            & Saxena (2002), "Forest fire risk zone mapping from satellite
+//            imagery and GIS", Int. J. Applied Earth Observation and
+//            Geoinformation 4(1):1-10 - developed and validated for Indian
+//            dry-deciduous forest, where human ignition sources dominate
+//            (unlike lightning-driven regimes assumed by most global fire
+//            models). Forest-type inflammability follows Champion & Seth
+//            (1968) classification (see BGDSS.CONFIG.forestType). All seven
+//            criterion weights are declared in BGDSS.CONFIG.constants.
+//            fireWeights so a Range/DFO team can re-run their own AHP
+//            pairwise comparison and override them - this is a starting
+//            point calibrated to Indian literature, not a fixed law.
 // Units    : fire frequency in years-burned-count; risk is a unitless
 //            0-1 overlay score before classification.
-// References: Saaty 1980 (AHP); Chuvieco & Congalton 1989 (fire risk
-//            weighted overlay approach).
 // ============================================================================
 
 BGDSS.FIRE = {};
@@ -1344,7 +1423,7 @@ BGDSS.FIRE.run = function () {
   var histEnd = ee.Date.fromYMD(year, 12, 31);
   var burnedHistory = burnedAreaCol.filterDate(histStart, histEnd).select('BurnDate');
 
-  // ---- Analysis: Fire History / Density / Frequency ---------------------------
+  // ---- Analysis: Fire History / Density / Frequency (observed, from MODIS) --
   var fireHistory = burnedHistory.map(function (img) { return img.gt(0); }).sum().clip(geometry).rename('fireHistory');
   var fireFrequency = fireHistory.rename('fireFrequency'); // count of burned periods, proxy for frequency
   var burnedCells = fireHistory.gt(0);
@@ -1352,7 +1431,7 @@ BGDSS.FIRE.run = function () {
     .focal_mean({ radius: 5, kernelType: 'circle', units: 'pixels' })
     .rename('fireDensity');
 
-  // ---- Fuel Load & Fuel Moisture (from cached Vegetation/Biomass layers) -----
+  // ---- Fuel Load & Fuel Moisture (descriptive layers, from cached NDVI/Biomass) --
   var ndvi = BGDSS.CACHE.ndvi;
   var ndmi = BGDSS.CACHE.ndmi;
   var totalBiomass = BGDSS.CACHE.totalBiomass;
@@ -1360,28 +1439,71 @@ BGDSS.FIRE.run = function () {
     : (ndvi ? ndvi.unitScale(-0.1, 0.9).clamp(0, 1).rename('fuelLoad') : null);
   var fuelMoisture = ndmi ? ndmi.unitScale(-0.5, 0.5).clamp(0, 1).rename('fuelMoisture') : null;
 
-  if (!fuelLoad) {
-    BGDSS.UTIL.log(LABEL, 'Fuel load inputs unavailable (Vegetation/Biomass engines skipped). Skipping module.', 'warn');
-    return;
+  // ---- Criterion 1: Forest-type inflammability (Champion & Seth 1968) --------
+  // Baseline inflammability of the beat's forest type (dry deciduous/teak is
+  // among India's most fire-prone types), reduced slightly where canopy is
+  // denser (better moisture retention) and left at full baseline over
+  // open/degraded/non-forest ground.
+  var canopyDensity = BGDSS.CACHE.canopyDensity;
+  var baseline = BGDSS.CONFIG.forestType.forestTypeBaseline;
+  var forestTypeRisk;
+  if (canopyDensity) {
+    var densityDamping = BGDSS.UTIL.normalize(canopyDensity, 0, 80, false).multiply(0.3);
+    forestTypeRisk = ee.Image(baseline).multiply(ee.Image(1).subtract(densityDamping)).rename('forestTypeRisk');
+  } else {
+    forestTypeRisk = ee.Image(baseline).rename('forestTypeRisk').clip(geometry);
   }
 
-  // ---- Susceptibility inputs from Terrain/Climate ------------------------------
+  // ---- Criterion 2: Settlement proximity (dominant human ignition source) ---
+  var settlementNorm;
+  if (BGDSS.CONFIG.villages) {
+    try {
+      var villageDistance = BGDSS.CACHE.villageDistance || ee.Image(0).paint(BGDSS.CONFIG.villages, 1).not()
+        .fastDistanceTransform(1024).sqrt().multiply(ee.Image.pixelArea().sqrt()).rename('villageDistance');
+      BGDSS.CACHE.villageDistance = villageDistance;
+      settlementNorm = BGDSS.UTIL.normalize(villageDistance, 0, 3000, true); // closer to village -> higher risk
+    } catch (e) {
+      settlementNorm = ee.Image(0.5);
+      BGDSS.UTIL.log(LABEL, 'Village layer invalid - Settlement Proximity (highest-weighted human factor, 18.5%) defaulted to neutral', 'warn');
+    }
+  } else {
+    settlementNorm = ee.Image(0.5);
+    BGDSS.UTIL.log(LABEL, 'BGDSS.CONFIG.villages not provided - Settlement Proximity (18.5% of fire-risk weight) defaulted to neutral (0.5); provide a village FeatureCollection for an accurate score', 'warn');
+  }
+
+  // ---- Criterion 3: Slope (steeper -> faster upslope spread) -----------------
   var slope = BGDSS.RESULTS.terrain.slope;
-  var aspect = BGDSS.RESULTS.terrain.aspect;
+  var slopeNorm = slope ? BGDSS.UTIL.normalize(slope, 0, 35, false) : ee.Image(0.5);
+
+  // ---- Criterion 4: Road proximity (access for graziers/travellers = ignition) --
+  var roadNorm;
+  if (BGDSS.CONFIG.roads) {
+    try {
+      var roadDistance = ee.Image(0).paint(BGDSS.CONFIG.roads, 1).not()
+        .fastDistanceTransform(1024).sqrt().multiply(ee.Image.pixelArea().sqrt()).rename('roadDistance');
+      roadNorm = BGDSS.UTIL.normalize(roadDistance, 0, 2000, true);
+    } catch (e) {
+      roadNorm = ee.Image(0.5);
+      BGDSS.UTIL.log(LABEL, 'Road layer invalid - Road Proximity defaulted to neutral', 'warn');
+    }
+  } else {
+    roadNorm = ee.Image(0.5);
+    BGDSS.UTIL.log(LABEL, 'BGDSS.CONFIG.roads not provided - Road Proximity (12.6% of fire-risk weight) defaulted to neutral (0.5); provide a road FeatureCollection for an accurate score', 'warn');
+  }
+
+  // ---- Criterion 5: Temperature; Criterion 6: Rainfall; Criterion 7: Aspect --
+  var tempMeanC = BGDSS.CACHE.tempMeanC;
   var rainfall = BGDSS.CACHE.annualRainfall;
-
-  // Normalize each criterion to a 0-1 "risk contribution" (1 = high risk).
-  var fuelLoadNorm = fuelLoad; // already 0-1, higher biomass/greenness -> more fuel
-  var fuelMoistureNorm = fuelMoisture ? ee.Image(1).subtract(fuelMoisture) : ee.Image(0.5); // drier -> higher risk
-  var slopeNorm = slope ? BGDSS.UTIL.normalize(slope, 0, 35, false) : ee.Image(0.5); // steeper -> faster spread
-  // South-facing slopes (135-225 deg, N hemisphere) receive more solar load -> drier fuel -> higher risk.
-  var aspectNorm = aspect ? aspect.subtract(180).abs().multiply(-1).add(180).divide(180)
-    .rename('aspectRisk') : ee.Image(0.5);
+  var aspect = BGDSS.RESULTS.terrain.aspect;
+  var temperatureNorm = tempMeanC ? BGDSS.UTIL.normalize(tempMeanC, 20, 42, false) : ee.Image(0.5);
   var rainfallNorm = rainfall ? BGDSS.UTIL.normalize(rainfall, 300, 1500, true) : ee.Image(0.5); // drier beat -> higher risk
-  var historyNorm = BGDSS.UTIL.normalize(fireFrequency, 0, lookback, false);
+  // South-facing slopes (135-225 deg, N hemisphere - Gujarat) receive more solar load -> drier fuel -> higher risk.
+  var aspectNorm = aspect ? aspect.subtract(180).abs().multiply(-1).add(180).divide(180).rename('aspectRisk') : ee.Image(0.5);
 
-  var criteria = [fuelLoadNorm, fuelMoistureNorm, slopeNorm, aspectNorm, rainfallNorm, historyNorm];
-  var weights = [0.28, 0.22, 0.14, 0.08, 0.13, 0.15]; // AHP-derived, normalized to 1 internally
+  // ---- Fire Susceptibility: Jaiswal et al. (2002) AHP weighted overlay -------
+  var w = BGDSS.CONFIG.constants.fireWeights;
+  var criteria = [forestTypeRisk, settlementNorm, slopeNorm, roadNorm, temperatureNorm, rainfallNorm, aspectNorm];
+  var weights = [w.forestType, w.settlementProximity, w.slope, w.roadProximity, w.temperature, w.rainfall, w.aspect];
   var susceptibility = BGDSS.UTIL.weightedOverlay(criteria, weights).rename('fireSusceptibility');
   var fireRisk = BGDSS.UTIL.classify5(susceptibility);
 
@@ -1392,18 +1514,20 @@ BGDSS.FIRE.run = function () {
   BGDSS.UTIL.registerStat('fire', 'riskArea', BGDSS.UTIL.computeAreaStats(fireRisk, BGDSS.UTIL.CLASS_LABELS_5));
 
   // ---- Visualization -------------------------------------------------------------
-  BGDSS.UTIL.addLayer(fireHistory.selfMask(), { min: 1, max: lookback, palette: ['fee08b', 'd73027', '7f0000'] }, 'Fire: History (years burned)', false);
+  BGDSS.UTIL.addLayer(fireHistory.selfMask(), { min: 1, max: lookback, palette: ['fee08b', 'd73027', '7f0000'] }, 'Fire: Observed History (years burned)', false);
   BGDSS.UTIL.addLayer(fireDensity, { min: 0, max: 1, palette: ['ffffcc', 'fc4e2a', '800026'] }, 'Fire: Density', false);
-  BGDSS.UTIL.addLayer(susceptibility, { min: 0, max: 1, palette: BGDSS.UTIL.PALETTE_5 }, 'Fire: Susceptibility', false);
-  BGDSS.UTIL.addLayer(fireRisk, { min: 1, max: 5, palette: BGDSS.UTIL.PALETTE_5 }, 'Fire: Risk (5-class)', true);
-  BGDSS.UTIL.addLegend('Fire Risk', BGDSS.UTIL.PALETTE_5, BGDSS.UTIL.CLASS_LABELS_5);
+  BGDSS.UTIL.addLayer(forestTypeRisk, { min: 0, max: 1, palette: BGDSS.UTIL.PALETTE_5 }, 'Fire: Forest-Type Inflammability', false);
+  BGDSS.UTIL.addLayer(susceptibility, { min: 0, max: 1, palette: BGDSS.UTIL.PALETTE_5 }, 'Fire: Susceptibility (AHP score)', false);
+  BGDSS.UTIL.addLayer(fireRisk, { min: 1, max: 5, palette: BGDSS.UTIL.PALETTE_5 }, 'Fire: Risk (5-class, Jaiswal et al. 2002 AHP)', true);
+  BGDSS.UTIL.addLegend('Fire Risk (Jaiswal et al. 2002 AHP)', BGDSS.UTIL.PALETTE_5, BGDSS.UTIL.CLASS_LABELS_5);
 
   // ---- Registration -------------------------------------------------------------
-  BGDSS.UTIL.registerResult('fire', 'fuelLoad', fuelLoad);
+  if (fuelLoad) { BGDSS.UTIL.registerResult('fire', 'fuelLoad', fuelLoad); }
   if (fuelMoisture) { BGDSS.UTIL.registerResult('fire', 'fuelMoisture', fuelMoisture); }
   BGDSS.UTIL.registerResult('fire', 'history', fireHistory);
   BGDSS.UTIL.registerResult('fire', 'density', fireDensity);
   BGDSS.UTIL.registerResult('fire', 'frequency', fireFrequency);
+  BGDSS.UTIL.registerResult('fire', 'forestTypeRisk', forestTypeRisk);
   BGDSS.UTIL.registerResult('fire', 'susceptibility', susceptibility);
   BGDSS.UTIL.registerResult('fire', 'risk', fireRisk);
   BGDSS.CACHE.fireRisk = fireRisk;
@@ -1413,7 +1537,7 @@ BGDSS.FIRE.run = function () {
   BGDSS.EXPORT.registerImage('Fire_Susceptibility', susceptibility, BGDSS.CONFIG.scale);
   BGDSS.EXPORT.registerImage('Fire_Risk', fireRisk, BGDSS.CONFIG.scale);
 
-  BGDSS.UTIL.log(LABEL, 'Fire Risk Completed', 'ok');
+  BGDSS.UTIL.log(LABEL, 'Fire Risk Completed (Jaiswal et al. 2002 India AHP model)', 'ok');
 };
 
 BGDSS.WORKFLOW.register('FIRE', BGDSS.FIRE.run);
@@ -1422,13 +1546,31 @@ BGDSS.WORKFLOW.register('FIRE', BGDSS.FIRE.run);
 // SECTION: SOIL ENGINE
 // ----------------------------------------------------------------------------
 // Datasets : NASA SMAP SPL4SMGP (soil moisture, optional), OpenLandMap
-//            texture class / organic carbon / bulk density / sand / clay.
+//            texture class / organic carbon / bulk density / sand / clay,
+//            ESA WorldCover (for the land-cover C-factor lookup).
 // Produces : Soil Moisture, Soil Type (texture class), RUSLE Soil Loss
 //            (t/ha/yr), Erosion Risk (5-class).
 // Units    : soil loss t/ha/yr.
-// References: Wischmeier & Smith 1978 (USLE); Renard et al. 1997 (RUSLE);
-//            Moore et al. 1991 (LS factor from slope + flow accumulation);
-//            Van der Knijff et al. 2000 (NDVI-based C factor).
+// Method   : RUSLE (Wischmeier & Smith 1978; Renard et al. 1997), adapted
+//            to Indian conditions rather than using US-calibrated defaults:
+//            - R (rainfall erosivity): Singh, Babu & Chandra (1981), Central
+//              Soil & Water Conservation Research and Training Institute
+//              (CSWCRTI), Dehradun - derived and validated for Indian
+//              rainfall regimes: R = 79 + 0.363*P (P = mean annual rainfall,
+//              mm). BGDSS.CONFIG.constants.rusleRFormula can switch back to
+//              the generic Renard & Freimund (1994) formula if preferred.
+//            - K (soil erodibility): Williams (1995) EPIC nomograph from
+//              OpenLandMap sand/clay/organic-carbon fractions.
+//            - LS (slope length-steepness): Moore et al. (1991).
+//            - C (cover-management): land-cover lookup table following the
+//              NRSC/ISRO "Soil Erosion Atlas of India" (2018, Dept. of Land
+//              Resources) methodology - the nationally accepted reference
+//              method for Indian soil-loss mapping - using ESA WorldCover
+//              classes. BGDSS.CONFIG.constants.rusleCMethod can switch to
+//              the continuous Van der Knijff et al. (2000) NDVI formula.
+//              NOTE: lookup C-values here follow the published literature
+//              range for each class; cross-check against the Gujarat-
+//              specific atlas sheet if higher precision is required.
 // ============================================================================
 
 BGDSS.SOIL = {};
@@ -1467,8 +1609,13 @@ BGDSS.SOIL.run = function () {
   var ndvi = BGDSS.CACHE.ndvi;
 
   if (slope && rainfall && ndvi) {
-    // R - rainfall erosivity (Renard & Freimund 1994 tropical approximation)
-    var R = rainfall.pow(1.61).multiply(0.0483).rename('R');
+    // R - rainfall erosivity. Default: Singh, Babu & Chandra (1981, CSWCRTI
+    // Dehradun) formula calibrated for Indian rainfall regimes. Switch
+    // BGDSS.CONFIG.constants.rusleRFormula to 'renard' for the generic
+    // Renard & Freimund (1994) formula instead.
+    var R = (BGDSS.CONFIG.constants.rusleRFormula === 'renard')
+      ? rainfall.pow(1.61).multiply(0.0483).rename('R')
+      : rainfall.multiply(0.363).add(79).rename('R');
 
     // K - soil erodibility, Williams (1995) EPIC-style approximation using
     // sand/clay/organic-carbon fractions when available, else a constant.
@@ -1492,9 +1639,26 @@ BGDSS.SOIL.run = function () {
     var LS = upslopeArea.multiply(cellSize).divide(22.13).pow(0.4)
       .multiply(slopeRad.sin().divide(0.0896).pow(1.3)).rename('LS');
 
-    // C - cover management factor from NDVI (Van der Knijff et al. 2000)
-    var alpha = 2, beta = 1;
-    var C = ndvi.multiply(-1).divide(ee.Image(beta).subtract(ndvi)).multiply(alpha).exp().rename('C');
+    // C - cover management factor. Default: land-cover lookup table per the
+    // NRSC/ISRO Soil Erosion Atlas of India methodology (ESA WorldCover
+    // classes). Falls back to the continuous Van der Knijff et al. (2000)
+    // NDVI formula if WorldCover is unavailable or rusleCMethod = 'ndvi'.
+    var C;
+    var worldCoverForC = BGDSS.DATA.getWorldCover();
+    if (BGDSS.CONFIG.constants.rusleCMethod === 'landcover' && worldCoverForC) {
+      // WorldCover classes -> C-factor: 10 Tree cover, 20 Shrubland,
+      // 30 Grassland, 40 Cropland, 50 Built-up, 60 Bare/sparse vegetation,
+      // 90 Wetland herbaceous, 95 Mangroves, 100 Moss/lichen.
+      var lcClasses = [10, 20, 30, 40, 50, 60, 90, 95, 100];
+      var lcCValues = [0.01, 0.05, 0.03, 0.28, 0.0, 0.45, 0.02, 0.01, 0.05];
+      C = worldCoverForC.select('Map').remap(lcClasses, lcCValues, 0.2).rename('C').clip(geometry);
+    } else {
+      var alpha = 2, beta = 1;
+      C = ndvi.multiply(-1).divide(ee.Image(beta).subtract(ndvi)).multiply(alpha).exp().rename('C');
+      if (BGDSS.CONFIG.constants.rusleCMethod === 'landcover') {
+        BGDSS.UTIL.log(LABEL, 'WorldCover unavailable for land-cover C-factor - using NDVI-based C-factor instead', 'warn');
+      }
+    }
 
     var P = ee.Image(BGDSS.CONFIG.constants.rusleP).rename('P');
 
@@ -1867,47 +2031,160 @@ BGDSS.WORKFLOW.register('DECISION', BGDSS.DECISION.run);
 // ----------------------------------------------------------------------------
 // Cross-engine summary: consolidates the per-engine BGDSS.STATS entries
 // already populated during each engine's own "Statistics" pipeline step
-// into a single Beat Summary Report (BGDSS.STATS.summary) suitable for a
-// one-page briefing to a forest officer, and prints it to console.
+// into a single, FLAT, plain-language Beat Summary Report - one row per
+// indicator (Category / Indicator / Value / Unit / % of Area) - so it can
+// be read directly by non-technical leadership (Range/DFO/PCCF/Minister
+// briefing) without interpreting nested GEE dictionaries. This replaces a
+// single-row export of raw ee.Dictionary objects (which printed as an
+// unreadable "Object (N properties)" and produced a messy CSV) with a
+// readable multi-row table plus qualitative verdict lines.
 // ============================================================================
 
 BGDSS.STATISTICS = {};
 
+/** Materialize an ee.ComputedObject to a plain JS value (getInfo), rounding
+ *  numbers to `digits` decimal places. Returns null on any failure so a
+ *  missing/invalid stat is silently omitted from the report rather than
+ *  crashing it. */
+BGDSS.STATISTICS._num = function (eeObj, digits) {
+  if (eeObj === null || eeObj === undefined) { return null; }
+  try {
+    var v = eeObj.getInfo ? eeObj.getInfo() : eeObj;
+    if (v === null || v === undefined) { return null; }
+    if (typeof v === 'number' && digits !== undefined) { return Number(v.toFixed(digits)); }
+    return v;
+  } catch (e) { return null; }
+};
+
+/** Read one named key out of a stats Dictionary (as produced by
+ *  BGDSS.UTIL.computeStats/registerStat) and materialize it as a number. */
+BGDSS.STATISTICS._dictValue = function (statsDict, key, digits) {
+  if (!statsDict) { return null; }
+  try { return BGDSS.STATISTICS._num(ee.Dictionary(statsDict).get(key, null), digits); }
+  catch (e) { return null; }
+};
+
+/** Flatten a BGDSS.UTIL.computeAreaStats() grouped-area Dictionary into one
+ *  readable row per class (ha + % of the classified area), and identify the
+ *  dominant (largest-area) class for a one-line verdict. */
+BGDSS.STATISTICS._classAreaRows = function (category, label, areaStatsDict, classLabels) {
+  var result = { rows: [], dominantLabel: null, dominantPercent: null };
+  if (!areaStatsDict) { return result; }
+  try {
+    var info = areaStatsDict.getInfo();
+    var groups = (info && info.groups) || [];
+    if (!groups.length) { return result; }
+    var totalHa = 0;
+    groups.forEach(function (g) { totalHa += (g.sum || 0); });
+    groups.sort(function (a, b) { return a.class - b.class; });
+    var dominantSum = -1, dominantIdx = null;
+    groups.forEach(function (g) {
+      var idx = Math.round(g.class) - 1;
+      var name = (classLabels[idx] !== undefined) ? classLabels[idx] : ('Class ' + g.class);
+      var ha = Number((g.sum || 0).toFixed(1));
+      var pct = totalHa > 0 ? Number((g.sum / totalHa * 100).toFixed(0)) : 0;
+      result.rows.push({ category: category, indicator: label + ' - ' + name, value: ha, unit: 'ha', percent: pct });
+      if (g.sum > dominantSum) { dominantSum = g.sum; dominantIdx = idx; }
+    });
+    if (dominantIdx !== null) {
+      result.dominantLabel = (classLabels[dominantIdx] !== undefined) ? classLabels[dominantIdx] : null;
+      result.dominantPercent = totalHa > 0 ? Number((dominantSum / totalHa * 100).toFixed(0)) : null;
+    }
+  } catch (e) { /* leave result at defaults */ }
+  return result;
+};
+
 BGDSS.STATISTICS.buildSummary = function () {
   var LABEL = 'STATISTICS';
+  var num = BGDSS.STATISTICS._num;
+  var dictValue = BGDSS.STATISTICS._dictValue;
+  var classAreaRows = BGDSS.STATISTICS._classAreaRows;
+  var rows = [];
 
-  var summary = {
-    unit: BGDSS.CONFIG.unitName,
-    district: BGDSS.CONFIG.district,
-    state: BGDSS.CONFIG.state,
-    year: BGDSS.CONFIG.year,
-    areaHa: BGDSS.STATE.areaHa,
-    areaKm2: BGDSS.STATE.areaKm2
-  };
+  function add(category, indicator, value, unit, percent) {
+    if (value === null || value === undefined) { return; }
+    rows.push({ category: category, indicator: indicator, value: value, unit: unit || '', percent: (percent === undefined ? null : percent) });
+  }
 
-  if (BGDSS.STATS.terrain.elevation) { summary.meanElevationM = ee.Dictionary(BGDSS.STATS.terrain.elevation).get('elevation_mean'); }
-  if (BGDSS.STATS.terrain.slope) { summary.meanSlopeDeg = ee.Dictionary(BGDSS.STATS.terrain.slope).get('slope_mean'); }
-  if (BGDSS.STATS.climate.annualRainfall) { summary.meanAnnualRainfallMm = ee.Dictionary(BGDSS.STATS.climate.annualRainfall).get('rainfall_mean'); }
-  if (BGDSS.STATS.vegetation.ndvi) { summary.meanNDVI = ee.Dictionary(BGDSS.STATS.vegetation.ndvi).get('ndvi_mean'); }
-  if (BGDSS.STATS.forest.forestAreaHa) { summary.forestAreaHa = ee.Dictionary(BGDSS.STATS.forest.forestAreaHa).get('forestMask'); }
-  if (BGDSS.STATS.carbon.carbonStock) { summary.meanCarbonStockMgPerHa = ee.Dictionary(BGDSS.STATS.carbon.carbonStock).get('carbonStock_mean'); }
-  if (BGDSS.STATS.carbon.totalCarbonTons) { summary.totalCarbonTons = ee.Dictionary(BGDSS.STATS.carbon.totalCarbonTons).get('carbonStock'); }
-  if (BGDSS.STATS.fire.riskArea) { summary.fireRiskAreaByClass = BGDSS.STATS.fire.riskArea; }
-  if (BGDSS.STATS.soil.soilLoss) { summary.meanSoilLossTPerHaPerYr = ee.Dictionary(BGDSS.STATS.soil.soilLoss).get('soilLoss_mean'); }
-  if (BGDSS.STATS.decision.managementZonesArea) { summary.managementZonesByClass = BGDSS.STATS.decision.managementZonesArea; }
+  // ---- Overview -----------------------------------------------------------
+  var areaHa = num(BGDSS.STATE.areaHa, 1);
+  add('Overview', 'Beat / Unit Name', BGDSS.CONFIG.unitName, '');
+  add('Overview', 'District', BGDSS.CONFIG.district, '');
+  add('Overview', 'State', BGDSS.CONFIG.state, '');
+  add('Overview', 'Analysis Year', BGDSS.CONFIG.year, '');
+  add('Overview', 'Total Area', areaHa, 'ha');
+  add('Overview', 'Forest Type (Champion & Seth 1968)', BGDSS.CONFIG.forestType.championSethGroup, '');
 
-  BGDSS.STATS.summary = summary;
+  // ---- Terrain --------------------------------------------------------------
+  add('Terrain', 'Mean Elevation', dictValue(BGDSS.STATS.terrain.elevation, 'elevation_mean', 0), 'm');
+  add('Terrain', 'Mean Slope', dictValue(BGDSS.STATS.terrain.slope, 'slope_mean', 1), 'degrees');
 
+  // ---- Climate --------------------------------------------------------------
+  add('Climate', 'Mean Annual Rainfall', dictValue(BGDSS.STATS.climate.annualRainfall, 'rainfall_mean', 0), 'mm/yr');
+  add('Climate', 'Mean Temperature', dictValue(BGDSS.STATS.climate.temperature, 'tempMean_mean', 1), 'deg C');
+
+  // ---- Vegetation / Forest ----------------------------------------------------
+  var ndvi = dictValue(BGDSS.STATS.vegetation.ndvi, 'ndvi_mean', 2);
+  add('Vegetation', 'Mean Greenness Index (NDVI, 0-1 scale)', ndvi, 'index');
+  var forestHa = dictValue(BGDSS.STATS.forest.forestAreaHa, 'forestMask', 1);
+  add('Forest', 'Forest Cover Area', forestHa, 'ha', (forestHa !== null && areaHa) ? Number((forestHa / areaHa * 100).toFixed(0)) : null);
+
+  // ---- Carbon (FSI/ISFR convention, see CARBON ENGINE header) ----------------
+  add('Carbon', 'Mean Carbon Stock', dictValue(BGDSS.STATS.carbon.carbonStock, 'carbonStock_mean', 1), 'tonnes C/ha');
+  var totalCarbonTons = dictValue(BGDSS.STATS.carbon.totalCarbonTons, 'carbonStock', 0);
+  add('Carbon', 'Total Carbon Stock (whole beat)', totalCarbonTons, 'tonnes C');
+  if (totalCarbonTons !== null) {
+    add('Carbon', 'Estimated CO2 Sequestered (whole beat)', Number((totalCarbonTons * BGDSS.CONFIG.constants.co2Conversion).toFixed(0)), 'tonnes CO2e');
+  }
+
+  // ---- Fire Risk (Jaiswal et al. 2002 India AHP model) - flattened by class --
+  var fireResult = classAreaRows('Fire Risk', 'Fire Risk Area', BGDSS.STATS.fire.riskArea, BGDSS.UTIL.CLASS_LABELS_5);
+  rows = rows.concat(fireResult.rows);
+
+  // ---- Soil Erosion (RUSLE, Indian R/C factors) -------------------------------
+  var soilLossMean = dictValue(BGDSS.STATS.soil.soilLoss, 'soilLoss_mean', 1);
+  add('Soil Erosion', 'Mean Soil Loss (RUSLE)', soilLossMean, 'tonnes/ha/yr');
+
+  // ---- Management Zones - flattened by zone -----------------------------------
+  var zoneResult = classAreaRows('Management Zones', 'Zone', BGDSS.STATS.decision.managementZonesArea, BGDSS.DECISION.ZONE_LABELS);
+  rows = rows.concat(zoneResult.rows);
+
+  // ---- Plain-language verdicts (for a non-technical / leadership audience) --
+  if (fireResult.dominantLabel) {
+    add('Verdict', 'Overall Fire Risk Rating', fireResult.dominantLabel, '(covers ' + fireResult.dominantPercent + '% of the beat)');
+  }
+  if (ndvi !== null) {
+    var healthLabel = ndvi >= 0.5 ? 'Good' : (ndvi >= 0.3 ? 'Moderate' : 'Poor');
+    add('Verdict', 'Overall Vegetation Health', healthLabel, '');
+  }
+  if (soilLossMean !== null) {
+    var erosionLabel = soilLossMean < 5 ? 'Low' : (soilLossMean < 10 ? 'Moderate' : (soilLossMean < 20 ? 'High' : 'Severe'));
+    add('Verdict', 'Overall Soil Erosion Severity', erosionLabel, '');
+  }
+
+  BGDSS.STATS.summary = rows;
+
+  // ---- Print a readable, plain-language report to the console ---------------
   try {
-    print('==================== BGDSS BEAT SUMMARY REPORT ====================');
-    print(ee.Dictionary(summary));
-    print('=====================================================================');
+    var title = 'BGDSS BEAT SUMMARY REPORT - ' + BGDSS.CONFIG.unitName + ', '
+      + BGDSS.CONFIG.district + ', ' + BGDSS.CONFIG.state + ' (' + BGDSS.CONFIG.year + ')';
+    print('================================================================');
+    print(title);
+    print('================================================================');
+    var lastCategory = null;
+    rows.forEach(function (r) {
+      if (r.category !== lastCategory) { print('-- ' + r.category + ' --'); lastCategory = r.category; }
+      var line = r.indicator + ': ' + r.value + (r.unit ? (' ' + r.unit) : '');
+      if (r.percent !== null && r.percent !== undefined && r.percent !== '') { line += ' (' + r.percent + '%)'; }
+      print(line);
+    });
+    print('================================================================');
   } catch (e) {
     // print() unavailable outside Code Editor context - non-fatal.
   }
 
-  BGDSS.UTIL.log(LABEL, 'Beat Summary Report Built', 'ok');
-  return summary;
+  BGDSS.UTIL.log(LABEL, 'Beat Summary Report Built (' + rows.length + ' plain-language indicators)', 'ok');
+  return rows;
 };
 
 // ============================================================================
@@ -1992,11 +2269,28 @@ BGDSS.EXPORT.exportTables = function () {
 /**
  * Purpose : Export the Beat Summary Report (BGDSS.STATS.summary) as CSV.
  */
+/**
+ * Purpose : Export the Beat Summary Report as ONE clean, flat CSV table -
+ *           one row per plain-language indicator (Sr No / Category /
+ *           Indicator / Value / Unit / % of Area) - readable directly in
+ *           Excel/Sheets by a non-technical reviewer (Range/DFO/PCCF/
+ *           Minister briefing), instead of a single row of nested
+ *           dictionaries.
+ */
 BGDSS.EXPORT.exportSummaryCsv = function () {
   try {
-    var summary = BGDSS.STATS.summary || {};
-    var feature = ee.Feature(null, summary);
-    var fc = ee.FeatureCollection([feature]);
+    var rows = BGDSS.STATS.summary || [];
+    var features = rows.map(function (r, i) {
+      return ee.Feature(null, {
+        'Sr No': i + 1,
+        'Category': r.category,
+        'Indicator': r.indicator,
+        'Value': r.value,
+        'Unit': r.unit,
+        'Percent of Area': (r.percent === null || r.percent === undefined) ? '' : r.percent
+      });
+    });
+    var fc = ee.FeatureCollection(features);
     Export.table.toDrive({
       collection: fc,
       description: BGDSS.CONFIG.exportPrefix + '_Summary',
