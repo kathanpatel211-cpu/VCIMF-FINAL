@@ -867,7 +867,7 @@ BGDSS.HYDROLOGY.run = function () {
     var aspect = BGDSS.RESULTS.terrain.aspect || ee.Terrain.aspect(dem);
     flowDirection = aspect.divide(45).round().mod(8).add(1).rename('flowDirection');
     flowAccumulation = ee.Image(1).divide(slope.add(1)).multiply(100)
-      .focal_sum({ radius: 10, kernelType: 'circle', units: 'pixels' })
+      .reduceNeighborhood({ reducer: ee.Reducer.sum(), kernel: ee.Kernel.circle({ radius: 10, units: 'pixels' }) })
       .rename('flowAccumulation');
     BGDSS.UTIL.log(LABEL, 'HydroSHEDS direction/accumulation unavailable - using DEM-derived proxy', 'warn');
   }
@@ -1635,7 +1635,9 @@ BGDSS.SOIL.run = function () {
     // gives upslope contributing area when available, else slope-only proxy.
     var cellSize = BGDSS.CONFIG.coarseScale;
     var slopeRad = slope.multiply(Math.PI / 180);
-    var upslopeArea = flowAcc ? flowAcc.multiply(cellSize) : slope.focal_sum({ radius: 10, kernelType: 'circle', units: 'pixels' });
+    var upslopeArea = flowAcc ? flowAcc.multiply(cellSize) : slope.reduceNeighborhood({
+      reducer: ee.Reducer.sum(), kernel: ee.Kernel.circle({ radius: 10, units: 'pixels' })
+    });
     var LS = upslopeArea.multiply(cellSize).divide(22.13).pow(0.4)
       .multiply(slopeRad.sin().divide(0.0896).pow(1.3)).rename('LS');
 

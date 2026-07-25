@@ -213,7 +213,16 @@ if (slope && rainfall) {
                            // replace with OpenLandMap-derived K if higher
                            // precision is needed (see full BGDSS Soil Engine)
   var slopeRad = slope.multiply(Math.PI / 180);
-  var LS = slope.focal_sum({ radius: 10, kernelType: 'circle', units: 'pixels' })
+  // Upslope-area proxy (no flow-accumulation input in this standalone
+  // module - see Module 1/full BGDSS Hydrology Engine for the HydroSHEDS-
+  // based version): sum of slope within a neighborhood via
+  // reduceNeighborhood (there is no ee.Image.focal_sum method - only
+  // focal_mean/median/min/max/mode exist as convenience wrappers).
+  var upslopeProxy = slope.reduceNeighborhood({
+    reducer: ee.Reducer.sum(),
+    kernel: ee.Kernel.circle({ radius: 10, units: 'pixels' })
+  });
+  var LS = upslopeProxy
     .multiply(CONFIG.scale).divide(22.13).pow(0.4)
     .multiply(slopeRad.sin().divide(0.0896).pow(1.3));
   var lcClasses = [10, 20, 30, 40, 50, 60, 90, 95, 100];
