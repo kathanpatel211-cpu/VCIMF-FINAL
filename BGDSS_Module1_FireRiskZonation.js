@@ -132,10 +132,18 @@ function safeMosaic(id, band, label) {
 var dem = safeMosaic('JAXA/ALOS/AW3D30/V3_2', 'DSM', 'DEM');
 var slope = null, aspect = null;
 if (dem) {
-  dem = dem.clip(roi).rename('elevation');
+  // AW3D30's DSM band is integer-typed and delivered in geographic
+  // (lat/lon) pixels, which are NOT square in meters - ee.Terrain.slope/
+  // aspect assume an isotropic grid and can under/over-estimate or leave
+  // gaps if run directly on a geographic image. Cast to float and
+  // reproject to the local UTM zone (43N covers Sabarkantha/Gujarat
+  // ~72-78E; change the EPSG code if your beat falls in a different zone)
+  // before computing terrain products.
+  dem = dem.clip(roi).rename('elevation').toFloat()
+    .reproject({ crs: 'EPSG:32643', scale: CONFIG.scale });
   slope = ee.Terrain.slope(dem);
   aspect = ee.Terrain.aspect(dem);
-  log('DEM / Slope / Aspect ready');
+  log('DEM / Slope / Aspect ready (reprojected to EPSG:32643 for terrain accuracy)');
 }
 
 // ============================================================================
@@ -245,6 +253,51 @@ var susceptibility = forestTypeRisk.multiply(w.forestType / wSum)
 
 var fireRisk = classify5(susceptibility);
 log('Fire Susceptibility + 5-class Fire Risk computed (Jaiswal et al. 2002 AHP)');
+
+// ---- DIAGNOSTIC: mean of each 0-1 criterion + the final score. The AHP
+// formula guarantees susceptibility >= ~0.30 whenever settlement/road are
+// neutral (0.5) and forestTypeRisk is at its floor (0.525), so if the
+// numbers below don't match what "Very Low everywhere" would need, this
+// tells us exactly which input collapsed to zero. -----------------------
+var diag = ee.Image.cat([
+  forestTypeRisk.rename('forestTypeRisk'),
+  settlementNorm.rename('settlementNorm'),
+  slopeNorm.rename('slopeNorm'),
+  roadNorm.rename('roadNorm'),
+  temperatureNorm.rename('temperatureNorm'),
+  rainfallNorm.rename('rainfallNorm'),
+  aspectNorm.rename('aspectNorm'),
+  susceptibility
+]).reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: roi,
+  scale: CONFIG.scale,
+  maxPixels: 1e13,
+  tileScale: 4,
+  bestEffort: true
+});
+diag.evaluate(function (d) {
+  print('---- DIAGNOSTIC: mean value of each criterion (0-1 scale) ----');
+  print(d);
+});
+
+// ---- DIAGNOSTIC: is susceptibility actually computed everywhere, or is it
+// MASKED (no-data) over most of the beat? A low "coverage %" here means the
+// map is showing "Very Low" by default for pixels where the model couldn't
+// compute a value at all - a masking problem, not a genuinely low risk. ---
+var coverage = ee.Image.constant(1).rename('total')
+  .addBands(susceptibility.mask().rename('valid'))
+  .reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 4, bestEffort: true
+  });
+coverage.evaluate(function (c) {
+  var total = c.total || 0;
+  var valid = c.valid || 0;
+  var pct = total > 0 ? Math.round(valid / total * 100) : 0;
+  print('---- DIAGNOSTIC: Fire Susceptibility data coverage ----');
+  print('Valid (unmasked) pixels: ' + pct + '% of the beat' + (pct < 90 ? '  <-- LOW: likely a masking issue upstream' : ''));
+});
 
 // ============================================================================
 // 8. VISUALIZATION
