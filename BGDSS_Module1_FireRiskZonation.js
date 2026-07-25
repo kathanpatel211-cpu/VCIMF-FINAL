@@ -1,0 +1,352 @@
+/**
+ * ============================================================================
+ *  BGDSS - MODULE 1: FIRE RISK ZONATION
+ *  Pilot: Sabarkantha Forest Division, Gujarat Forest Department
+ *  Platform: Google Earth Engine (JavaScript API)
+ * ============================================================================
+ *
+ *  STANDALONE SCRIPT - paste this file into a NEW Earth Engine script and
+ *  run it on its own. It does not depend on any other BGDSS file.
+ *
+ *  METHODOLOGY (India-specific, not a generic global fire model)
+ *  ---------------------------------------------------------------------------
+ *  AHP (Analytic Hierarchy Process) weighted overlay reproducing the
+ *  published pairwise-comparison weights of:
+ *    Jaiswal, R.K., Mukherjee, S., Krishnamurthy, J. & Saxena, R. (2002),
+ *    "Forest fire risk zone mapping from satellite imagery and GIS",
+ *    Int. J. Applied Earth Observation and Geoinformation 4(1):1-10.
+ *  This is the standard India-specific fire-risk zonation study: unlike
+ *  most global fire models (built around lightning ignition), it weights
+ *  human ignition sources (proximity to settlements/roads) very heavily,
+ *  which matches Indian dry-deciduous forest fire regimes.
+ *
+ *  Forest-type inflammability follows Champion & Seth (1968), "A Revised
+ *  Survey of the Forest Types of India" - Sabarkantha's forests fall under
+ *  Group 5B, Northern Dry Deciduous Forest, one of India's most fire-prone
+ *  types. Edit CONFIG.forestTypeBaseline if your beat's working plan
+ *  documents a different type.
+ *
+ *  HOW TO USE
+ *  ---------------------------------------------------------------------------
+ *  1. Edit the CONFIG block below (your beat asset is already filled in).
+ *  2. If you have village/road layers, set CONFIG.villages / CONFIG.roads -
+ *     these are two of the highest-weighted criteria in this model, so
+ *     accuracy improves a lot once they're supplied.
+ *  3. Run. Layers appear in the Layers panel (mostly off by default -
+ *     toggle "Fire Risk (5-class)" on). A plain-language summary prints to
+ *     the Console. Two export tasks (GeoTIFF risk map + CSV summary table)
+ *     appear in the Tasks tab - click Run on each to save them to Drive.
+ * ============================================================================
+ */
+
+// ============================================================================
+// CONFIG - the only section to edit
+// ============================================================================
+var CONFIG = {
+  roi: ee.FeatureCollection('projects/raygadh-range/assets/BEAT'),
+  year: 2025,
+  fireHistoryYears: 10,             // years of MODIS burned-area look-back
+
+  district: 'Sabarkantha',
+  state: 'Gujarat',
+  unitName: 'BEAT',
+
+  scale: 30,                        // analysis/export resolution, meters
+  exportFolder: 'BGDSS',
+  exportPrefix: 'BGDSS_FireRisk',
+
+  // Optional - set these to an ee.FeatureCollection of points/lines if you
+  // have them (e.g. 'projects/raygadh-range/assets/VILLAGES'). Leave null
+  // to skip gracefully (the model then uses a neutral default for that
+  // criterion and logs a warning explaining the accuracy trade-off).
+  villages: null,
+  roads: null,
+
+  // Champion & Seth (1968) forest type baseline inflammability, 0-1.
+  // 0.75 = Northern Dry Deciduous (Group 5B) - update if your beat's
+  // working plan documents a different Champion & Seth type.
+  forestTypeBaseline: 0.75,
+
+  // Jaiswal et al. (2002) published AHP weights - re-run your own AHP
+  // pairwise comparison with the Range/DFO team if better local judgment
+  // is available; these are a starting point, not a fixed law.
+  weights: {
+    forestType: 0.279,
+    settlementProximity: 0.185,
+    slope: 0.148,
+    roadProximity: 0.126,
+    temperature: 0.104,
+    rainfall: 0.081,
+    aspect: 0.077
+  }
+};
+
+var roi = CONFIG.roi.geometry();
+try { Map.centerObject(CONFIG.roi, 12); Map.setOptions('SATELLITE'); } catch (e) {}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+function log(msg) { print('✓ ' + msg); }
+function warn(msg) { print('⚠ ' + msg); }
+
+function normalize(img, min, max, invert) {
+  var n = img.subtract(min).divide(max - min).clamp(0, 1);
+  return invert ? ee.Image(1).subtract(n) : n;
+}
+
+var CLASS_LABELS = ['Very Low', 'Low', 'Moderate', 'High', 'Very High'];
+var PALETTE = ['1a9850', '91cf60', 'fee08b', 'fc8d59', 'd73027'];
+
+function classify5(img, breaks) {
+  breaks = breaks || [0.2, 0.4, 0.6, 0.8];
+  return ee.Image(1)
+    .where(img.gt(breaks[0]), 2)
+    .where(img.gt(breaks[1]), 3)
+    .where(img.gt(breaks[2]), 4)
+    .where(img.gt(breaks[3]), 5)
+    .rename('class').clip(roi);
+}
+
+// Defensive dataset loaders: never throw, just log and return null so the
+// rest of the script keeps running with a neutral fallback for that input.
+function safeImage(id, label) {
+  try { var img = ee.Image(id); img.bandNames().getInfo(); return img; }
+  catch (e) { warn(label + ' unavailable (' + id + ') - using fallback'); return null; }
+}
+function safeCollection(id, label) {
+  try { var col = ee.ImageCollection(id); col.first().bandNames().getInfo(); return col; }
+  catch (e) { warn(label + ' unavailable (' + id + ') - using fallback'); return null; }
+}
+function safeMosaic(id, band, label) {
+  try {
+    var col = ee.ImageCollection(id);
+    col.first().bandNames().getInfo();
+    return band ? col.select([band]).mosaic() : col.mosaic();
+  } catch (e) { warn(label + ' unavailable (' + id + ') - using fallback'); return null; }
+}
+
+// ============================================================================
+// 1. TERRAIN (JAXA AW3D30 - tiled ImageCollection, mosaicked)
+// ============================================================================
+var dem = safeMosaic('JAXA/ALOS/AW3D30/V3_2', 'DSM', 'DEM');
+var slope = null, aspect = null;
+if (dem) {
+  dem = dem.clip(roi).rename('elevation');
+  slope = ee.Terrain.slope(dem);
+  aspect = ee.Terrain.aspect(dem);
+  log('DEM / Slope / Aspect ready');
+}
+
+// ============================================================================
+// 2. FOREST-TYPE INFLAMMABILITY (Champion & Seth 1968, canopy-modulated)
+// ============================================================================
+var hansen = safeImage('UMD/hansen/global_forest_change_2023_v1_11', 'Hansen canopy cover');
+var canopyDensity = hansen ? hansen.select('treecover2000').clip(roi) : null;
+var forestTypeRisk;
+if (canopyDensity) {
+  // Denser canopy retains moisture better (slightly lower risk); open/
+  // degraded stands keep the full baseline inflammability of the type.
+  var damping = normalize(canopyDensity, 0, 80, false).multiply(0.3);
+  forestTypeRisk = ee.Image(CONFIG.forestTypeBaseline).multiply(ee.Image(1).subtract(damping)).rename('forestTypeRisk');
+  log('Forest-Type Inflammability computed (baseline ' + CONFIG.forestTypeBaseline + ', canopy-modulated)');
+} else {
+  forestTypeRisk = ee.Image(CONFIG.forestTypeBaseline).clip(roi).rename('forestTypeRisk');
+  warn('Canopy data unavailable - Forest-Type Inflammability using flat baseline (no canopy modulation)');
+}
+
+// ============================================================================
+// 3. CLIMATE (CHIRPS rainfall, MODIS LST temperature)
+// ============================================================================
+var yStart = ee.Date.fromYMD(CONFIG.year, 1, 1);
+var yEnd = yStart.advance(1, 'year');
+
+var chirps = safeCollection('UCSB-CHG/CHIRPS/DAILY', 'CHIRPS rainfall');
+var rainfall = chirps ? chirps.filterDate(yStart, yEnd).sum().clip(roi).rename('rainfall') : null;
+if (rainfall) { log('Annual rainfall computed'); }
+
+var modisLst = safeCollection('MODIS/061/MOD11A2', 'MODIS LST temperature');
+var tempMeanC = null;
+if (modisLst) {
+  var lstYear = modisLst.filterDate(yStart, yEnd);
+  var day = lstYear.select('LST_Day_1km').mean().multiply(0.02).subtract(273.15);
+  var night = lstYear.select('LST_Night_1km').mean().multiply(0.02).subtract(273.15);
+  tempMeanC = day.add(night).divide(2).clip(roi).rename('tempMean');
+  log('Mean temperature computed');
+}
+
+// ============================================================================
+// 4. OBSERVED FIRE HISTORY (MODIS MCD64A1 Burned Area) - for validation, not
+//    used directly in the AHP score (which is a PREDICTIVE susceptibility
+//    model); compare the two visually to sanity-check the model.
+// ============================================================================
+var burnedCol = safeCollection('MODIS/061/MCD64A1', 'MODIS Burned Area');
+var fireHistory = null;
+if (burnedCol) {
+  var histStart = ee.Date.fromYMD(CONFIG.year - CONFIG.fireHistoryYears, 1, 1);
+  var histEnd = ee.Date.fromYMD(CONFIG.year, 12, 31);
+  fireHistory = burnedCol.filterDate(histStart, histEnd).select('BurnDate')
+    .map(function (img) { return img.gt(0); }).sum().clip(roi).rename('fireHistory');
+  log('Observed fire history (' + CONFIG.fireHistoryYears + ' yr look-back) computed');
+}
+
+// ============================================================================
+// 5. SETTLEMENT / ROAD PROXIMITY (dominant human-ignition criteria)
+// ============================================================================
+var settlementNorm;
+if (CONFIG.villages) {
+  var villageDist = ee.Image(0).paint(CONFIG.villages, 1).not()
+    .fastDistanceTransform(1024).sqrt().multiply(ee.Image.pixelArea().sqrt());
+  settlementNorm = normalize(villageDist, 0, 3000, true); // closer to village -> higher risk
+  log('Settlement Proximity computed from CONFIG.villages');
+} else {
+  settlementNorm = ee.Image(0.5);
+  warn('CONFIG.villages not set - Settlement Proximity (18.5% of the model weight) defaulted to neutral (0.5)');
+}
+
+var roadNorm;
+if (CONFIG.roads) {
+  var roadDist = ee.Image(0).paint(CONFIG.roads, 1).not()
+    .fastDistanceTransform(1024).sqrt().multiply(ee.Image.pixelArea().sqrt());
+  roadNorm = normalize(roadDist, 0, 2000, true);
+  log('Road Proximity computed from CONFIG.roads');
+} else {
+  roadNorm = ee.Image(0.5);
+  warn('CONFIG.roads not set - Road Proximity (12.6% of the model weight) defaulted to neutral (0.5)');
+}
+
+// ============================================================================
+// 6. REMAINING CRITERIA - normalize each to a 0-1 "risk contribution"
+// ============================================================================
+var slopeNorm = slope ? normalize(slope, 0, 35, false) : ee.Image(0.5);
+// South-facing slopes (135-225 deg, Northern Hemisphere) get more solar
+// load -> drier fuel -> higher risk.
+var aspectNorm = aspect
+  ? aspect.subtract(180).abs().multiply(-1).add(180).divide(180).rename('aspectRisk')
+  : ee.Image(0.5);
+var temperatureNorm = tempMeanC ? normalize(tempMeanC, 20, 42, false) : ee.Image(0.5);
+var rainfallNorm = rainfall ? normalize(rainfall, 300, 1500, true) : ee.Image(0.5); // drier -> higher risk
+
+// ============================================================================
+// 7. AHP WEIGHTED OVERLAY (Jaiswal et al. 2002) -> Fire Susceptibility -> Risk
+// ============================================================================
+var w = CONFIG.weights;
+var wSum = w.forestType + w.settlementProximity + w.slope + w.roadProximity
+  + w.temperature + w.rainfall + w.aspect;
+
+var susceptibility = forestTypeRisk.multiply(w.forestType / wSum)
+  .add(settlementNorm.multiply(w.settlementProximity / wSum))
+  .add(slopeNorm.multiply(w.slope / wSum))
+  .add(roadNorm.multiply(w.roadProximity / wSum))
+  .add(temperatureNorm.multiply(w.temperature / wSum))
+  .add(rainfallNorm.multiply(w.rainfall / wSum))
+  .add(aspectNorm.multiply(w.aspect / wSum))
+  .rename('fireSusceptibility');
+
+var fireRisk = classify5(susceptibility);
+log('Fire Susceptibility + 5-class Fire Risk computed (Jaiswal et al. 2002 AHP)');
+
+// ============================================================================
+// 8. VISUALIZATION
+// ============================================================================
+Map.addLayer(forestTypeRisk, { min: 0, max: 1, palette: PALETTE }, 'Forest-Type Inflammability', false);
+if (fireHistory) {
+  Map.addLayer(fireHistory.selfMask(), { min: 1, max: CONFIG.fireHistoryYears, palette: ['fee08b', 'd73027', '7f0000'] }, 'Observed Fire History (years burned)', false);
+}
+Map.addLayer(susceptibility, { min: 0, max: 1, palette: PALETTE }, 'Fire Susceptibility (AHP score)', false);
+Map.addLayer(fireRisk, { min: 1, max: 5, palette: PALETTE }, 'Fire Risk (5-class)', true);
+
+try {
+  var legend = ui.Panel({ style: { position: 'bottom-left', padding: '8px 15px' } });
+  legend.add(ui.Label('Fire Risk (Jaiswal et al. 2002 AHP)', { fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0' }));
+  for (var i = 0; i < CLASS_LABELS.length; i++) {
+    var colorBox = ui.Label('', { backgroundColor: PALETTE[i], padding: '8px', margin: '0 0 4px 0' });
+    var desc = ui.Label(CLASS_LABELS[i], { margin: '0 0 4px 6px' });
+    legend.add(ui.Panel({ widgets: [colorBox, desc], layout: ui.Panel.Layout.flow('horizontal') }));
+  }
+  Map.add(legend);
+} catch (e) {}
+
+// ============================================================================
+// 9. STATISTICS + PLAIN-LANGUAGE SUMMARY + CSV EXPORT
+// ============================================================================
+var areaImg = ee.Image.pixelArea().divide(1e4).addBands(fireRisk); // ha
+var areaStats = areaImg.reduceRegion({
+  reducer: ee.Reducer.sum().group({ groupField: 1, groupName: 'class' }),
+  geometry: roi,
+  scale: CONFIG.scale,
+  maxPixels: 1e13,
+  tileScale: 4,
+  bestEffort: true
+});
+
+// .evaluate() is asynchronous (does not block the script), unlike
+// .getInfo() - keeps this script responsive even on a large beat.
+areaStats.evaluate(function (result) {
+  var groups = (result && result.groups) || [];
+  var total = 0;
+  groups.forEach(function (g) { total += g.sum; });
+  groups.sort(function (a, b) { return a.class - b.class; });
+
+  print('================================================================');
+  print('FIRE RISK ZONATION SUMMARY - ' + CONFIG.unitName + ', ' + CONFIG.district + ', ' + CONFIG.state + ' (' + CONFIG.year + ')');
+  print('================================================================');
+
+  var rows = [];
+  var dominantSum = -1, dominantLabel = null, dominantPct = null;
+  groups.forEach(function (g, idx) {
+    var label = CLASS_LABELS[Math.round(g.class) - 1] || ('Class ' + g.class);
+    var ha = Math.round(g.sum * 10) / 10;
+    var pct = total > 0 ? Math.round(g.sum / total * 100) : 0;
+    print('Fire Risk - ' + label + ': ' + ha + ' ha (' + pct + '%)');
+    rows.push({ sr: idx + 1, cls: label, ha: ha, pct: pct });
+    if (g.sum > dominantSum) { dominantSum = g.sum; dominantLabel = label; dominantPct = pct; }
+  });
+
+  if (dominantLabel) {
+    print('----------------------------------------------------------------');
+    print('Overall Fire Risk Rating: ' + dominantLabel + ' (covers ' + dominantPct + '% of the beat)');
+  }
+  print('================================================================');
+
+  // ---- clean, one-row-per-class CSV table (Excel/Sheets readable) ----
+  var features = rows.map(function (r) {
+    return ee.Feature(null, {
+      'Sr No': r.sr,
+      'Fire Risk Class': r.cls,
+      'Area (ha)': r.ha,
+      'Percent of Beat': r.pct
+    });
+  });
+  Export.table.toDrive({
+    collection: ee.FeatureCollection(features),
+    description: CONFIG.exportPrefix + '_Summary',
+    folder: CONFIG.exportFolder,
+    fileNamePrefix: CONFIG.exportPrefix + '_Summary',
+    fileFormat: 'CSV'
+  });
+});
+
+// ============================================================================
+// 10. RASTER EXPORTS (GeoTIFF - run from the Tasks tab)
+// ============================================================================
+Export.image.toDrive({
+  image: fireRisk.toInt(),
+  description: CONFIG.exportPrefix + '_RiskMap',
+  folder: CONFIG.exportFolder,
+  fileNamePrefix: CONFIG.exportPrefix + '_RiskMap',
+  region: roi.bounds(),
+  scale: CONFIG.scale,
+  maxPixels: 1e13
+});
+Export.image.toDrive({
+  image: susceptibility,
+  description: CONFIG.exportPrefix + '_SusceptibilityScore',
+  folder: CONFIG.exportFolder,
+  fileNamePrefix: CONFIG.exportPrefix + '_SusceptibilityScore',
+  region: roi.bounds(),
+  scale: CONFIG.scale,
+  maxPixels: 1e13
+});
+
+log('Fire Risk Zonation module complete. Toggle "Fire Risk (5-class)" on in the Layers panel; run the 3 tasks in the Tasks tab to save outputs to Drive.');
