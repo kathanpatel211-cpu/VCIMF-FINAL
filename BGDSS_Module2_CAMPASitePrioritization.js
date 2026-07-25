@@ -176,13 +176,26 @@ if (dem) {
 var hansen = safeImage('UMD/hansen/global_forest_change_2023_v1_11', 'Hansen canopy cover');
 var canopyDensity = hansen ? hansen.select('treecover2000').resample('bilinear').clip(roi) : null;
 
-var worldCover = safeMosaic('ESA/WorldCover/v200', 'Map', 'ESA WorldCover');
+// Try v200 (2021) first, fall back to v100 (2020) if unavailable.
+var worldCover = safeMosaic('ESA/WorldCover/v200', 'Map', 'ESA WorldCover v200')
+  || safeMosaic('ESA/WorldCover/v100', 'Map', 'ESA WorldCover v100');
+
 // CAMPA does not plant on cropland (40), built-up (50), or water (80) -
 // exclude those classes from eligibility regardless of canopy reading.
-var plantableMask = worldCover
-  ? worldCover.neq(40).and(worldCover.neq(50)).and(worldCover.neq(80)).clip(roi)
-  : ee.Image(1).clip(roi);
-if (!worldCover) { warn('ESA WorldCover unavailable - cropland/built-up/water cannot be excluded from eligibility; verify manually'); }
+// IMPORTANT: if WorldCover is unavailable, we do NOT fall back to "include
+// everything" - that would silently let active cropland (which naturally
+// reads as ~0% tree cover, i.e. maximum "New Plantation" priority) flood
+// the ranking, which is exactly the kind of large, field-shaped, uniformly
+// "high priority" blob this criterion exists to prevent. Without a land-
+// cover mask, eligibility cannot be trusted, so the module stops instead
+// of producing a misleading map.
+var worldCoverMap = worldCover ? worldCover.select('Map') : null;
+var plantableMask = worldCoverMap
+  ? worldCoverMap.neq(40).and(worldCoverMap.neq(50)).and(worldCoverMap.neq(80)).clip(roi)
+  : null;
+if (!worldCover) {
+  warn('ESA WorldCover (v200 and v100) both unavailable - cannot exclude cropland/built-up/water. Stopping to avoid a methodologically invalid site ranking.');
+}
 
 if (!canopyDensity) {
   warn('Hansen canopy data unavailable. Skipping module - degradation status cannot be assessed without it.');
@@ -227,8 +240,8 @@ if (slope && rainfall) {
     .multiply(slopeRad.sin().divide(0.0896).pow(1.3));
   var lcClasses = [10, 20, 30, 40, 50, 60, 90, 95, 100];
   var lcCValues = [0.01, 0.05, 0.03, 0.28, 0.0, 0.45, 0.02, 0.01, 0.05];
-  var C = worldCover
-    ? worldCover.select('Map').remap(lcClasses, lcCValues, 0.2).clip(roi)
+  var C = worldCoverMap
+    ? worldCoverMap.remap(lcClasses, lcCValues, 0.2).clip(roi)
     : ee.Image(0.2);
   soilLoss = R.multiply(K).multiply(LS).multiply(C).rename('soilLoss').clip(roi);
   log('RUSLE soil loss computed (Indian R/C factors)');
@@ -267,7 +280,7 @@ if (cciBiomass) {
 // treatment: 1 = New Plantation, 2 = ANR, 0 = Not Prioritized
 // ============================================================================
 var treatment = null, priorityScore = null;
-if (canopyDensity) {
+if (canopyDensity && plantableMask) {
   treatment = ee.Image(0)
     .where(canopyDensity.lt(CONFIG.newPlantationCanopyMax), 1)
     .where(canopyDensity.gte(CONFIG.newPlantationCanopyMax).and(canopyDensity.lt(CONFIG.anrCanopyMax)), 2)
@@ -294,7 +307,7 @@ if (canopyDensity) {
 
   log('Treatment eligibility + Priority Score computed');
 } else {
-  warn('Cannot compute treatment eligibility without canopy data. Stopping.');
+  warn('Cannot compute treatment eligibility without canopy data and a land-cover mask. Stopping.');
 }
 
 // ============================================================================
@@ -404,8 +417,27 @@ if (treatment && priorityScore) {
   });
 
   // ---- Visualization ---------------------------------------------------------
-  Map.addLayer(priorityScore, { min: 0, max: 1, palette: ['fee08b', 'fc8d59', 'd73027'] }, 'CAMPA Priority Score', true);
-  Map.addLayer(treatment.selfMask(), { min: 1, max: 2, palette: ['1a9850', '2b83ba'] }, 'Recommended Treatment (1=New Plantation, 2=ANR)', false);
+  // Stretch the Priority Score palette to the ACTUAL 5th-95th percentile of
+  // computed values, not a fixed 0-1 assumption - if the real values only
+  // span a narrow band (e.g. 0.4-0.6), a fixed 0-1 stretch renders as a
+  // single flat color even though the underlying scores do vary. This also
+  // prints the true observed range so a "why is it all one color" question
+  // can be answered from data, not guesswork.
+  var scoreStatsInfo = priorityScore.reduceRegion({
+    reducer: ee.Reducer.percentile([5, 95]),
+    geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 4, bestEffort: true
+  }).getInfo();
+  var stretchMin = (scoreStatsInfo && scoreStatsInfo.priorityScore_p5 != null) ? scoreStatsInfo.priorityScore_p5 : 0;
+  var stretchMax = (scoreStatsInfo && scoreStatsInfo.priorityScore_p95 != null) ? scoreStatsInfo.priorityScore_p95 : 1;
+  if (!(stretchMax - stretchMin > 0.05)) { stretchMin = 0; stretchMax = 1; }
+  print('Priority Score observed range (5th-95th percentile): ' + stretchMin.toFixed(2) + ' - ' + stretchMax.toFixed(2)
+    + (stretchMax - stretchMin < 0.15 ? '  <-- NARROW: eligible land is scoring quite similarly; see the criteria weights in CONFIG if more spread is wanted' : ''));
+
+  // Treatment Type (the 3 categories) is the primary map to look at for
+  // "how is this distributed" - shown by default. Priority Score is the
+  // underlying continuous ranking, useful for detail but off by default.
+  Map.addLayer(treatment.selfMask(), { min: 1, max: 2, palette: ['1a9850', '2b83ba'] }, 'Recommended Treatment (green=New Plantation, blue=ANR)', true);
+  Map.addLayer(priorityScore, { min: stretchMin, max: stretchMax, palette: ['fee08b', 'fc8d59', 'd73027'] }, 'CAMPA Priority Score (stretched to observed range)', false);
   try {
     var gridOutline = ee.Image().byte().paint({ featureCollection: grid, color: 1, width: 1 });
     Map.addLayer(gridOutline, { palette: ['ffffff'] }, 'Planning Blocks (' + CONFIG.blockSizeM + 'm)', false);
@@ -413,8 +445,14 @@ if (treatment && priorityScore) {
 
   try {
     var legend = ui.Panel({ style: { position: 'bottom-left', padding: '8px 15px' } });
-    legend.add(ui.Label('CAMPA Site Priority', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 4px 0' }));
-    legend.add(ui.Label('Higher = higher priority for CAMPA-funded treatment', { fontSize: '11px', color: '666666', margin: '0 0 4px 0' }));
+    legend.add(ui.Label('Recommended Treatment', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
+    legend.add(ui.Label('(untinted areas = Not Prioritized / excluded land)', { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
+    var treatLegendItems = [['1a9850', 'New Plantation (< 10% canopy)'], ['2b83ba', 'ANR (10-40% canopy)']];
+    treatLegendItems.forEach(function (item) {
+      var colorBox = ui.Label('', { backgroundColor: item[0], padding: '8px', margin: '0 0 4px 0' });
+      var desc = ui.Label(item[1], { margin: '0 0 4px 6px', fontSize: '12px' });
+      legend.add(ui.Panel({ widgets: [colorBox, desc], layout: ui.Panel.Layout.flow('horizontal') }));
+    });
     Map.add(legend);
   } catch (e) {}
 
