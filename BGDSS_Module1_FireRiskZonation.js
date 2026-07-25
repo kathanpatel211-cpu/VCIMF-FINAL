@@ -51,7 +51,13 @@ var CONFIG = {
   state: 'Gujarat',
   unitName: 'BEAT',
 
-  scale: 30,                        // analysis/export resolution, meters
+  scale: 10,                        // analysis/export resolution, meters -
+                                     // matched to the finest available input
+                                     // (Sentinel-2/Hansen/AW3D30); coarser
+                                     // inputs (MODIS, CHIRPS) are bilinearly
+                                     // resampled onto this grid so the final
+                                     // map reads as smooth gradients instead
+                                     // of blocky native pixels
   exportFolder: 'BGDSS',
   exportPrefix: 'BGDSS_FireRisk',
 
@@ -140,17 +146,18 @@ if (dem) {
   // ~72-78E; change the EPSG code if your beat falls in a different zone)
   // before computing terrain products.
   dem = dem.clip(roi).rename('elevation').toFloat()
+    .resample('bilinear')
     .reproject({ crs: 'EPSG:32643', scale: CONFIG.scale });
   slope = ee.Terrain.slope(dem);
   aspect = ee.Terrain.aspect(dem);
-  log('DEM / Slope / Aspect ready (reprojected to EPSG:32643 for terrain accuracy)');
+  log('DEM / Slope / Aspect ready (reprojected to EPSG:32643, bilinear-smoothed)');
 }
 
 // ============================================================================
 // 2. FOREST-TYPE INFLAMMABILITY (Champion & Seth 1968, canopy-modulated)
 // ============================================================================
 var hansen = safeImage('UMD/hansen/global_forest_change_2023_v1_11', 'Hansen canopy cover');
-var canopyDensity = hansen ? hansen.select('treecover2000').clip(roi) : null;
+var canopyDensity = hansen ? hansen.select('treecover2000').resample('bilinear').clip(roi) : null;
 var forestTypeRisk;
 if (canopyDensity) {
   // Denser canopy retains moisture better (slightly lower risk); open/
@@ -169,9 +176,16 @@ if (canopyDensity) {
 var yStart = ee.Date.fromYMD(CONFIG.year, 1, 1);
 var yEnd = yStart.advance(1, 'year');
 
+// CHIRPS (~5.5km) and MODIS LST (1km) are far coarser than the 10m analysis
+// grid. .resample('bilinear') doesn't invent real detail, but it replaces
+// hard, blocky native grid-cell edges with a smooth interpolated gradient
+// when these layers are combined with the finer terrain/canopy inputs -
+// the standard cartographic fix for a multi-resolution composite map.
 var chirps = safeCollection('UCSB-CHG/CHIRPS/DAILY', 'CHIRPS rainfall');
-var rainfall = chirps ? chirps.filterDate(yStart, yEnd).sum().clip(roi).rename('rainfall') : null;
-if (rainfall) { log('Annual rainfall computed'); }
+var rainfall = chirps
+  ? chirps.filterDate(yStart, yEnd).sum().resample('bilinear').clip(roi).rename('rainfall')
+  : null;
+if (rainfall) { log('Annual rainfall computed (bilinear-smoothed)'); }
 
 var modisLst = safeCollection('MODIS/061/MOD11A2', 'MODIS LST temperature');
 var tempMeanC = null;
@@ -179,8 +193,8 @@ if (modisLst) {
   var lstYear = modisLst.filterDate(yStart, yEnd);
   var day = lstYear.select('LST_Day_1km').mean().multiply(0.02).subtract(273.15);
   var night = lstYear.select('LST_Night_1km').mean().multiply(0.02).subtract(273.15);
-  tempMeanC = day.add(night).divide(2).clip(roi).rename('tempMean');
-  log('Mean temperature computed');
+  tempMeanC = day.add(night).divide(2).resample('bilinear').clip(roi).rename('tempMean');
+  log('Mean temperature computed (bilinear-smoothed)');
 }
 
 // ============================================================================
@@ -251,8 +265,20 @@ var susceptibility = forestTypeRisk.multiply(w.forestType / wSum)
   .add(aspectNorm.multiply(w.aspect / wSum))
   .rename('fireSusceptibility');
 
-var fireRisk = classify5(susceptibility);
-log('Fire Susceptibility + 5-class Fire Risk computed (Jaiswal et al. 2002 AHP)');
+var fireRiskRaw = classify5(susceptibility);
+
+// Cartographic clean-up: a raw pixel-by-pixel classification always has
+// some salt-and-pepper single-pixel noise at class boundaries. A majority
+// (mode) filter over a small neighborhood removes that noise so the map
+// reads as clean, coherent zones - standard practice for a briefing map,
+// as opposed to a raw scientific raster meant for pixel-level inspection.
+var smoothingKernel = ee.Kernel.square({ radius: 2, units: 'pixels' });
+var fireRisk = fireRiskRaw.reduceNeighborhood({
+  reducer: ee.Reducer.mode(),
+  kernel: smoothingKernel
+}).rename('class').clip(roi);
+
+log('Fire Susceptibility + 5-class Fire Risk computed (Jaiswal et al. 2002 AHP, mode-smoothed)');
 
 // ---- DIAGNOSTIC: mean of each 0-1 criterion + the final score. The AHP
 // formula guarantees susceptibility >= ~0.30 whenever settlement/road are
@@ -302,16 +328,40 @@ coverage.evaluate(function (c) {
 // ============================================================================
 // 8. VISUALIZATION
 // ============================================================================
+if (dem) {
+  var hillshade = ee.Terrain.hillshade(dem);
+  Map.addLayer(hillshade, { min: 0, max: 255 }, 'Hillshade (terrain backdrop)', false);
+}
 Map.addLayer(forestTypeRisk, { min: 0, max: 1, palette: PALETTE }, 'Forest-Type Inflammability', false);
 if (fireHistory) {
   Map.addLayer(fireHistory.selfMask(), { min: 1, max: CONFIG.fireHistoryYears, palette: ['fee08b', 'd73027', '7f0000'] }, 'Observed Fire History (years burned)', false);
 }
-Map.addLayer(susceptibility, { min: 0, max: 1, palette: PALETTE }, 'Fire Susceptibility (AHP score)', false);
-Map.addLayer(fireRisk, { min: 1, max: 5, palette: PALETTE }, 'Fire Risk (5-class)', true);
+Map.addLayer(susceptibility, { min: 0, max: 1, palette: PALETTE }, 'Fire Susceptibility (AHP score, continuous)', false);
+Map.addLayer(fireRiskRaw, { min: 1, max: 5, palette: PALETTE }, 'Fire Risk - unsmoothed (pixel-level detail)', false);
+Map.addLayer(fireRisk, { min: 1, max: 5, palette: PALETTE }, 'Fire Risk (5-class, briefing map)', true);
+
+try {
+  var outline = ee.Image().byte().paint({ featureCollection: CONFIG.roi, color: 1, width: 2 });
+  Map.addLayer(outline, { palette: ['ffffff'] }, 'Beat Boundary', true);
+} catch (e) {}
+
+try {
+  var titlePanel = ui.Panel({
+    style: { position: 'top-center', padding: '6px 16px', backgroundColor: 'rgba(255,255,255,0.85)' }
+  });
+  titlePanel.add(ui.Label(
+    'Fire Risk Zonation - ' + CONFIG.unitName + ', ' + CONFIG.district + ', ' + CONFIG.state + ' (' + CONFIG.year + ')',
+    { fontWeight: 'bold', fontSize: '16px', margin: '2px 0' }));
+  titlePanel.add(ui.Label(
+    'Jaiswal et al. (2002) AHP model - Champion & Seth (1968) forest type',
+    { fontSize: '11px', color: '555555', margin: '0 0 2px 0' }));
+  Map.add(titlePanel);
+} catch (e) {}
 
 try {
   var legend = ui.Panel({ style: { position: 'bottom-left', padding: '8px 15px' } });
-  legend.add(ui.Label('Fire Risk (Jaiswal et al. 2002 AHP)', { fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0' }));
+  legend.add(ui.Label('Fire Risk', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
+  legend.add(ui.Label('Jaiswal et al. (2002) AHP', { fontSize: '11px', color: '666666', margin: '0 0 6px 0' }));
   for (var i = 0; i < CLASS_LABELS.length; i++) {
     var colorBox = ui.Label('', { backgroundColor: PALETTE[i], padding: '8px', margin: '0 0 4px 0' });
     var desc = ui.Label(CLASS_LABELS[i], { margin: '0 0 4px 6px' });
