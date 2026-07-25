@@ -209,9 +209,9 @@ BGDSS.DATA.IDS = {
   modisBurnedArea: 'MODIS/061/MCD64A1',
   firms: 'FIRMS',
   hydroshedsVfDem: 'WWF/HydroSHEDS/03VFDEM',
-  hydroshedsDir: 'WWF/HydroSHEDS/15DIR',
-  hydroshedsAcc: 'WWF/HydroSHEDS/15ACC', // verify
-  hydroBasinsAsLev08: 'WWF/HydroSHEDS/v1/Basins/hybas_8', // verify (continent-level asset name may vary)
+  hydroshedsDir: 'WWF/HydroSHEDS/15DIR',       // confirmed vs. earthengine-catalog (image, band b1)
+  hydroshedsAcc: 'WWF/HydroSHEDS/15ACC',       // confirmed vs. earthengine-catalog (image, band b1)
+  hydroBasinsAsLev08: 'WWF/HydroSHEDS/v1/Basins/hybas_8', // confirmed (table, global level-8 basins)
   smapSoilMoisture: 'NASA/SMAP/SPL4SMGP/007',
   olTexture: 'OpenLandMap/SOL/SOL_TEXTURE-CLASS_USDA-TT_M/v02',
   olOrganicCarbon: 'OpenLandMap/SOL/SOL_ORGANIC-CARBON_USDA-6A1C_M/v02',
@@ -260,6 +260,30 @@ BGDSS.DATA.safeCollection = function (id, cacheKey, label) {
 };
 
 /**
+ * Purpose : Safely construct a single mosaicked ee.Image out of a tiled
+ *           ee.ImageCollection (several EE datasets - e.g. JAXA AW3D30,
+ *           ESA WorldCover - are published as per-tile ImageCollections,
+ *           not single Images). Validates availability first; never
+ *           throws.
+ * Input   : id, cacheKey, label, bandName (optional - selects before mosaic)
+ * Output  : ee.Image (single mosaicked band) on success, null on failure
+ */
+BGDSS.DATA.safeMosaicImage = function (id, cacheKey, label, bandName) {
+  if (BGDSS.CACHE.hasOwnProperty(cacheKey)) { return BGDSS.CACHE[cacheKey]; }
+  var img = null;
+  try {
+    var col = ee.ImageCollection(id);
+    col.first().bandNames().getInfo();
+    img = bandName ? col.select([bandName]).mosaic() : col.mosaic();
+  } catch (e) {
+    BGDSS.UTIL.log(label, 'Dataset unavailable (' + id + '). Skipping module.', 'warn');
+    img = null;
+  }
+  BGDSS.CACHE[cacheKey] = img;
+  return img;
+};
+
+/**
  * Purpose : Safely construct + validate an ee.FeatureCollection, memoized.
  */
 BGDSS.DATA.safeTable = function (id, cacheKey, label) {
@@ -279,7 +303,9 @@ BGDSS.DATA.safeTable = function (id, cacheKey, label) {
 /* ---- Convenience typed getters used by the engines below ---- */
 
 BGDSS.DATA.getDem = function () {
-  return BGDSS.DATA.safeImage(BGDSS.DATA.IDS.demAW3D30, 'demAW3D30', 'TERRAIN').select(['DSM'], ['elevation']);
+  // JAXA AW3D30 is published as a tiled ImageCollection (bands DSM/STK/MSK),
+  // not a single Image - mosaic the DSM band into one continuous surface.
+  return BGDSS.DATA.safeMosaicImage(BGDSS.DATA.IDS.demAW3D30, 'demAW3D30', 'TERRAIN', 'DSM');
 };
 
 BGDSS.DATA.getChirps = function () {
@@ -295,7 +321,9 @@ BGDSS.DATA.getSentinel2 = function () {
 };
 
 BGDSS.DATA.getWorldCover = function () {
-  return BGDSS.DATA.safeImage(BGDSS.DATA.IDS.worldCover, 'worldCover', 'FOREST');
+  // ESA WorldCover v200 is also a tiled ImageCollection (band 'Map') - mosaic
+  // it into one continuous land-cover surface before use.
+  return BGDSS.DATA.safeMosaicImage(BGDSS.DATA.IDS.worldCover, 'worldCover', 'FOREST', 'Map');
 };
 
 BGDSS.DATA.getHansenGfc = function () {
@@ -771,7 +799,9 @@ BGDSS.HYDROLOGY.run = function () {
 
   var flowDirection, flowAccumulation;
   if (usingHydrosheds) {
-    flowDirection = flowDir.clip(geometry).rename('flowDirection');
+    // WWF/HydroSHEDS/15DIR is a D8 direction code (1=E,2=SE,4=S,8=SW,16=W,
+    // 32=NW,64=N,128=NE); 0=ocean outlet and 255=inland sink are nodata.
+    flowDirection = flowDir.clip(geometry).updateMask(flowDir.neq(0).and(flowDir.neq(255))).rename('flowDirection');
     flowAccumulation = flowAcc.clip(geometry).rename('flowAccumulation');
   } else {
     // Fallback proxy: aspect-derived 8-direction flow, and a slope-weighted
@@ -833,7 +863,10 @@ BGDSS.HYDROLOGY.run = function () {
   BGDSS.UTIL.registerStat('hydrology', 'waterHarvestSuitabilityArea', BGDSS.UTIL.computeAreaStats(waterHarvestSuitability, BGDSS.UTIL.CLASS_LABELS_5, { scale: BGDSS.CONFIG.coarseScale }));
 
   // ---- Visualization -------------------------------------------------------------
-  BGDSS.UTIL.addLayer(flowDirection, { min: 1, max: 8, palette: ['ff0000', 'ff8000', 'ffff00', '80ff00', '00ff00', '00ffff', '0000ff', 'ff00ff'] }, 'Hydrology: Flow Direction', false);
+  var flowDirVis = usingHydrosheds
+    ? { min: 1, max: 128, palette: ['ff0000', 'ff8000', 'ffff00', '80ff00', '00ff00', '00ffff', '0000ff', 'ff00ff'] }
+    : { min: 1, max: 8, palette: ['ff0000', 'ff8000', 'ffff00', '80ff00', '00ff00', '00ffff', '0000ff', 'ff00ff'] };
+  BGDSS.UTIL.addLayer(flowDirection, flowDirVis, 'Hydrology: Flow Direction', false);
   BGDSS.UTIL.addLayer(flowAccumulation, { min: 0, max: 1000, palette: ['ffffcc', '41b6c4', '253494'] }, 'Hydrology: Flow Accumulation', false);
   BGDSS.UTIL.addLayer(drainage, { palette: ['0000ff'] }, 'Hydrology: Drainage Network', true);
   BGDSS.UTIL.addLayer(waterHarvestSuitability, { min: 1, max: 5, palette: BGDSS.UTIL.PALETTE_5 }, 'Hydrology: Water Harvesting Suitability', false);
