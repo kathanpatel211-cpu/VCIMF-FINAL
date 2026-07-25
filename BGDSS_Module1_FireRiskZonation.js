@@ -163,7 +163,8 @@ if (canopyDensity) {
   // Denser canopy retains moisture better (slightly lower risk); open/
   // degraded stands keep the full baseline inflammability of the type.
   var damping = normalize(canopyDensity, 0, 80, false).multiply(0.3);
-  forestTypeRisk = ee.Image(CONFIG.forestTypeBaseline).multiply(ee.Image(1).subtract(damping)).rename('forestTypeRisk');
+  forestTypeRisk = ee.Image(CONFIG.forestTypeBaseline).multiply(ee.Image(1).subtract(damping))
+    .rename('forestTypeRisk').unmask(CONFIG.forestTypeBaseline);
   log('Forest-Type Inflammability computed (baseline ' + CONFIG.forestTypeBaseline + ', canopy-modulated)');
 } else {
   forestTypeRisk = ee.Image(CONFIG.forestTypeBaseline).clip(roi).rename('forestTypeRisk');
@@ -239,15 +240,28 @@ if (CONFIG.roads) {
 
 // ============================================================================
 // 6. REMAINING CRITERIA - normalize each to a 0-1 "risk contribution"
+// ----------------------------------------------------------------------------
+// IMPORTANT: every criterion below is .unmask(0.5)'d. Earth Engine's
+// image arithmetic propagates masks (a masked pixel in ANY input to an
+// .add()/.multiply() chain makes the OUTPUT masked at that pixel too), and
+// ee.Image.where()'s documented behavior is to leave a pixel AT ITS
+// STARTING VALUE whenever the test condition is masked - which for
+// classify5() (which starts from a constant 1 = "Very Low") means any
+// masked pixel silently renders as "Very Low" instead of "no data". Real
+// gaps are common here: cloud-persistent MODIS LST pixels, DEM voids over
+// water, etc. Rather than let a data gap silently masquerade as "safe",
+// every criterion falls back to a neutral 0.5 wherever its source data is
+// missing, so susceptibility is always genuinely computed everywhere in
+// the beat - never a silent default.
 // ============================================================================
-var slopeNorm = slope ? normalize(slope, 0, 35, false) : ee.Image(0.5);
+var slopeNorm = (slope ? normalize(slope, 0, 35, false) : ee.Image(0.5)).unmask(0.5);
 // South-facing slopes (135-225 deg, Northern Hemisphere) get more solar
 // load -> drier fuel -> higher risk.
-var aspectNorm = aspect
+var aspectNorm = (aspect
   ? aspect.subtract(180).abs().multiply(-1).add(180).divide(180).rename('aspectRisk')
-  : ee.Image(0.5);
-var temperatureNorm = tempMeanC ? normalize(tempMeanC, 20, 42, false) : ee.Image(0.5);
-var rainfallNorm = rainfall ? normalize(rainfall, 300, 1500, true) : ee.Image(0.5); // drier -> higher risk
+  : ee.Image(0.5)).unmask(0.5);
+var temperatureNorm = (tempMeanC ? normalize(tempMeanC, 20, 42, false) : ee.Image(0.5)).unmask(0.5);
+var rainfallNorm = (rainfall ? normalize(rainfall, 300, 1500, true) : ee.Image(0.5)).unmask(0.5); // drier -> higher risk
 
 // ============================================================================
 // 7. AHP WEIGHTED OVERLAY (Jaiswal et al. 2002) -> Fire Susceptibility -> Risk
