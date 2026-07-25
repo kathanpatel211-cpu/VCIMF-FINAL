@@ -445,8 +445,15 @@ areaStats.evaluate(function (result) {
 });
 
 // ============================================================================
-// 10. RASTER EXPORTS (GeoTIFF - run from the Tasks tab)
+// 10. EXPORTS - all in one consistent CRS (EPSG:32643, UTM 43N) so every
+//     layer lines up perfectly when brought into ArcGIS together.
 // ============================================================================
+var EXPORT_CRS = 'EPSG:32643';
+
+// (a) Raw classified raster (values 1-5) - for a GIS analyst who wants to
+//     apply their own symbology/attribute domain in ArcGIS. Pair with the
+//     BGDSS_FireRisk_ArcGIS.clr colormap file (sent separately) via
+//     Symbology > Colormap > Import Colormap File.
 Export.image.toDrive({
   image: fireRisk.toInt(),
   description: CONFIG.exportPrefix + '_RiskMap',
@@ -454,8 +461,45 @@ Export.image.toDrive({
   fileNamePrefix: CONFIG.exportPrefix + '_RiskMap',
   region: roi.bounds(),
   scale: CONFIG.scale,
+  crs: EXPORT_CRS,
   maxPixels: 1e13
 });
+
+// (b) Pre-rendered RGB version - the 5-class palette baked directly into
+//     the pixels. Drop this straight into ArcGIS or a slide deck with NO
+//     symbology setup required - what a non-GIS reviewer (PMO/Minister)
+//     should actually be shown.
+Export.image.toDrive({
+  image: fireRisk.visualize({ min: 1, max: 5, palette: PALETTE }),
+  description: CONFIG.exportPrefix + '_RiskMap_RGB',
+  folder: CONFIG.exportFolder,
+  fileNamePrefix: CONFIG.exportPrefix + '_RiskMap_RGB',
+  region: roi.bounds(),
+  scale: CONFIG.scale,
+  crs: EXPORT_CRS,
+  maxPixels: 1e13
+});
+
+// (c) Hillshade-shaded cartographic composite - the classified color
+//     blended with terrain shading for a 3D-relief "atlas" look, the kind
+//     of single image that reads well printed A3-size in a briefing.
+if (dem) {
+  var hillshadeNorm = ee.Terrain.hillshade(dem).divide(255);
+  var shadedComposite = fireRisk.visualize({ min: 1, max: 5, palette: PALETTE })
+    .multiply(hillshadeNorm).uint8();
+  Export.image.toDrive({
+    image: shadedComposite,
+    description: CONFIG.exportPrefix + '_RiskMap_Shaded',
+    folder: CONFIG.exportFolder,
+    fileNamePrefix: CONFIG.exportPrefix + '_RiskMap_Shaded',
+    region: roi.bounds(),
+    scale: CONFIG.scale,
+    crs: EXPORT_CRS,
+    maxPixels: 1e13
+  });
+}
+
+// (d) Continuous susceptibility score (0-1) - for technical audit/reuse.
 Export.image.toDrive({
   image: susceptibility,
   description: CONFIG.exportPrefix + '_SusceptibilityScore',
@@ -463,7 +507,18 @@ Export.image.toDrive({
   fileNamePrefix: CONFIG.exportPrefix + '_SusceptibilityScore',
   region: roi.bounds(),
   scale: CONFIG.scale,
+  crs: EXPORT_CRS,
   maxPixels: 1e13
 });
 
-log('Fire Risk Zonation module complete. Toggle "Fire Risk (5-class)" on in the Layers panel; run the 3 tasks in the Tasks tab to save outputs to Drive.');
+// (e) Beat boundary as a vector layer, same CRS, to overlay cleanly on
+//     every raster above in ArcGIS.
+Export.table.toDrive({
+  collection: CONFIG.roi,
+  description: CONFIG.exportPrefix + '_BeatBoundary',
+  folder: CONFIG.exportFolder,
+  fileNamePrefix: CONFIG.exportPrefix + '_BeatBoundary',
+  fileFormat: 'SHP'
+});
+
+log('Fire Risk Zonation module complete. Toggle "Fire Risk (5-class, briefing map)" on in the Layers panel; run the 6 tasks in the Tasks tab to save ArcGIS-ready outputs to Drive.');
