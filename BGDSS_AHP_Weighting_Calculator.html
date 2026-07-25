@@ -1,0 +1,915 @@
+<title>BGDSS AHP Weighting Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --ink:#1f2a22; --ink-soft:#3d4a3f;
+    --canopy:#2f4a3b; --canopy-2:#4c6b54; --canopy-tint:#e4ebe3;
+    --bg:#ede8dc; --panel:#f8f5ec; --panel-2:#ffffff;
+    --line:#d9d2bf;
+    --laterite:#b5602e; --laterite-tint:#f3e2d3;
+    --good:#3f7d4e; --good-tint:#dff0e2;
+    --warn:#b23a2e; --warn-tint:#f8dfdb;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:"Seravek","Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",SFMono-Regular,Consolas,"Liberation Mono",monospace;
+    --radius:10px;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#eae6d9; --ink-soft:#c7c2b2;
+      --canopy:#8fb79a; --canopy-2:#6f9481; --canopy-tint:#1c2a20;
+      --bg:#141b16; --panel:#1b241d; --panel-2:#202a22;
+      --line:#31402f;
+      --laterite:#d98a54; --laterite-tint:#2d2018;
+      --good:#68c481; --good-tint:#173322;
+      --warn:#e17565; --warn-tint:#3a1e19;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#eae6d9; --ink-soft:#c7c2b2;
+    --canopy:#8fb79a; --canopy-2:#6f9481; --canopy-tint:#1c2a20;
+    --bg:#141b16; --panel:#1b241d; --panel-2:#202a22;
+    --line:#31402f;
+    --laterite:#d98a54; --laterite-tint:#2d2018;
+    --good:#68c481; --good-tint:#173322;
+    --warn:#e17565; --warn-tint:#3a1e19;
+  }
+  :root[data-theme="light"]{
+    --ink:#1f2a22; --ink-soft:#3d4a3f;
+    --canopy:#2f4a3b; --canopy-2:#4c6b54; --canopy-tint:#e4ebe3;
+    --bg:#ede8dc; --panel:#f8f5ec; --panel-2:#ffffff;
+    --line:#d9d2bf;
+    --laterite:#b5602e; --laterite-tint:#f3e2d3;
+    --good:#3f7d4e; --good-tint:#dff0e2;
+    --warn:#b23a2e; --warn-tint:#f8dfdb;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.5;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:28px 20px 80px;}
+
+  header.top{
+    display:flex; flex-direction:column; gap:6px; margin-bottom:26px;
+    border-bottom:1px solid var(--line); padding-bottom:18px;
+  }
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--canopy-2);
+  }
+  h1{
+    font-family:var(--serif); font-weight:600; font-size:clamp(26px,4vw,36px);
+    margin:2px 0 4px; text-wrap:balance; color:var(--ink);
+  }
+  .sub{color:var(--ink-soft); font-size:15px; max-width:62ch;}
+
+  nav.steps{
+    display:flex; gap:6px; flex-wrap:wrap; margin:22px 0 26px;
+  }
+  nav.steps button{
+    font-family:var(--sans); font-size:13px; padding:9px 14px; border-radius:999px;
+    border:1px solid var(--line); background:var(--panel-2); color:var(--ink-soft);
+    cursor:pointer; transition:background .15s, color .15s, border-color .15s;
+  }
+  nav.steps button.active{ background:var(--canopy); border-color:var(--canopy); color:var(--canopy-tint); font-weight:600; }
+  nav.steps button:disabled{ opacity:.45; cursor:not-allowed; }
+
+  section.panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:26px 24px; margin-bottom:20px;
+  }
+  section.panel h2{
+    font-family:var(--serif); font-size:21px; margin:0 0 6px; color:var(--ink);
+  }
+  section.panel .hint{ color:var(--ink-soft); font-size:14px; margin-bottom:18px; max-width:68ch; }
+
+  /* ---- summary strip ---- */
+  .summary-strip{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px;
+    margin-bottom:22px;
+  }
+  .stat-card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 16px;
+  }
+  .stat-card .label{ font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); }
+  .stat-card .value{ font-family:var(--serif); font-size:26px; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;
+    padding:4px 10px; border-radius:999px; margin-top:6px;
+  }
+  .pill.good{ background:var(--good-tint); color:var(--good); }
+  .pill.warn{ background:var(--warn-tint); color:var(--warn); }
+  .pill.dot::before{ content:""; width:7px; height:7px; border-radius:50%; background:currentColor; display:inline-block; }
+
+  /* ---- criteria setup ---- */
+  .cluster-card{
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--panel-2);
+    padding:16px 18px; margin-bottom:14px;
+  }
+  .cluster-card .cluster-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;}
+  .cluster-card input.cluster-name{
+    font-family:var(--serif); font-size:17px; border:none; background:transparent; color:var(--ink);
+    padding:2px 4px; border-bottom:1px dashed transparent; flex:1;
+  }
+  .cluster-card input.cluster-name:hover, .cluster-card input.cluster-name:focus{ border-bottom-color:var(--line); outline:none; }
+  .crit-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--line); }
+  .crit-row:first-of-type{ border-top:none; }
+  .crit-row input.crit-name{
+    flex:1; font-family:var(--sans); font-size:14px; border:none; background:transparent; color:var(--ink);
+    padding:4px 6px; border-radius:6px;
+  }
+  .crit-row input.crit-name:focus{ outline:2px solid var(--canopy-2); background:var(--panel); }
+  .icon-btn{
+    border:none; background:transparent; color:var(--ink-soft); cursor:pointer; font-size:15px;
+    width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ background:var(--canopy-tint); color:var(--canopy); }
+  .icon-btn:focus-visible{ outline:2px solid var(--canopy-2); }
+  .add-crit-btn, .add-cluster-btn{
+    font-family:var(--sans); font-size:13px; color:var(--canopy-2); background:none; border:1px dashed var(--line);
+    border-radius:8px; padding:7px 12px; cursor:pointer; margin-top:8px;
+  }
+  .add-crit-btn:hover, .add-cluster-btn:hover{ border-color:var(--canopy-2); background:var(--canopy-tint); }
+
+  .btn{
+    font-family:var(--sans); font-size:14px; font-weight:600; padding:10px 20px; border-radius:8px;
+    border:1px solid var(--canopy); background:var(--canopy); color:var(--canopy-tint); cursor:pointer;
+  }
+  .btn:hover{ opacity:.92; }
+  .btn.secondary{ background:transparent; color:var(--canopy); }
+  .btn.laterite{ background:var(--laterite); border-color:var(--laterite); color:var(--laterite-tint); }
+  .btn:focus-visible, button:focus-visible, input:focus-visible{ outline:2px solid var(--canopy-2); outline-offset:2px; }
+  .row-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+
+  /* ---- pairwise comparison ---- */
+  .compare-progress{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-bottom:14px; }
+  .compare-card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius);
+    padding:24px; text-align:center;
+  }
+  .compare-context{ font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--canopy-2); margin-bottom:10px;}
+  .compare-terms{ display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:22px; flex-wrap:wrap;}
+  .term{ font-family:var(--serif); font-size:19px; max-width:26ch; }
+  .term.a{ color:var(--canopy); text-align:right; }
+  .term.b{ color:var(--laterite); text-align:left; }
+  .vs{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); }
+
+  .slider-wrap{ padding:6px 8px 0; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px;
+    background:linear-gradient(90deg, var(--laterite), var(--line) 50%, var(--canopy));
+    outline:none; margin:14px 0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+    background:var(--panel-2); border:3px solid var(--ink); cursor:pointer; margin-top:-2px;
+  }
+  input[type=range]::-moz-range-thumb{ width:16px; height:16px; border-radius:50%; background:var(--panel-2); border:3px solid var(--ink); cursor:pointer; }
+  .slider-scale{ display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--ink-soft); padding:0 2px;}
+  .judgment-readout{ font-family:var(--serif); font-size:18px; margin:14px 0 4px; min-height:26px; }
+  .judgment-readout b{ font-variant-numeric:tabular-nums; }
+
+  .nav-buttons{ display:flex; justify-content:space-between; margin-top:22px; }
+  .matrix-toggle{ font-size:12px; color:var(--ink-soft); background:none; border:none; text-decoration:underline; cursor:pointer; margin-top:16px;}
+
+  table.matrix{ border-collapse:collapse; width:100%; margin-top:10px; font-family:var(--mono); font-size:12px; }
+  table.matrix th, table.matrix td{ border:1px solid var(--line); padding:6px 8px; text-align:center; font-variant-numeric:tabular-nums; }
+  table.matrix th{ background:var(--canopy-tint); font-weight:600; color:var(--ink-soft); font-family:var(--sans); font-size:11px; }
+  table.matrix input{
+    width:64px; text-align:center; font-family:var(--mono); font-size:12px; border:1px solid transparent;
+    background:transparent; color:var(--ink); border-radius:4px; padding:3px;
+  }
+  table.matrix input:focus{ border-color:var(--canopy-2); background:var(--panel-2); outline:none;}
+  .matrix-scroll{ overflow-x:auto; }
+
+  /* ---- results ---- */
+  .cr-banner{
+    display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:var(--radius);
+    margin-bottom:16px; flex-wrap:wrap;
+  }
+  .cr-banner.good{ background:var(--good-tint); }
+  .cr-banner.warn{ background:var(--warn-tint); }
+  .cr-banner .big{ font-family:var(--serif); font-size:22px; font-variant-numeric:tabular-nums; }
+  .cr-banner.good .big{ color:var(--good); }
+  .cr-banner.warn .big{ color:var(--warn); }
+  .cr-banner .msg{ font-size:13.5px; color:var(--ink-soft); flex:1; min-width:200px; }
+
+  .weight-group{ margin-bottom:22px; }
+  .weight-group h3{ font-family:var(--serif); font-size:16px; margin:0 0 10px; color:var(--ink); font-weight:600; }
+  .weight-row{ display:flex; align-items:center; gap:12px; margin-bottom:9px; }
+  .weight-label{ width:230px; flex-shrink:0; font-size:13.5px; color:var(--ink); }
+  .weight-bar-track{ flex:1; background:var(--line); border-radius:6px; height:20px; position:relative; overflow:hidden; }
+  .weight-bar-fill{ height:100%; border-radius:6px; transition:width .4s ease; }
+  .weight-pct{ width:52px; text-align:right; font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums; }
+
+  .inconsistent-callout{
+    border-left:3px solid var(--warn); background:var(--warn-tint); padding:12px 14px; border-radius:0 8px 8px 0;
+    font-size:13.5px; margin-top:10px; color:var(--ink);
+  }
+
+  /* ---- sensitivity ---- */
+  .sens-controls{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px; }
+  select{
+    font-family:var(--sans); font-size:14px; padding:9px 10px; border-radius:8px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--ink);
+  }
+  .delta{ font-family:var(--mono); font-size:12px; margin-left:8px; }
+  .delta.up{ color:var(--good); } .delta.down{ color:var(--warn); }
+
+  /* ---- export ---- */
+  textarea.export-box{
+    width:100%; min-height:220px; font-family:var(--mono); font-size:12.5px; border:1px solid var(--line);
+    border-radius:8px; padding:14px; background:var(--panel-2); color:var(--ink); resize:vertical;
+  }
+  .export-actions{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .copied-msg{ font-size:12.5px; color:var(--good); font-family:var(--mono); }
+
+  footer.note{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:30px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">BGDSS · Beat GIS Decision Support System</div>
+    <h1>AHP Weighting Calculator</h1>
+    <p class="sub">Turn your team's expert judgment into defensible, reproducible priority weights for the CAMPA site-prioritization model — Saaty's pairwise-comparison method, with a consistency check and sensitivity analysis, not a manually guessed number.</p>
+  </header>
+
+  <nav class="steps" id="stepNav"></nav>
+
+  <main id="stepContent"></main>
+
+  <footer class="note">Runs entirely in this page — no data leaves your browser until you export it.</footer>
+</div>
+
+<script>
+/* ============================================================================
+   AHP MATH
+   ============================================================================ */
+const RI_TABLE = {1:0,2:0,3:0.58,4:0.90,5:1.12,6:1.24,7:1.32,8:1.41,9:1.45,10:1.49};
+
+function buildMatrix(items, judgments){
+  const n = items.length;
+  const A = Array.from({length:n},()=>Array(n).fill(1));
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      const key = i+'-'+j;
+      const v = (judgments[key] !== undefined) ? judgments[key] : 1;
+      A[i][j] = v;
+      A[j][i] = 1/v;
+    }
+  }
+  return A;
+}
+
+function principalEigenWeights(A){
+  const n = A.length;
+  let v = Array(n).fill(1/n);
+  for(let iter=0; iter<200; iter++){
+    const nv = Array(n).fill(0);
+    for(let i=0;i<n;i++){ for(let j=0;j<n;j++){ nv[i]+= A[i][j]*v[j]; } }
+    const sum = nv.reduce((a,b)=>a+b,0) || 1;
+    for(let i=0;i<n;i++){ nv[i]/=sum; }
+    v = nv;
+  }
+  return v;
+}
+
+function ahpResult(items, judgments){
+  const n = items.length;
+  const A = buildMatrix(items, judgments);
+  if(n < 2){ return { A, w:[1], lambdaMax:1, CI:0, CR:0, n, worst:null }; }
+  const w = principalEigenWeights(A);
+  let lambdaMax = 0;
+  for(let i=0;i<n;i++){
+    let rowSum = 0;
+    for(let j=0;j<n;j++){ rowSum += A[i][j]*w[j]; }
+    lambdaMax += rowSum / w[i];
+  }
+  lambdaMax /= n;
+  const CI = n>2 ? (lambdaMax-n)/(n-1) : 0;
+  const RI = RI_TABLE[n] || 1.49;
+  const CR = n>2 ? CI/RI : 0;
+
+  // worst (most inconsistent) pair
+  let worst = null, worstDev = -1;
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      const ratio = w[i]/w[j];
+      const dev = Math.abs(Math.log(A[i][j]) - Math.log(ratio));
+      if(dev > worstDev){ worstDev = dev; worst = {i,j}; }
+    }
+  }
+  return { A, w, lambdaMax, CI, CR, n, worst };
+}
+
+function saatyLabel(v){
+  const av = Math.abs(v) >= 1 ? v : 1/v;
+  const table = [[1,'Equal importance'],[2,'Weak'],[3,'Moderate importance'],[4,'Moderate-plus'],
+    [5,'Strong importance'],[6,'Strong-plus'],[7,'Very strong importance'],[8,'Very, very strong'],[9,'Extreme importance']];
+  let closest = table[0], bestDist = Infinity;
+  for(const t of table){ const d = Math.abs(t[0]-av); if(d<bestDist){ bestDist=d; closest=t; } }
+  return closest[1];
+}
+
+/* ============================================================================
+   DEFAULT MODEL (Gujarat CAMPA site-prioritization criteria set, editable)
+   ============================================================================ */
+function defaultModel(){
+  return {
+    clusters: [
+      { id:'eco', name:'Ecological Integrity', criteria:[
+        {id:'c'+cid(), name:'Degradation Severity'},
+        {id:'c'+cid(), name:'Fragmentation Index'},
+        {id:'c'+cid(), name:'Distance to Existing Forest'},
+        {id:'c'+cid(), name:'Hydrological Connectivity'}
+      ]},
+      { id:'phys', name:'Physical Site Suitability', criteria:[
+        {id:'c'+cid(), name:'Soil Depth'},
+        {id:'c'+cid(), name:'Soil Texture'},
+        {id:'c'+cid(), name:'Soil Organic Carbon'},
+        {id:'c'+cid(), name:'Slope & Rainfall Workability'},
+        {id:'c'+cid(), name:'Climate Exposure'}
+      ]},
+      { id:'carbon', name:'Carbon & Restoration Value', criteria:[
+        {id:'c'+cid(), name:'Carbon-Gain Potential'},
+        {id:'c'+cid(), name:'Soil Erosion Risk (RUSLE)'}
+      ]},
+      { id:'risk', name:'Risk & Feasibility', criteria:[
+        {id:'c'+cid(), name:'Fire Frequency History'},
+        {id:'c'+cid(), name:'Invasive Species Severity'},
+        {id:'c'+cid(), name:'Human Dependency & Accessibility'}
+      ]}
+    ],
+    clusterJudgments: {},
+    criteriaJudgments: {}
+  };
+}
+let _cidCounter = 0;
+function cid(){ return (++_cidCounter); }
+
+let state = JSON.parse(localStorage.getItem('bgdss_ahp_state') || 'null') || defaultModel();
+function persist(){ try{ localStorage.setItem('bgdss_ahp_state', JSON.stringify(state)); }catch(e){} }
+
+let currentStep = 0;
+const STEPS = ['Criteria', 'Pairwise Comparisons', 'Results', 'Sensitivity', 'Export'];
+
+/* ============================================================================
+   NAV
+   ============================================================================ */
+function renderNav(){
+  const nav = document.getElementById('stepNav');
+  nav.innerHTML = '';
+  STEPS.forEach((label, i)=>{
+    const b = document.createElement('button');
+    b.textContent = (i+1)+'. '+label;
+    if(i===currentStep) b.className='active';
+    b.onclick = ()=>{ currentStep=i; render(); };
+    nav.appendChild(b);
+  });
+}
+
+function render(){
+  renderNav();
+  const el = document.getElementById('stepContent');
+  el.innerHTML = '';
+  if(currentStep===0) el.appendChild(renderCriteriaStep());
+  if(currentStep===1) el.appendChild(renderPairwiseStep());
+  if(currentStep===2) el.appendChild(renderResultsStep());
+  if(currentStep===3) el.appendChild(renderSensitivityStep());
+  if(currentStep===4) el.appendChild(renderExportStep());
+  persist();
+}
+
+/* ============================================================================
+   STEP 1 — CRITERIA SETUP
+   ============================================================================ */
+function renderCriteriaStep(){
+  const wrap = document.createElement('div');
+
+  const panel = document.createElement('section');
+  panel.className='panel';
+  panel.innerHTML = '<h2>Define your criteria</h2><p class="hint">Grouped into clusters so the pairwise comparison stays manageable (Saaty recommends no more than ~7-9 items compared at once). Rename, remove, or add criteria and clusters freely — this defaults to a Gujarat CAMPA restoration template.</p>';
+
+  state.clusters.forEach((cluster, ci)=>{
+    const card = document.createElement('div');
+    card.className='cluster-card';
+    const head = document.createElement('div');
+    head.className='cluster-head';
+    const nameInput = document.createElement('input');
+    nameInput.className='cluster-name'; nameInput.value=cluster.name;
+    nameInput.oninput = (e)=>{ cluster.name = e.target.value; };
+    const delClusterBtn = document.createElement('button');
+    delClusterBtn.className='icon-btn'; delClusterBtn.title='Remove cluster'; delClusterBtn.textContent='✕';
+    delClusterBtn.onclick = ()=>{ state.clusters.splice(ci,1); render(); };
+    head.appendChild(nameInput); head.appendChild(delClusterBtn);
+    card.appendChild(head);
+
+    cluster.criteria.forEach((crit, ki)=>{
+      const row = document.createElement('div'); row.className='crit-row';
+      const input = document.createElement('input');
+      input.className='crit-name'; input.value=crit.name;
+      input.oninput = (e)=>{ crit.name = e.target.value; };
+      const del = document.createElement('button');
+      del.className='icon-btn'; del.title='Remove criterion'; del.textContent='–';
+      del.onclick = ()=>{ cluster.criteria.splice(ki,1); render(); };
+      row.appendChild(input); row.appendChild(del);
+      card.appendChild(row);
+    });
+
+    const addCrit = document.createElement('button');
+    addCrit.className='add-crit-btn'; addCrit.textContent='+ Add criterion';
+    addCrit.onclick = ()=>{ cluster.criteria.push({id:'c'+cid(), name:'New criterion'}); render(); };
+    card.appendChild(addCrit);
+    panel.appendChild(card);
+  });
+
+  const addCluster = document.createElement('button');
+  addCluster.className='add-cluster-btn'; addCluster.textContent='+ Add cluster';
+  addCluster.onclick = ()=>{ state.clusters.push({id:'cl'+cid(), name:'New cluster', criteria:[]}); render(); };
+  panel.appendChild(addCluster);
+
+  const actions = document.createElement('div'); actions.className='row-actions';
+  const resetBtn = document.createElement('button'); resetBtn.className='btn secondary'; resetBtn.textContent='Reset to default template';
+  resetBtn.onclick = ()=>{ if(confirm('Reset all criteria and judgments to the default template?')){ state = defaultModel(); render(); } };
+  const nextBtn = document.createElement('button'); nextBtn.className='btn'; nextBtn.textContent='Continue to Pairwise Comparisons →';
+  nextBtn.onclick = ()=>{ currentStep=1; render(); };
+  actions.appendChild(resetBtn); actions.appendChild(nextBtn);
+  panel.appendChild(actions);
+
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+/* ============================================================================
+   STEP 2 — PAIRWISE COMPARISONS
+   ============================================================================ */
+function buildComparisonList(){
+  // list of {level:'cluster'|'criteria', clusterId, items:[{id,name}], judgments}
+  const list = [];
+  if(state.clusters.length>1){
+    list.push({ level:'cluster', label:'Clusters', items: state.clusters.map(c=>({id:c.id,name:c.name})), judgments: state.clusterJudgments });
+  }
+  state.clusters.forEach(cluster=>{
+    if(cluster.criteria.length>1){
+      if(!state.criteriaJudgments[cluster.id]) state.criteriaJudgments[cluster.id] = {};
+      list.push({ level:'criteria', clusterName:cluster.name, label:cluster.name, items: cluster.criteria, judgments: state.criteriaJudgments[cluster.id] });
+    }
+  });
+  return list;
+}
+
+let pairwiseIndex = 0; // flat index across all group pairs
+function flattenPairs(list){
+  const flat = [];
+  list.forEach((group)=>{
+    const n = group.items.length;
+    for(let i=0;i<n;i++){ for(let j=i+1;j<n;j++){ flat.push({group, i, j}); } }
+  });
+  return flat;
+}
+
+function renderPairwiseStep(){
+  const wrap = document.createElement('div');
+  const list = buildComparisonList();
+  const flat = flattenPairs(list);
+
+  if(flat.length===0){
+    const p = document.createElement('section'); p.className='panel';
+    p.innerHTML = '<h2>Nothing to compare yet</h2><p class="hint">Add at least two criteria to a cluster (or at least two clusters) in Step 1.</p>';
+    wrap.appendChild(p);
+    return wrap;
+  }
+  if(pairwiseIndex >= flat.length) pairwiseIndex = flat.length-1;
+  if(pairwiseIndex < 0) pairwiseIndex = 0;
+
+  const panel = document.createElement('section'); panel.className='panel';
+  const { group, i, j } = flat[pairwiseIndex];
+  const a = group.items[i], b = group.items[j];
+  const key = i+'-'+j;
+  const current = (group.judgments[key] !== undefined) ? group.judgments[key] : 1;
+
+  panel.innerHTML = '<h2>Pairwise Comparisons</h2><p class="hint">One judgment at a time. Answer for how much more important each factor is <em>for deciding which land gets CAMPA-funded restoration first</em> — not in general.</p>';
+
+  const progress = document.createElement('div'); progress.className='compare-progress';
+  progress.textContent = 'Comparison ' + (pairwiseIndex+1) + ' of ' + flat.length + (group.level==='cluster' ? '  ·  Cluster-level weights' : '  ·  Within: ' + group.label);
+  panel.appendChild(progress);
+
+  const card = document.createElement('div'); card.className='compare-card';
+  const ctx = document.createElement('div'); ctx.className='compare-context';
+  ctx.textContent = group.level==='cluster' ? 'Comparing clusters' : 'Comparing criteria within "'+group.label+'"';
+  card.appendChild(ctx);
+
+  const terms = document.createElement('div'); terms.className='compare-terms';
+  const termA = document.createElement('div'); termA.className='term a'; termA.textContent = a.name;
+  const vs = document.createElement('div'); vs.className='vs'; vs.textContent='vs';
+  const termB = document.createElement('div'); termB.className='term b'; termB.textContent = b.name;
+  terms.appendChild(termA); terms.appendChild(vs); terms.appendChild(termB);
+  card.appendChild(terms);
+
+  // slider: -8..8 -> value>=0: intensity=v+1 (A dominant); value<0: intensity=-v+1 (B dominant), matrix value = A/B ratio
+  const sliderWrap = document.createElement('div'); sliderWrap.className='slider-wrap';
+  const slider = document.createElement('input');
+  slider.type='range'; slider.min=-8; slider.max=8; slider.step=1;
+  slider.value = current>=1 ? (current-1) : -(Math.round(1/current)-1);
+  const readout = document.createElement('div'); readout.className='judgment-readout';
+  function updateReadout(){
+    const v = parseInt(slider.value,10);
+    const intensity = v>=0 ? v+1 : -v+1;
+    const dominant = v>=0 ? a.name : (v<0 ? b.name : null);
+    const matrixVal = v>=0 ? intensity : 1/intensity;
+    group.judgments[key] = matrixVal;
+    if(intensity===1){
+      readout.innerHTML = '<b>Equal importance</b>';
+    } else {
+      readout.innerHTML = '<b>'+dominant+'</b> is '+saatyLabel(intensity).toLowerCase()+' than the other <span style="color:var(--ink-soft)">(intensity '+intensity+')</span>';
+    }
+  }
+  slider.oninput = updateReadout;
+  sliderWrap.appendChild(slider);
+  const scale = document.createElement('div'); scale.className='slider-scale';
+  scale.innerHTML = '<span>Extreme ← '+b.name.split(' ').slice(0,2).join(' ')+'</span><span>Equal</span><span>'+a.name.split(' ').slice(0,2).join(' ')+' → Extreme</span>';
+  sliderWrap.appendChild(scale);
+  card.appendChild(sliderWrap);
+  card.appendChild(readout);
+  updateReadout();
+
+  panel.appendChild(card);
+
+  const navBtns = document.createElement('div'); navBtns.className='nav-buttons';
+  const backBtn = document.createElement('button'); backBtn.className='btn secondary'; backBtn.textContent='← Back';
+  backBtn.disabled = pairwiseIndex===0;
+  backBtn.onclick = ()=>{ pairwiseIndex--; render(); };
+  const nextBtn = document.createElement('button'); nextBtn.className='btn';
+  nextBtn.textContent = (pairwiseIndex === flat.length-1) ? 'See Results →' : 'Next comparison →';
+  nextBtn.onclick = ()=>{
+    if(pairwiseIndex === flat.length-1){ currentStep=2; render(); }
+    else { pairwiseIndex++; render(); }
+  };
+  navBtns.appendChild(backBtn); navBtns.appendChild(nextBtn);
+  panel.appendChild(navBtns);
+
+  const toggle = document.createElement('button'); toggle.className='matrix-toggle';
+  toggle.textContent = 'Show full comparison matrix for "'+group.label+'" (expert / direct-edit mode)';
+  const matrixHolder = document.createElement('div');
+  toggle.onclick = ()=>{
+    matrixHolder.innerHTML = matrixHolder.innerHTML ? '' : renderMatrixEditorHTML(group);
+    attachMatrixEditorHandlers(matrixHolder, group);
+  };
+  panel.appendChild(toggle);
+  panel.appendChild(matrixHolder);
+
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function renderMatrixEditorHTML(group){
+  const items = group.items;
+  let html = '<div class="matrix-scroll"><table class="matrix"><tr><th></th>';
+  items.forEach(it=> html += '<th>'+escapeHtml(it.name)+'</th>');
+  html += '</tr>';
+  items.forEach((rowIt,i)=>{
+    html += '<tr><th>'+escapeHtml(rowIt.name)+'</th>';
+    items.forEach((colIt,j)=>{
+      if(i===j){ html += '<td>1</td>'; }
+      else if(i<j){
+        const v = group.judgments[i+'-'+j] !== undefined ? group.judgments[i+'-'+j] : 1;
+        html += '<td><input data-i="'+i+'" data-j="'+j+'" type="number" step="0.1" min="0.11" max="9" value="'+ (Math.round(v*100)/100) +'"></td>';
+      } else {
+        const v = group.judgments[j+'-'+i] !== undefined ? group.judgments[j+'-'+i] : 1;
+        html += '<td style="color:var(--ink-soft)">'+ (Math.round((1/v)*100)/100) +'</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</table></div>';
+  return html;
+}
+function attachMatrixEditorHandlers(holder, group){
+  holder.querySelectorAll('input[data-i]').forEach(inp=>{
+    inp.onchange = (e)=>{
+      const i = parseInt(e.target.dataset.i,10), j = parseInt(e.target.dataset.j,10);
+      let v = parseFloat(e.target.value); if(!v || v<=0) v = 1;
+      group.judgments[i+'-'+j] = v;
+      holder.innerHTML = renderMatrixEditorHTML(group);
+      attachMatrixEditorHandlers(holder, group);
+    };
+  });
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ============================================================================
+   COMPUTE GLOBAL RESULTS
+   ============================================================================ */
+function computeAll(){
+  const clusterItems = state.clusters.map(c=>({id:c.id,name:c.name}));
+  const clusterResult = state.clusters.length>1
+    ? ahpResult(clusterItems, state.clusterJudgments)
+    : { w:[1], CR:0, lambdaMax:1, CI:0, n:1, worst:null, A:[[1]] };
+
+  const perCluster = {};
+  state.clusters.forEach((cluster, ci)=>{
+    const jm = state.criteriaJudgments[cluster.id] || {};
+    const res = cluster.criteria.length>1 ? ahpResult(cluster.criteria, jm) : { w:[1], CR:0, lambdaMax:1, CI:0, n:cluster.criteria.length, worst:null, A:[[1]] };
+    perCluster[cluster.id] = res;
+  });
+
+  const globalWeights = [];
+  state.clusters.forEach((cluster, ci)=>{
+    const clusterWeight = clusterResult.w[ci];
+    const local = perCluster[cluster.id];
+    cluster.criteria.forEach((crit, kj)=>{
+      globalWeights.push({
+        clusterId:cluster.id, clusterName:cluster.name, name:crit.name,
+        localWeight: local.w[kj], clusterWeight, globalWeight: clusterWeight*local.w[kj]
+      });
+    });
+  });
+  globalWeights.sort((a,b)=>b.globalWeight-a.globalWeight);
+  return { clusterResult, perCluster, globalWeights };
+}
+
+const CLUSTER_COLORS = ['#2f4a3b','#b5602e','#4c6b54','#8a7a3f','#5c7a8a','#7a4c5c'];
+function colorFor(clusterId){
+  const idx = state.clusters.findIndex(c=>c.id===clusterId);
+  return CLUSTER_COLORS[idx % CLUSTER_COLORS.length];
+}
+
+/* ============================================================================
+   STEP 3 — RESULTS
+   ============================================================================ */
+function crPill(cr){
+  const ok = cr < 0.10;
+  const span = document.createElement('span');
+  span.className = 'pill dot ' + (ok?'good':'warn');
+  span.textContent = ok ? 'Consistent (CR '+cr.toFixed(3)+')' : 'Revise judgments (CR '+cr.toFixed(3)+')';
+  return span;
+}
+
+function renderResultsStep(){
+  const wrap = document.createElement('div');
+  const { clusterResult, perCluster, globalWeights } = computeAll();
+
+  const summary = document.createElement('section'); summary.className='panel';
+  summary.innerHTML = '<h2>Global Priority Weights</h2><p class="hint">Cluster weight × within-cluster local weight = each criterion\'s final global weight. This is what goes into <code>CONFIG.weights</code> in the GEE module.</p>';
+
+  const banner = document.createElement('div');
+  const overallOk = clusterResult.CR < 0.10 && Object.values(perCluster).every(r=>r.CR<0.10);
+  banner.className = 'cr-banner ' + (overallOk?'good':'warn');
+  banner.innerHTML = '<div class="big">'+(overallOk?'✓ Consistent':'⚠ Needs review')+'</div>'
+    + '<div class="msg">'+(overallOk
+        ? 'Every comparison group has a Consistency Ratio under Saaty\'s 0.10 threshold — these weights are statistically defensible.'
+        : 'One or more comparison groups exceed CR 0.10. See the flagged judgment(s) below before using these weights in a funding submission.')+'</div>';
+  summary.appendChild(banner);
+
+  const group = document.createElement('div'); group.className='weight-group';
+  group.innerHTML = '<h3>Final Global Weights</h3>';
+  const maxW = Math.max(...globalWeights.map(g=>g.globalWeight));
+  globalWeights.forEach(g=>{
+    const row = document.createElement('div'); row.className='weight-row';
+    const label = document.createElement('div'); label.className='weight-label'; label.textContent=g.name;
+    const track = document.createElement('div'); track.className='weight-bar-track';
+    const fill = document.createElement('div'); fill.className='weight-bar-fill';
+    fill.style.width = (g.globalWeight/maxW*100)+'%';
+    fill.style.background = colorFor(g.clusterId);
+    track.appendChild(fill);
+    const pct = document.createElement('div'); pct.className='weight-pct'; pct.textContent = (g.globalWeight*100).toFixed(1)+'%';
+    row.appendChild(label); row.appendChild(track); row.appendChild(pct);
+    group.appendChild(row);
+  });
+  summary.appendChild(group);
+  wrap.appendChild(summary);
+
+  if(state.clusters.length>1){
+    const cPanel = document.createElement('section'); cPanel.className='panel';
+    cPanel.innerHTML = '<h2>Cluster-Level Consistency</h2>';
+    cPanel.appendChild(crPill(clusterResult.CR));
+    if(clusterResult.worst && clusterResult.CR>=0.10){
+      const a = state.clusters[clusterResult.worst.i], b = state.clusters[clusterResult.worst.j];
+      const call = document.createElement('div'); call.className='inconsistent-callout';
+      call.innerHTML = 'Most likely source of inconsistency: your judgment comparing <b>'+a.name+'</b> vs <b>'+b.name+'</b>. Revisit that comparison in Step 2.';
+      cPanel.appendChild(call);
+    }
+    wrap.appendChild(cPanel);
+  }
+
+  state.clusters.forEach(cluster=>{
+    if(cluster.criteria.length<2) return;
+    const res = perCluster[cluster.id];
+    const p = document.createElement('section'); p.className='panel';
+    p.innerHTML = '<h2>Within "'+escapeHtml(cluster.name)+'"</h2>';
+    p.appendChild(crPill(res.CR));
+    if(res.worst && res.CR>=0.10){
+      const a = cluster.criteria[res.worst.i], b = cluster.criteria[res.worst.j];
+      const call = document.createElement('div'); call.className='inconsistent-callout';
+      call.innerHTML = 'Most likely source of inconsistency: your judgment comparing <b>'+a.name+'</b> vs <b>'+b.name+'</b>. Revisit that comparison in Step 2.';
+      p.appendChild(call);
+    }
+    wrap.appendChild(p);
+  });
+
+  const actions = document.createElement('div'); actions.className='row-actions';
+  const backBtn = document.createElement('button'); backBtn.className='btn secondary'; backBtn.textContent='← Revise Comparisons';
+  backBtn.onclick = ()=>{ currentStep=1; render(); };
+  const nextBtn = document.createElement('button'); nextBtn.className='btn'; nextBtn.textContent='Sensitivity Analysis →';
+  nextBtn.onclick = ()=>{ currentStep=3; render(); };
+  actions.appendChild(backBtn); actions.appendChild(nextBtn);
+  wrap.appendChild(actions);
+
+  return wrap;
+}
+
+/* ============================================================================
+   STEP 4 — SENSITIVITY ANALYSIS
+   ============================================================================ */
+function renderSensitivityStep(){
+  const wrap = document.createElement('div');
+  const panel = document.createElement('section'); panel.className='panel';
+  panel.innerHTML = '<h2>Sensitivity Analysis</h2><p class="hint">Pick one judgment and see, live, how much the final weights would move if that single comparison changed — this is how you show a reviewer the ranking is robust, not fragile to one opinion.</p>';
+
+  const list = buildComparisonList();
+  const flat = flattenPairs(list);
+  if(flat.length===0){
+    panel.innerHTML += '<p>Add criteria first.</p>'; wrap.appendChild(panel); return wrap;
+  }
+
+  const controls = document.createElement('div'); controls.className='sens-controls';
+  const sel = document.createElement('select');
+  flat.forEach((f,idx)=>{
+    const opt = document.createElement('option'); opt.value = idx;
+    const groupLabel = f.group.level==='cluster' ? 'Clusters' : f.group.label;
+    opt.textContent = groupLabel+': '+f.group.items[f.i].name+' vs '+f.group.items[f.j].name;
+    sel.appendChild(opt);
+  });
+  controls.appendChild(sel);
+  panel.appendChild(controls);
+
+  const before = computeAll();
+  const baselineByName = {}; before.globalWeights.forEach(g=> baselineByName[g.name]=g.globalWeight);
+
+  const sliderWrap = document.createElement('div'); sliderWrap.className='slider-wrap';
+  const slider = document.createElement('input'); slider.type='range'; slider.min=-8; slider.max=8; slider.step=1;
+  const readout = document.createElement('div'); readout.className='judgment-readout';
+  sliderWrap.appendChild(slider);
+  panel.appendChild(sliderWrap);
+  panel.appendChild(readout);
+
+  const resultsHolder = document.createElement('div'); resultsHolder.className='weight-group';
+  panel.appendChild(resultsHolder);
+
+  function loadSelected(){
+    const f = flat[parseInt(sel.value,10)];
+    const key = f.i+'-'+f.j;
+    const current = (f.group.judgments[key] !== undefined) ? f.group.judgments[key] : 1;
+    slider.value = current>=1 ? (current-1) : -(Math.round(1/current)-1);
+    updateSensitivity();
+  }
+  function updateSensitivity(){
+    const f = flat[parseInt(sel.value,10)];
+    const key = f.i+'-'+f.j;
+    const v = parseInt(slider.value,10);
+    const intensity = v>=0 ? v+1 : -v+1;
+    const matrixVal = v>=0 ? intensity : 1/intensity;
+    const original = f.group.judgments[key];
+    f.group.judgments[key] = matrixVal;
+    const a = f.group.items[f.i].name, b = f.group.items[f.j].name;
+    readout.innerHTML = v===0 ? '<b>Equal importance</b>' : '<b>'+(v>=0?a:b)+'</b> '+saatyLabel(intensity).toLowerCase()+' <span style="color:var(--ink-soft)">(intensity '+intensity+')</span>';
+
+    const after = computeAll();
+    resultsHolder.innerHTML = '<h3>Effect on Global Weights</h3>';
+    const maxW = Math.max(...after.globalWeights.map(g=>g.globalWeight));
+    after.globalWeights.forEach(g=>{
+      const base = baselineByName[g.name] || g.globalWeight;
+      const delta = (g.globalWeight-base)*100;
+      const row = document.createElement('div'); row.className='weight-row';
+      const label = document.createElement('div'); label.className='weight-label'; label.textContent=g.name;
+      const track = document.createElement('div'); track.className='weight-bar-track';
+      const fill = document.createElement('div'); fill.className='weight-bar-fill';
+      fill.style.width = (g.globalWeight/maxW*100)+'%'; fill.style.background = colorFor(g.clusterId);
+      track.appendChild(fill);
+      const pct = document.createElement('div'); pct.className='weight-pct'; pct.textContent = (g.globalWeight*100).toFixed(1)+'%';
+      const delta_el = document.createElement('span'); delta_el.className='delta '+(delta>=0?'up':'down');
+      delta_el.textContent = (delta>=0?'+':'')+delta.toFixed(1)+'pp';
+      row.appendChild(label); row.appendChild(track); row.appendChild(pct); row.appendChild(delta_el);
+      resultsHolder.appendChild(row);
+    });
+
+    if(original !== undefined) f.group.judgments[key] = original; // don't persist sensitivity scratch edits
+    else delete f.group.judgments[key];
+  }
+  sel.onchange = loadSelected;
+  slider.oninput = updateSensitivity;
+  loadSelected();
+
+  const actions = document.createElement('div'); actions.className='row-actions';
+  const backBtn = document.createElement('button'); backBtn.className='btn secondary'; backBtn.textContent='← Results';
+  backBtn.onclick = ()=>{ currentStep=2; render(); };
+  const nextBtn = document.createElement('button'); nextBtn.className='btn'; nextBtn.textContent='Export →';
+  nextBtn.onclick = ()=>{ currentStep=4; render(); };
+  actions.appendChild(backBtn); actions.appendChild(nextBtn);
+  panel.appendChild(actions);
+
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+/* ============================================================================
+   STEP 5 — EXPORT
+   ============================================================================ */
+function renderExportStep(){
+  const wrap = document.createElement('div');
+  const { clusterResult, perCluster, globalWeights } = computeAll();
+
+  const panel = document.createElement('section'); panel.className='panel';
+  panel.innerHTML = '<h2>Export</h2><p class="hint">Full audit trail (matrices, eigenvalues, consistency ratios) as JSON, plus a ready-to-paste snippet for the GEE module\'s <code>CONFIG.weights</code>.</p>';
+
+  const record = {
+    generatedAt: new Date().toISOString(),
+    tool: 'BGDSS AHP Weighting Calculator v1.0',
+    clusters: state.clusters.map((c,ci)=>({
+      name:c.name,
+      clusterWeight: clusterResult.w[ci],
+      criteria: c.criteria.map((crit,kj)=>({
+        name:crit.name,
+        localWeight: perCluster[c.id].w[kj],
+        globalWeight: clusterResult.w[ci]*perCluster[c.id].w[kj]
+      })),
+      comparisonMatrix: perCluster[c.id].A,
+      lambdaMax: perCluster[c.id].lambdaMax,
+      consistencyIndex: perCluster[c.id].CI,
+      consistencyRatio: perCluster[c.id].CR
+    })),
+    clusterLevel: {
+      comparisonMatrix: clusterResult.A,
+      lambdaMax: clusterResult.lambdaMax,
+      consistencyIndex: clusterResult.CI,
+      consistencyRatio: clusterResult.CR
+    },
+    globalWeights: globalWeights.map(g=>({ name:g.name, cluster:g.clusterName, weight: Number(g.globalWeight.toFixed(6)) }))
+  };
+
+  const jsonBox = document.createElement('textarea'); jsonBox.className='export-box'; jsonBox.readOnly=true;
+  jsonBox.value = JSON.stringify(record, null, 2);
+  panel.appendChild(document.createElement('h3')).textContent = 'Full audit record (JSON)';
+  panel.appendChild(jsonBox);
+
+  const actions1 = document.createElement('div'); actions1.className='export-actions';
+  const copyBtn1 = document.createElement('button'); copyBtn1.className='btn secondary'; copyBtn1.textContent='Copy JSON';
+  const msg1 = document.createElement('span'); msg1.className='copied-msg';
+  copyBtn1.onclick = ()=> copyText(jsonBox.value, msg1);
+  const dlBtn = document.createElement('button'); dlBtn.className='btn secondary'; dlBtn.textContent='Download JSON file';
+  dlBtn.onclick = ()=> downloadText(JSON.stringify(record,null,2), 'bgdss_ahp_weights.json', 'application/json');
+  actions1.appendChild(copyBtn1); actions1.appendChild(dlBtn); actions1.appendChild(msg1);
+  panel.appendChild(actions1);
+
+  const snippetTitle = document.createElement('h3'); snippetTitle.style.marginTop='24px'; snippetTitle.textContent='Ready-to-paste CONFIG.weights (flat, for the current GEE module)';
+  panel.appendChild(snippetTitle);
+  let snippet = 'weights: {\n';
+  globalWeights.forEach(g=>{
+    const key = g.name.replace(/[^a-zA-Z0-9]+(.)/g, (m,c)=>c.toUpperCase()).replace(/^(.)/, c=>c.toLowerCase()).replace(/[^a-zA-Z0-9]/g,'');
+    snippet += '  ' + key + ': ' + g.globalWeight.toFixed(4) + ',  // ' + g.name + ' (' + g.clusterName + ')\n';
+  });
+  snippet += '}';
+  const snipBox = document.createElement('textarea'); snipBox.className='export-box'; snipBox.style.minHeight='160px'; snipBox.readOnly=true;
+  snipBox.value = snippet;
+  panel.appendChild(snipBox);
+  const actions2 = document.createElement('div'); actions2.className='export-actions';
+  const copyBtn2 = document.createElement('button'); copyBtn2.className='btn laterite'; copyBtn2.textContent='Copy CONFIG snippet';
+  const msg2 = document.createElement('span'); msg2.className='copied-msg';
+  copyBtn2.onclick = ()=> copyText(snipBox.value, msg2);
+  actions2.appendChild(copyBtn2); actions2.appendChild(msg2);
+  panel.appendChild(actions2);
+
+  const actions = document.createElement('div'); actions.className='row-actions'; actions.style.marginTop='26px';
+  const backBtn = document.createElement('button'); backBtn.className='btn secondary'; backBtn.textContent='← Sensitivity Analysis';
+  backBtn.onclick = ()=>{ currentStep=3; render(); };
+  actions.appendChild(backBtn);
+  panel.appendChild(actions);
+
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function copyText(text, msgEl){
+  const done = ()=>{ msgEl.textContent='Copied ✓'; setTimeout(()=>msgEl.textContent='',2000); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done){
+  const ta = document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+  ta.select(); try{ document.execCommand('copy'); done(); }catch(e){} document.body.removeChild(ta);
+}
+function downloadText(text, filename, mime){
+  const blob = new Blob([text], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+render();
+</script>
