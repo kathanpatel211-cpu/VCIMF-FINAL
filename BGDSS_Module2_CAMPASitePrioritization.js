@@ -662,14 +662,23 @@ CRITERIA.forEach(function (crit) {
   // evaluation (exactly the bug found in Carbon-Gain Potential). Check
   // key presence explicitly and fall back to neutral rather than build a
   // graph with a null operand.
-  var p2Key = ee.String(crit.id).cat('_p2');
-  var p98Key = ee.String(crit.id).cat('_p98');
-  var hasStats = pct.contains(p2Key).and(pct.contains(p98Key));
-  var p2 = ee.Number(ee.Algorithms.If(hasStats, pct.get(p2Key), 0));
-  var p98 = ee.Number(ee.Algorithms.If(hasStats, pct.get(p98Key), 1));
-  var range = p98.subtract(p2);
-  var norm = ee.Image(ee.Algorithms.If(hasStats.and(range.abs().gt(1e-6)),
-    raw.subtract(p2).divide(range).clamp(0, 1),
+  // .get(key, null) returns null (rather than erroring) when the key is
+  // missing - e.g. because the candidate mask had zero valid pixels for
+  // this criterion. Nested ee.Algorithms.If() checks (each treats a null
+  // condition as falsy) fall back to a neutral image without ever building
+  // a graph with a null numeric operand - ee.Dictionary has no .contains()
+  // method, which is what crashed the previous version of this guard.
+  var p2Raw = pct.get(ee.String(crit.id).cat('_p2'), null);
+  var p98Raw = pct.get(ee.String(crit.id).cat('_p98'), null);
+  var norm = ee.Image(ee.Algorithms.If(p2Raw,
+    ee.Algorithms.If(p98Raw,
+      (function () {
+        var p2 = ee.Number(p2Raw);
+        var p98 = ee.Number(p98Raw);
+        var range = p98.subtract(p2);
+        return ee.Algorithms.If(range.abs().gt(1e-6), raw.subtract(p2).divide(range).clamp(0, 1), ee.Image(0.5));
+      })(),
+      ee.Image(0.5)),
     ee.Image(0.5)));
   if (crit.direction === 'down') { norm = ee.Image(1).subtract(norm); }
   norm = norm.rename(crit.id).unmask(0.5).clip(roi);
