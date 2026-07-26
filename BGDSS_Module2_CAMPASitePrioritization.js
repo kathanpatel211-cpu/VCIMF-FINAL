@@ -304,6 +304,28 @@ if (canopy2000 && lossYear && worldCoverMap && slope) {
   }
   candidateMask = candidateMask.clip(roi).rename('candidate');
   log('Candidate mask built (excludes well-stocked forest, water, built-up, cropland, bare rock, slope>' + CONFIG.slopeExcludeDeg + ')');
+
+  // ---- DIAGNOSTIC: area (ha) removed by each exclusion, and the final
+  // candidate area. If "Eligible blocks: 0" ever recurs, this tells you
+  // which single exclusion is responsible instead of guessing. ------------
+  var pxHa = ee.Image.pixelArea().divide(1e4);
+  var diagBands = [
+    pxHa.updateMask(wellStockedMask).rename('wellStocked'),
+    pxHa.updateMask(waterMask).rename('water'),
+    pxHa.updateMask(builtMask).rename('built'),
+    pxHa.updateMask(cropMask).rename('crop'),
+    pxHa.updateMask(slopeExcludeMask).rename('steepSlope'),
+    pxHa.updateMask(candidateMask).rename('candidateFinal')
+  ];
+  if (bareRockIndex) { diagBands.push(pxHa.updateMask(bareRockIndex).rename('bareRock')); }
+  var diagInfo = ee.Image.cat(diagBands).reduceRegion({
+    reducer: ee.Reducer.sum(), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 8, bestEffort: true
+  }).getInfo();
+  print('---- DIAGNOSTIC: area (ha) excluded by each candidate-mask rule ----');
+  print(diagInfo);
+  if (!diagInfo || !diagInfo.candidateFinal) {
+    warn('Candidate area is 0/undefined. Compare the exclusion areas above against the total beat area (' + Math.round(ee.Number(roi.area(1)).divide(1e4).getInfo()) + ' ha) to see which rule is removing everything.');
+  }
 } else {
   warn('Cannot build candidate mask (needs Hansen + WorldCover + slope). Stopping - scoring the whole AOI without a candidate mask produces an invalid ranking.');
 }
@@ -402,7 +424,10 @@ if (currentAgb && existingForestMask) {
   var refStat = currentAgb.updateMask(existingForestMask).reduceRegion({
     reducer: ee.Reducer.percentile([90]), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 4, bestEffort: true
   });
-  var localRef = refStat.get('agb');
+  // A percentile reducer names its output '<band>_p<N>', not '<band>' - and
+  // .get() needs an explicit default or a genuinely missing key becomes a
+  // null that only errors later, at whatever line first forces evaluation.
+  var localRef = refStat.get('agb_p90', null);
   referenceAgb = ee.Number(ee.Algorithms.If(localRef, localRef, CONFIG.referenceAgbTPerHa));
 }
 
@@ -518,7 +543,11 @@ var CRITERIA = [
 
   { id: 'carbonGainPotential', name: 'Carbon-Gain Potential', direction: 'up', build: function () {
     if (!currentAgb) return null;
-    return referenceAgb.subtract(currentAgb).max(0).rename('carbonGainPotential');
+    // referenceAgb is an ee.Number (scalar) - ee.Number has no image methods
+    // (the earlier bug called .subtract(image) on it directly, which built a
+    // malformed Number-space graph that only failed once something forced
+    // evaluation). Cast to a constant image first.
+    return ee.Image.constant(referenceAgb).subtract(currentAgb).max(0).rename('carbonGainPotential');
   }},
 
   { id: 'erosionRisk', name: 'Soil Erosion Risk (RUSLE)', direction: 'up', build: function () {
@@ -626,10 +655,20 @@ CRITERIA.forEach(function (crit) {
   var pct = masked.reduceRegion({
     reducer: ee.Reducer.percentile([2, 98]), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 8, bestEffort: true
   });
-  var p2 = ee.Number(pct.get(ee.String(crit.id).cat('_p2')));
-  var p98 = ee.Number(pct.get(ee.String(crit.id).cat('_p98')));
+  // If the candidate mask has zero valid pixels for this criterion (e.g. the
+  // candidate mask itself came back empty), the percentile dictionary is
+  // missing these keys entirely - .get() without a default then resolves to
+  // a null that only errors later, at whatever line first forces
+  // evaluation (exactly the bug found in Carbon-Gain Potential). Check
+  // key presence explicitly and fall back to neutral rather than build a
+  // graph with a null operand.
+  var p2Key = ee.String(crit.id).cat('_p2');
+  var p98Key = ee.String(crit.id).cat('_p98');
+  var hasStats = pct.contains(p2Key).and(pct.contains(p98Key));
+  var p2 = ee.Number(ee.Algorithms.If(hasStats, pct.get(p2Key), 0));
+  var p98 = ee.Number(ee.Algorithms.If(hasStats, pct.get(p98Key), 1));
   var range = p98.subtract(p2);
-  var norm = ee.Image(ee.Algorithms.If(range.abs().gt(1e-6),
+  var norm = ee.Image(ee.Algorithms.If(hasStats.and(range.abs().gt(1e-6)),
     raw.subtract(p2).divide(range).clamp(0, 1),
     ee.Image(0.5)));
   if (crit.direction === 'down') { norm = ee.Image(1).subtract(norm); }
