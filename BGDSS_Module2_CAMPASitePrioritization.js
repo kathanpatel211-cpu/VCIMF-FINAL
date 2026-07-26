@@ -419,16 +419,31 @@ if (gedi) {
 // best-preserved existing forest, rather than a generic state/ISFR average
 // (brief C10 - avoids the "reference too high, criterion saturates" failure
 // mode, and needs no external figure).
-var referenceAgb = ee.Number(CONFIG.referenceAgbTPerHa);
+//
+// referenceAgb is deliberately kept a PLAIN JAVASCRIPT NUMBER, never an
+// ee.Number. .getInfo() is called HERE, synchronously, inside a try/catch,
+// so any failure (empty region, missing key, whatever) is caught at the
+// exact line that causes it - not left as an unresolved lazy graph node
+// that only errors later, at some unrelated line that happens to force
+// evaluation first (which is what went wrong twice already: relying on
+// ee.Dictionary.get()'s default value / ee.Algorithms.If() to "safely"
+// swallow a missing key does not actually stop the underlying error from
+// surfacing downstream).
+var referenceAgb = CONFIG.referenceAgbTPerHa;
 if (currentAgb && existingForestMask) {
-  var refStat = currentAgb.updateMask(existingForestMask).reduceRegion({
-    reducer: ee.Reducer.percentile([90]), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 4, bestEffort: true
-  });
-  // A percentile reducer names its output '<band>_p<N>', not '<band>' - and
-  // .get() needs an explicit default or a genuinely missing key becomes a
-  // null that only errors later, at whatever line first forces evaluation.
-  var localRef = refStat.get('agb_p90', null);
-  referenceAgb = ee.Number(ee.Algorithms.If(localRef, localRef, CONFIG.referenceAgbTPerHa));
+  try {
+    var refStat = currentAgb.updateMask(existingForestMask).reduceRegion({
+      reducer: ee.Reducer.percentile([90]), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 4, bestEffort: true
+    }).getInfo();
+    if (refStat && typeof refStat.agb_p90 === 'number') {
+      referenceAgb = refStat.agb_p90;
+      log('Local reference AGB (90th percentile within existing forest): ' + referenceAgb.toFixed(1) + ' t/ha');
+    } else {
+      warn('Local reference AGB percentile returned no data - using configured default (' + CONFIG.referenceAgbTPerHa + ' t/ha)');
+    }
+  } catch (e) {
+    warn('Local reference AGB computation failed (' + e.message + ') - using configured default (' + CONFIG.referenceAgbTPerHa + ' t/ha)');
+  }
 }
 
 // ============================================================================
@@ -640,8 +655,9 @@ log('Weight sum check passed (' + weightSum.toFixed(4) + ')');
 // inversions (brief Part 5).
 // ============================================================================
 var normalizedBands = [];   // {id, name, weight, image (0-1, direction already applied)}
-var rawBandsForDiagnostics = []; // {id, image} pre-stretch, for histogram/variance QA
 
+// ---- Pass 1: build each criterion's RAW image (client-side try/catch) -----
+var builtCriteria = []; // {id, name, weight, direction, image}
 CRITERIA.forEach(function (crit) {
   var raw = null;
   try { raw = crit.build(); } catch (e) { warn(crit.name + ' failed to build (' + e.message + ') - defaulted to neutral'); }
@@ -651,40 +667,46 @@ CRITERIA.forEach(function (crit) {
     if (raw === null) { warn(crit.name + ' (' + (weight * 100).toFixed(1) + '% weight) running on a NEUTRAL DEFAULT - see warnings above for why'); }
     return;
   }
-  var masked = raw.updateMask(candidateMask);
-  var pct = masked.reduceRegion({
-    reducer: ee.Reducer.percentile([2, 98]), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 8, bestEffort: true
-  });
-  // If the candidate mask has zero valid pixels for this criterion (e.g. the
-  // candidate mask itself came back empty), the percentile dictionary is
-  // missing these keys entirely - .get() without a default then resolves to
-  // a null that only errors later, at whatever line first forces
-  // evaluation (exactly the bug found in Carbon-Gain Potential). Check
-  // key presence explicitly and fall back to neutral rather than build a
-  // graph with a null operand.
-  // .get(key, null) returns null (rather than erroring) when the key is
-  // missing - e.g. because the candidate mask had zero valid pixels for
-  // this criterion. Nested ee.Algorithms.If() checks (each treats a null
-  // condition as falsy) fall back to a neutral image without ever building
-  // a graph with a null numeric operand - ee.Dictionary has no .contains()
-  // method, which is what crashed the previous version of this guard.
-  var p2Raw = pct.get(ee.String(crit.id).cat('_p2'), null);
-  var p98Raw = pct.get(ee.String(crit.id).cat('_p98'), null);
-  var norm = ee.Image(ee.Algorithms.If(p2Raw,
-    ee.Algorithms.If(p98Raw,
-      (function () {
-        var p2 = ee.Number(p2Raw);
-        var p98 = ee.Number(p98Raw);
-        var range = p98.subtract(p2);
-        return ee.Algorithms.If(range.abs().gt(1e-6), raw.subtract(p2).divide(range).clamp(0, 1), ee.Image(0.5));
-      })(),
-      ee.Image(0.5)),
-    ee.Image(0.5)));
-  if (crit.direction === 'down') { norm = ee.Image(1).subtract(norm); }
-  norm = norm.rename(crit.id).unmask(0.5).clip(roi);
-  normalizedBands.push({ id: crit.id, name: crit.name, weight: weight, image: norm });
-  rawBandsForDiagnostics.push({ id: crit.id, image: masked.rename(crit.id) });
-  log(crit.name + ' normalized (2nd-98th percentile stretch within candidate mask, direction=' + crit.direction + ')');
+  builtCriteria.push({ id: crit.id, name: crit.name, weight: weight, direction: crit.direction, image: raw.updateMask(candidateMask).rename(crit.id) });
+});
+
+// ---- Pass 2: ONE combined percentile reduceRegion, evaluated ONCE, HERE ---
+// This entire function used to run one lazy reduceRegion per criterion and
+// try to detect a missing key inside the Earth Engine graph itself
+// (first via a nonexistent ee.Dictionary.contains(), then via
+// ee.Algorithms.If() null-checks). Both attempts failed the same way: the
+// failure did not surface at this line, it surfaced later, at whatever
+// unrelated line first forced evaluation of the resulting graph. Forcing
+// evaluation HERE with .getInfo(), inside a try/catch, means every p2/p98
+// below is a PLAIN JAVASCRIPT NUMBER (or genuinely absent) before any image
+// math touches it - there is no lazy graph left to fail downstream.
+var percentileStats = {};
+if (builtCriteria.length && candidateMask) {
+  try {
+    var combined = ee.Image.cat(builtCriteria.map(function (c) { return c.image; }));
+    percentileStats = combined.reduceRegion({
+      reducer: ee.Reducer.percentile([2, 98]), geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 8, bestEffort: true
+    }).getInfo() || {};
+  } catch (e) {
+    warn('Batched percentile computation failed (' + e.message + ') - every criterion below will default to neutral');
+  }
+}
+
+// ---- Pass 3: stretch + direction, using plain-number arithmetic -----------
+builtCriteria.forEach(function (c) {
+  var p2 = percentileStats[c.id + '_p2'];
+  var p98 = percentileStats[c.id + '_p98'];
+  var norm;
+  if (typeof p2 === 'number' && typeof p98 === 'number' && Math.abs(p98 - p2) > 1e-6) {
+    norm = c.image.subtract(p2).divide(p98 - p2).clamp(0, 1);
+    log(c.name + ' normalized (2nd-98th percentile ' + p2.toFixed(2) + '-' + p98.toFixed(2) + ', direction=' + c.direction + ')');
+  } else {
+    norm = ee.Image(0.5);
+    warn(c.name + ': no valid percentile stats within the candidate mask (likely zero eligible pixels) - defaulted to neutral');
+  }
+  if (c.direction === 'down') { norm = ee.Image(1).subtract(norm); }
+  norm = norm.rename(c.id).unmask(0.5).clip(roi);
+  normalizedBands.push({ id: c.id, name: c.name, weight: c.weight, image: norm });
 });
 
 var priorityScore = normalizedBands.reduce(function (acc, b) {
