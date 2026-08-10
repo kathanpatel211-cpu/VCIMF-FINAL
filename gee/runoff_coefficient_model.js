@@ -161,12 +161,19 @@ function maskS2clouds(img) {
   return img.updateMask(mask);
 }
 
+// .median() on an ImageCollection strips the per-pixel "default projection"
+// metadata (collapses to ungridded WGS84), which reduceResolution() later
+// requires. Recover it explicitly from a native Sentinel-2 band (10 m).
+var s2Proj = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterBounds(catchment).limit(1).first().select('B4').projection();
+
 var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
   .filterBounds(catchment)
   .filterDate(CONFIG.S2_START, CONFIG.S2_END)
   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', CONFIG.S2_CLOUD_PROB_MAX))
   .map(maskS2clouds)
   .median()
+  .setDefaultProjection(s2Proj)
   .clip(catchment);
 
 var ndvi = s2.normalizedDifference(['B8', 'B4']).rename('NDVI');
@@ -182,12 +189,18 @@ var bsi = s2.expression(
   }).rename('BSI');
 
 // 3c. Dynamic World V1 — mean class-probability composite
+// Same projection-loss issue as s2 above (.mean() strips the default
+// projection); recover it from a native Dynamic World band (10 m).
+var dwProj = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
+  .filterBounds(catchment).limit(1).first().select('built').projection();
+
 var dw = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
   .filterBounds(catchment)
   .filterDate(CONFIG.DW_START, CONFIG.DW_END)
   .select(['water', 'trees', 'grass', 'flooded_vegetation', 'crops',
     'shrub_and_scrub', 'built', 'bare', 'snow_and_ice'])
   .mean()
+  .setDefaultProjection(dwProj)
   .clip(catchment);
 
 // 3d. DEM — SRTM 30 m (matches the 30-m analysis grid)
