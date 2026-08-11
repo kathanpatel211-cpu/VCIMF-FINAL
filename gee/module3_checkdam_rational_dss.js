@@ -1,10 +1,24 @@
 /**
- * Module 3 - Check-dam catchment runoff coefficient and Rational-Method DSS
+ * Module 3 - Check-dam catchment runoff coefficient DSS (C-only + SCS-CN cross-check)
  * Google Earth Engine Code Editor (JavaScript)
  *
  * The user-supplied catchment is the complete upstream contributing area for
  * the proposed check-dam outlet. It is the only spatial analysis boundary in
  * this application.
+ *
+ * SCOPE NOTE: The hydraulic-path / time-of-concentration / Rational-Method
+ * peak-discharge (Q) subsystem that was previously in this file has been
+ * REMOVED. It traced the longest flow path over MERIT Hydro (~90 m) using
+ * two 150-step iterative D8 neighborhood searches, and Earth Engine
+ * consistently rejected the resulting expression graph with "Computation is
+ * too complex" once the outlet/path stats were actually evaluated. That is
+ * a hard platform limit on this iterative approach, not a fixable bug in the
+ * graph itself, so it has been removed rather than patched again. This also
+ * brings the script back in line with the original C-only development
+ * phase: no peak discharge, rainfall intensity, time of concentration, IDF,
+ * return period, or check-dam hydraulic design here. Those remain a later,
+ * separate module (built with a non-iterative flow-path method, e.g. a
+ * pre-conditioned/validated stream network or a bounded-step approach).
  *
  * IMPORTANT ENGINEERING LIMITATION
  * ---------------------------------
@@ -88,25 +102,6 @@ var CONFIG = {
   // DSM because that would create false precision.
   STREAM_ASSET: '',
 
-  // Supply the surveyed/proposed check-dam outlet when available. Until both
-  // coordinates are entered, the script shows a lowest-boundary proxy but
-  // marks hydraulic Tc and Rational-Method Q as unresolved/not design-ready.
-  OUTLET_LON: null,
-  OUTLET_LAT: null,
-  OUTLET_LABEL: 'Proposed check-dam outlet',
-
-  // MERIT Hydro is a 3-arc-second (~90 m) hydrologic reference network with
-  // flow direction and upstream drainage area. It is used for the hydraulic
-  // path screen, not for the 30-m C-analysis grid.
-  MERIT_HYDRO_ID: 'MERIT/Hydro/v1_0_1',
-  MERIT_SCALE_M: 92.77,
-  MERIT_MIN_UPA_KM2: 0.001,
-  HYDRO_OUTLET_SNAP_MAX_M: 500,
-  // 150 MERIT cells is about 14 km for the supplied small catchment. Increase
-  // only for larger catchments after checking server graph size.
-  HYDRO_MAX_UPSTREAM_STEPS: 150,
-  HYDRO_MAX_PATH_TO_AREA_ROOT_RATIO: 25,
-
   // Native/source-analysis scales. These are deliberately kept visible so the
   // output cannot be mistaken for a single-resolution observation.
   LULC_SCALE_M: 10,
@@ -118,14 +113,6 @@ var CONFIG = {
   // Slope thresholds are percent slope and are editable.
   SLOPE_BREAKS_PCT: [3, 8, 15, 30],
 
-  // Initial design inputs. The UI is editable; the initial value is explicitly
-  // a placeholder and must be replaced with the applicable IDF/design-storm
-  // intensity before design use.
-  DESIGN_INTENSITY_MMHR: 50,
-  RETURN_PERIOD_YEARS: '10',
-  STORM_DURATION_MIN: 60,
-  DESIGN_RAINFALL_SOURCE: 'USER INPUT REQUIRED: official/local IDF or rainfall-frequency analysis',
-
   // Field HSG override for the whole catchment. Use 'NONE' to use the
   // texture-derived proxy. This affects SCS-CN/diagnostics, not the primary
   // Indian Government land-cover/soil-texture/slope C table.
@@ -133,10 +120,7 @@ var CONFIG = {
 
   // The primary Indian Government/WAPCOS C table is land-cover + soil-texture
   // + slope based and does not publish an intensity-dependent C range.
-  // Rainfall intensity is used only as I in Q = C * I * A / 360.
   C_COMPLETE_COVERAGE_TARGET_PCT: 99.0,
-
-  TC_MIN_GRADIENT: 0.0001,
 
   // Separate SCS-CN cross-check inputs. It is never mixed with Rational C.
   SCS_CN_STORM_DEPTH_MM: 170,
@@ -417,18 +401,11 @@ var C_CLASSES = [
 
 function dictionaryNumber(dictionary, key, fallback) {
   var d = ee.Dictionary(dictionary);
-  // reduceRegion() over a fully-masked image (e.g. no MERIT Hydro channel
-  // pixel found near the outlet) returns the key present but set to null,
-  // not omitted. d.contains(key) alone doesn't catch that, so the fallback
-  // never fires and downstream .divide()/.gt()/.max() calls blow up with
-  // "Parameter 'left' is required and may not be null." Guard against both
-  // "key missing" and "key present but null" in one pass.
+  // reduceRegion() over a fully-masked image returns the key present but set
+  // to null, not omitted, so d.contains(key) alone can't be trusted. Guard
+  // against both "key missing" and "key present but null" in one pass.
   var rawValue = ee.Algorithms.If(d.contains(key), d.get(key), null);
   return ee.Number(ee.Algorithms.If(rawValue, rawValue, fallback));
-}
-
-function safeString(value, fallback) {
-  return ee.String(ee.Algorithms.If(value, value, fallback));
 }
 
 function clampC(value) {
@@ -681,18 +658,6 @@ function reduceStat(image, reducer, bandName, scale, fallback) {
   return dictionaryNumber(dictionary, bandName, fallback);
 }
 
-function reduceStatGeometry(image, reducer, bandName, geometry, scale, fallback) {
-  var dictionary = image.reduceRegion({
-    reducer: reducer,
-    geometry: geometry,
-    scale: scale,
-    maxPixels: CONFIG.MAX_PIXELS,
-    bestEffort: true,
-    tileScale: 4
-  });
-  return dictionaryNumber(dictionary, bandName, fallback);
-}
-
 function makeMeanAnnualRainfallContext(chirps, startYear, endYear) {
   var years = ee.List.sequence(startYear, endYear);
   var annualImages = years.map(function(year) {
@@ -848,8 +813,7 @@ function makeCClassImage(cImage) {
     .clip(catchmentGeometry);
 }
 
-function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
-                            weightedC, peakQ) {
+function makeResultsFeature(weightedC) {
   var feature = ee.Feature(null, {
     catchment_id: CONFIG.CATCHMENT_ID,
     catchment_asset: CONFIG.CATCHMENT_ASSET,
@@ -862,33 +826,7 @@ function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
     max_elevation_m: maxElevation,
     mean_slope_pct: meanSlopePct,
     max_slope_pct: maxSlopePct,
-    longest_flow_path_m: longestFlowPathM,
-    longest_flow_path_km: longestFlowPathM.divide(1000),
-    outlet_source: outletConfigured ? 'configured proposed check-dam outlet' :
-      'lowest boundary DEM proxy; not validated',
-    outlet_configured: outletConfigured,
-    outlet_within_catchment: outletWithinCatchment,
-    merit_outlet_snap_distance_m: meritSnapDistanceM,
-    hydraulic_path_valid: hydraulicPathValidNumber,
-    hydraulic_path_reaches_outlet: pathReachesOutlet,
-    hydraulic_path_sanity_limit_m: pathLengthSanityLimitM,
-    hydraulic_path_method: 'MERIT Hydro ~90 m D8 local drainage direction and upstream drainage area; path traced upstream from snapped outlet. Validate against outlet survey/imagery before design.',
-    outlet_longitude: ee.List(outletPoint.coordinates()).get(0),
-    outlet_latitude: ee.List(outletPoint.coordinates()).get(1),
     selected_dem_source: CONFIG.DEM_SOURCE,
-    tc_selected_minutes: tcSelectedMinutes,
-    tc_copernicus_minutes: ee.Number(tcCopernicus.get('tc_minutes')),
-    tc_srtm_minutes: ee.Number(tcSrtm.get('tc_minutes')),
-    selected_channel_gradient: ee.Number(tcSelected.get('channel_gradient')),
-    selected_outlet_elevation_m: ee.Number(tcSelected.get('outlet_elevation_m')),
-    selected_remote_elevation_m: ee.Number(tcSelected.get('remote_elevation_m')),
-    selected_elevation_drop_m: ee.Number(tcSelected.get('remote_elevation_m'))
-      .subtract(ee.Number(tcSelected.get('outlet_elevation_m'))),
-    tc_dem_difference_pct: tcDifferencePct,
-    tc_method: 'Kirpich: 0.0195 * L^0.77 / S^0.385 using terrain-constrained cost-distance proxy; final design requires conditioned/surveyed hydraulic path.',
-    field_confirmed_hsg: CONFIG.FIELD_CONFIRMED_HSG,
-    hsg_used_for_c: CONFIG.FIELD_CONFIRMED_HSG === 'NONE' ?
-      'texture-derived proxy' : 'field-confirmed catchment-wide override',
     mean_soil_sand_pct: meanSandPct,
     mean_soil_clay_pct: meanClayPct,
     mean_soil_water_33kpa_pct: meanSoilWater33kPa,
@@ -913,10 +851,9 @@ function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
     chirps_mean_annual_rainfall_mm: meanAnnualRainfall,
     rainfall_context_source: CONFIG.CHIRPS_ID + ' (' +
       CONFIG.CHIRPS_CONTEXT_START_YEAR + '-' + CONFIG.CHIRPS_CONTEXT_END_YEAR +
-      '); context only, not design I',
+      '); context only',
     weighted_c_primary: weightedC,
     c_primary_method: 'Indian Government/WAPCOS land-cover + soil-texture + slope table for 0-30%; independent IRC:SP:13/IRC:SP:42 surface-condition branch for >30% and named non-table surfaces.',
-    c_primary_rainfall_dependence: 'This primary table is intensity-independent; rainfall intensity is used as I in Q = C*I*A/360.',
     c_valid_coverage_pct: validCoveragePct,
     c_valid_area_ha: validAreaM2.divide(10000),
     c_unresolved_area_ha: unresolvedAreaM2.divide(10000),
@@ -928,7 +865,7 @@ function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
     c_coverage_target_pct: CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT,
     c_source_map: 'C_source: 101 Government/WAPCOS; 201-210 named IRC surface category; 301 approved expert/field override; 999 unresolved.',
     c_confidence_map: 'C_confidence: 3 high/field or strong evidence; 2 moderate/source-backed screening; 1 low/proxy; 0 unresolved.',
-    confidence_basis: 'High only when C coverage target is met, source categories are traceable, rainfall source is documented and Copernicus/SRTM Tc difference is <=20%; field HSG affects the separate SCS-CN cross-check.',
+    confidence_basis: 'High only when C coverage target is met and source categories are traceable.',
     c_missing_reason_source: 'C_missing_reason image/table; inspect before design use.',
     c_source_provenance: 'C_source image/table identifies Government/WAPCOS, each IRC surface category, expert override or unresolved.',
     c_confidence_provenance: 'C_confidence image/table identifies high/strong, moderate/source-backed, low/proxy and unresolved pixels.',
@@ -936,11 +873,6 @@ function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
     bare_rock_high_confidence_area_ha: bareHighConfidenceAreaHa,
     bare_rock_moderate_confidence_area_ha: bareModerateConfidenceAreaHa,
     agriculture_cover_key: CONFIG.AGRICULTURE_COVER_KEY,
-    rainfall_intensity_mmhr: designIntensity,
-    design_rainfall_source: currentRainfallSource,
-    return_period_years: returnPeriod,
-    storm_duration_min: durationMinutes,
-    peak_q_central_m3s: peakQ,
     c_numeric_uncertainty_range: 'Not supplied by the adopted Indian Government/WAPCOS table; unresolved >30% surfaces and field validation are reported instead.',
     weighted_cn_crosscheck: weightedCN,
     scs_cn_storm_depth_mm: CONFIG.SCS_CN_STORM_DEPTH_MM,
@@ -956,8 +888,7 @@ function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
     observed_C_model_MAE: observedCModelMaeClient === null ? -9999 : observedCModelMaeClient,
     observed_C_model_RMSE: observedCModelRmseClient === null ? -9999 : observedCModelRmseClient,
     observed_C_model_percentage_error: observedCModelErrorPctClient === null ? -9999 : observedCModelErrorPctClient,
-    observed_validation_note: 'Observed C = Q_observed * 360 / (I_observed * A_ha); field observations are independent validation data.',
-    rational_method_units: 'Q m3/s = C * I mm/hr * A ha / 360',
+    observed_validation_note: 'Observed C = Q_observed * 360 / (I_observed * A_ha); field observations are independent validation data supplied by the user, not computed by this script.',
     c_lookup_source: C_LOOKUP_SOURCE,
     c_lookup_notes: C_LOOKUP_NOTE,
     c_expert_overrides_json: JSON.stringify(CONFIG.C_EXPERT_OVERRIDES),
@@ -966,7 +897,7 @@ function makeResultsFeature(designIntensity, returnPeriod, durationMinutes,
     soil_resolution_m: CONFIG.SOIL_SCALE_M,
     lulc_resolution_m: CONFIG.LULC_SCALE_M,
     terrain_resolution_m: CONFIG.TERRAIN_SCALE_M,
-    methodology_status: 'Preliminary/design-support; validate against applicable standards and observations'
+    methodology_status: 'Preliminary/design-support C only; peak discharge/Tc module not included in this phase; validate against applicable standards and observations'
   });
 
   LULC_CLASSES.forEach(function(definition) {
@@ -1100,85 +1031,13 @@ function setMetric(key, value, decimals) {
 }
 
 function deriveConfidence() {
-  var sourceText = rainfallSourceInput.getValue() || '';
-  var sourceProvided = sourceText !== '' &&
-    sourceText.toUpperCase().indexOf('USER INPUT REQUIRED') < 0;
-  if (tcPathValidClient === 1 &&
-      cCoverageClient >= CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT &&
-      sourceProvided && Number(tcDifferenceClient) <= 20) {
-    return 'High (source-backed primary C, complete coverage, documented rainfall source, low DEM Tc sensitivity)';
+  if (cCoverageClient !== null && cCoverageClient >= CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT) {
+    return 'High (source-backed primary C, complete coverage)';
   }
-  if (tcPathValidClient === 1 &&
-      cCoverageClient >= CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT &&
-      Number(tcDifferenceClient) <= 30) {
-    return 'Moderate (complete C coverage but proxy/IDF/DEM uncertainty remains)';
+  if (cCoverageClient !== null && cCoverageClient >= 90) {
+    return 'Moderate (C coverage below target; review unresolved-reason map)';
   }
-  return 'Low (C coverage, >30% slope handling, rainfall source or DEM uncertainty requires resolution)';
-}
-
-function updatePeakDischarge() {
-  var intensity = parseFloat(intensityInput.getValue());
-  var duration = parseFloat(durationInput.getValue());
-  var returnPeriod = returnPeriodInput.getValue();
-  var rainfallSource = rainfallSourceInput.getValue();
-
-  if (!isFinite(intensity) || intensity <= 0) {
-    inputStatus.setValue('ERROR: enter a positive design rainfall intensity in mm/hour.');
-    return;
-  }
-  if (!isFinite(duration) || duration <= 0) {
-    inputStatus.setValue('ERROR: enter a positive storm duration in minutes.');
-    return;
-  }
-  if (weightedCClient === null || areaHaClient === null) {
-    inputStatus.setValue('Still computing catchment statistics; try again shortly.');
-    return;
-  }
-  if (cCoverageClient === null || cCoverageClient <
-      CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT) {
-    inputStatus.setValue(
-      'ERROR: final Q is blocked because valid C coverage is ' +
-      (cCoverageClient === null ? 'not ready' : cCoverageClient.toFixed(2) + '%') +
-      '. Inspect the C missing-reason map/table and resolve the gap.'
-    );
-    peakQLabel.setValue('Q = blocked by C coverage');
-    return;
-  }
-  if (tcPathValidClient !== 1) {
-    inputStatus.setValue(
-      'ERROR: final Q is blocked because the hydraulic path/Tc is unresolved. Configure and validate the actual check-dam outlet, then inspect the longest-path map.'
-    );
-    peakQLabel.setValue('Q = blocked by hydraulic path');
-    return;
-  }
-  if (rainfallSource === '' ||
-      rainfallSource.toUpperCase().indexOf('USER INPUT REQUIRED') >= 0) {
-    inputStatus.setValue(
-      'ERROR: final Q is blocked until the applicable Indian/local IDF or rainfall-frequency source is entered.'
-    );
-    peakQLabel.setValue('Q = blocked by rainfall source');
-    return;
-  }
-  currentDesignIntensity = intensity;
-  currentDurationMinutes = duration;
-  currentReturnPeriod = returnPeriod;
-  currentRainfallSource = rainfallSource;
-
-  var q = weightedCClient * intensity * areaHaClient / 360;
-  peakQLabel.setValue(q.toFixed(3) + ' m3/s');
-  sensitivityLabel.setValue(
-    'No numeric lower/upper C range is supplied by the adopted Government table; review unresolved surface classes and field validation.'
-  );
-  var tcNote = tcClient !== null && Math.abs(duration - tcClient) > 1 ?
-    ' WARNING: duration differs from computed Tc (' + tcClient.toFixed(1) + ' min).' : '';
-  var sourceNote = rainfallSource === '' ||
-    rainfallSource.toUpperCase().indexOf('USER INPUT REQUIRED') >= 0 ?
-    ' WARNING: enter the official/local IDF source before design use.' : '';
-  inputStatus.setValue(
-    'Q updated using C*I*A/360; A=ha, I=mm/hour, Q=m3/s. ' +
-    'Return period: ' + returnPeriod + ' year; duration: ' + duration + ' min.' +
-    tcNote + sourceNote
-  );
+  return 'Low (C coverage below 90%; review unresolved-reason map before use)';
 }
 
 function calculateObservedValidation() {
@@ -1255,24 +1114,15 @@ function updateSCSCrosscheck() {
 
 function createExportTasks() {
   if (weightedCClient === null || cCoverageClient === null ||
-      cCoverageClient < CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT ||
-      tcPathValidClient !== 1 ||
-      currentRainfallSource === '' ||
-      currentRainfallSource.toUpperCase().indexOf('USER INPUT REQUIRED') >= 0) {
+      cCoverageClient < CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT) {
     inputStatus.setValue(
       'Exports are blocked until valid C coverage reaches ' +
-      CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT + '% and the hydraulic path/Tc is validated. Inspect the provenance, outlet and longest-path products.'
+      CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT + '%. Inspect the C missing-reason map/table and resolve the gap.'
     );
     return;
   }
 
-  var results = makeResultsFeature(
-    currentDesignIntensity,
-    currentReturnPeriod,
-    currentDurationMinutes,
-    weightedC,
-    weightedC.multiply(currentDesignIntensity).multiply(areaHa).divide(360)
-  );
+  var results = makeResultsFeature(weightedC);
 
   var region = catchmentGeometry.bounds(1);
   function exportImageToDrive(image, description, scale) {
@@ -1326,10 +1176,6 @@ function createExportTasks() {
   exportImageToDrive(cMissingReason, 'C_missing_reason', CONFIG.C_SCALE_M);
   exportImageToDrive(cnImage, 'SCS_CN_crosscheck', CONFIG.C_SCALE_M);
   exportImageToDrive(scsRunoffDepthImage, 'SCS_CN_runoff_depth', CONFIG.C_SCALE_M);
-  exportImageToDrive(hydraulicPath.selfMask(), 'longest_hydraulic_flow_path', CONFIG.MERIT_SCALE_M);
-  exportImageToDrive(flowDistance, 'hydraulic_path_distance', CONFIG.MERIT_SCALE_M);
-  exportImageToDrive(meritDirection, 'MERIT_flow_direction', CONFIG.MERIT_SCALE_M);
-  exportImageToDrive(meritUpstreamArea, 'MERIT_upstream_area_km2', CONFIG.MERIT_SCALE_M);
   Export.table.toDrive({
     collection: ee.FeatureCollection([results]),
     description: CONFIG.EXPORT_PREFIX + '_results',
@@ -1444,7 +1290,7 @@ function createExportTasks() {
   });
 
   inputStatus.setValue(
-    'Export tasks created. Review the Tasks tab; values use the current UI rainfall inputs.'
+    'Export tasks created. Review the Tasks tab.'
   );
 }
 
@@ -1518,282 +1364,6 @@ var demCopernicus = copernicusCollection.mosaic()
 var demSrtm = ee.Image(CONFIG.SRTM_DEM_ID).select('elevation')
   .rename('elevation_m').clip(catchmentGeometry);
 var dem = CONFIG.DEM_SOURCE === 'SRTM' ? demSrtm : demCopernicus;
-
-// The asset does not carry a surveyed outlet field. Use configured outlet
-// coordinates when supplied; otherwise show a lowest-boundary proxy and mark
-// Tc/Q as unresolved until the proposed check-dam point is entered/validated.
-var outletConfigured = typeof CONFIG.OUTLET_LON === 'number' &&
-  typeof CONFIG.OUTLET_LAT === 'number' &&
-  isFinite(CONFIG.OUTLET_LON) && isFinite(CONFIG.OUTLET_LAT);
-
-// Some Code Editor runtimes do not expose Geometry.boundary() on a computed
-// dissolved geometry. Paint the polygon edge into an image instead; this is
-// robust for Polygon/MultiPolygon FeatureCollections.
-var catchmentBoundaryMask = ee.Image(0).byte()
-  .paint(
-    ee.FeatureCollection([ee.Feature(catchmentGeometry)]),
-    1,
-    1
-  )
-  .selfMask()
-  .clip(catchmentGeometry);
-var boundaryElevationSamples = dem.updateMask(catchmentBoundaryMask).sample({
-  region: catchmentBounds,
-  scale: CONFIG.TERRAIN_SCALE_M,
-  numPixels: 5000,
-  geometries: true,
-  tileScale: 4
-});
-var outletProxyFeature = ee.Feature(boundaryElevationSamples.sort('elevation_m').first());
-var outletProxyPoint = outletProxyFeature.geometry();
-var outletPoint = outletConfigured ?
-  ee.Geometry.Point([CONFIG.OUTLET_LON, CONFIG.OUTLET_LAT]) : outletProxyPoint;
-var outletFeature = ee.Feature(outletPoint).set({
-  outlet_source: outletConfigured ? 'configured proposed check-dam outlet' :
-    'lowest boundary DEM proxy; not validated',
-  outlet_label: CONFIG.OUTLET_LABEL
-});
-var outletWithinCatchment = catchmentGeometry.contains(outletPoint, 1);
-// FIX: Geometry.contains() returns an untyped ComputedObject. Calling a
-// logical method like .and() directly on it fails with "Earth Engine
-// requires you to specify the object type before calling 'and'". Cast an
-// explicit ee.Number copy for use in logical chains below, while keeping the
-// original boolean (used for printing/serialization/client-side booleans).
-var outletWithinCatchmentNumber = ee.Number(
-  ee.Algorithms.If(outletWithinCatchment, 1, 0)
-);
-var outletSource = ee.Image(0).byte()
-  .paint(ee.FeatureCollection([ee.Feature(outletPoint)]), 1)
-  .rename('outlet_source')
-  .setDefaultProjection(dem.projection());
-
-// --------------------------------------------------------------------------
-// MERIT Hydro D8/flow-accumulation path audit
-// --------------------------------------------------------------------------
-// MERIT Hydro provides a ~90-m local drainage direction (D8) and upstream
-// drainage area. It is coarser than the 30-m C grid, so it is used only for the
-// hydraulic-path/Tc screen. The path is traced upstream from the snapped
-// outlet through pixels whose MERIT direction drains back to that outlet.
-var meritHydro = ee.Image(CONFIG.MERIT_HYDRO_ID);
-var meritProjection = meritHydro.select('dir').projection();
-var meritDirection = meritHydro.select('dir')
-  .setDefaultProjection(meritProjection)
-  .clip(catchmentGeometry)
-  .rename('MERIT_flow_direction');
-var meritUpstreamArea = meritHydro.select('upa')
-  .setDefaultProjection(meritProjection)
-  .clip(catchmentGeometry)
-  .rename('MERIT_upstream_area_km2');
-var meritChannelMask = meritUpstreamArea.gte(CONFIG.MERIT_MIN_UPA_KM2)
-  .and(meritDirection.gte(0))
-  .clip(catchmentGeometry);
-var meritOutletSeed = ee.Image(0).byte()
-  .paint(ee.FeatureCollection([ee.Feature(outletPoint)]), 1)
-  .setDefaultProjection(meritProjection)
-  .clip(catchmentGeometry)
-  .selfMask();
-var meritDistanceFromOutlet = ee.Image.constant(CONFIG.MERIT_SCALE_M).toFloat()
-  .setDefaultProjection(meritProjection)
-  .clip(catchmentGeometry)
-  .cumulativeCost(meritOutletSeed,
-    CONFIG.HYDRO_OUTLET_SNAP_MAX_M, false)
-  .rename('MERIT_distance_from_outlet_m');
-var meritSnapDictionary = meritDistanceFromOutlet
-  .updateMask(meritChannelMask)
-  .reduceRegion({
-    reducer: ee.Reducer.min(),
-    geometry: catchmentGeometry,
-    scale: CONFIG.MERIT_SCALE_M,
-    maxPixels: CONFIG.MAX_PIXELS,
-    bestEffort: true,
-    tileScale: 4
-  });
-var meritSnapDistanceM = dictionaryNumber(
-  meritSnapDictionary, 'MERIT_distance_from_outlet_m', -1);
-var meritOutletChannelSeed = meritDistanceFromOutlet
-  .eq(meritSnapDistanceM)
-  .and(meritChannelMask)
-  .selfMask()
-  .rename('MERIT_outlet_channel_seed');
-
-function d8Kernel(weights) {
-  return ee.Kernel.fixed(3, 3, weights, 1, 1, false);
-}
-
-var d8Codes = [1, 2, 4, 8, 16, 32, 64, 128];
-var d8UpstreamKernels = {
-  1: d8Kernel([[0, 0, 0], [0, 0, 1], [0, 0, 0]]),
-  2: d8Kernel([[0, 0, 0], [0, 0, 0], [0, 0, 1]]),
-  4: d8Kernel([[0, 0, 0], [0, 0, 0], [0, 1, 0]]),
-  8: d8Kernel([[0, 0, 0], [0, 0, 0], [1, 0, 0]]),
-  16: d8Kernel([[0, 0, 0], [1, 0, 0], [0, 0, 0]]),
-  32: d8Kernel([[1, 0, 0], [0, 0, 0], [0, 0, 0]]),
-  64: d8Kernel([[0, 1, 0], [0, 0, 0], [0, 0, 0]]),
-  128: d8Kernel([[0, 0, 1], [0, 0, 0], [0, 0, 0]])
-};
-var d8DownstreamKernels = {
-  1: d8Kernel([[0, 0, 0], [1, 0, 0], [0, 0, 0]]),
-  2: d8Kernel([[1, 0, 0], [0, 0, 0], [0, 0, 0]]),
-  4: d8Kernel([[0, 1, 0], [0, 0, 0], [0, 0, 0]]),
-  8: d8Kernel([[0, 0, 1], [0, 0, 0], [0, 0, 0]]),
-  16: d8Kernel([[0, 0, 0], [0, 0, 1], [0, 0, 0]]),
-  32: d8Kernel([[0, 0, 0], [0, 0, 0], [0, 0, 1]]),
-  64: d8Kernel([[0, 0, 0], [0, 0, 0], [0, 1, 0]]),
-  128: d8Kernel([[0, 0, 0], [0, 0, 0], [1, 0, 0]])
-};
-var d8StepLength = {
-  1: CONFIG.MERIT_SCALE_M,
-  2: CONFIG.MERIT_SCALE_M * Math.SQRT2,
-  4: CONFIG.MERIT_SCALE_M,
-  8: CONFIG.MERIT_SCALE_M * Math.SQRT2,
-  16: CONFIG.MERIT_SCALE_M,
-  32: CONFIG.MERIT_SCALE_M * Math.SQRT2,
-  64: CONFIG.MERIT_SCALE_M,
-  128: CONFIG.MERIT_SCALE_M * Math.SQRT2
-};
-
-var initialHydroDistance = ee.Image.constant(-1).toFloat()
-  .where(meritOutletChannelSeed, 0)
-  .rename('hydraulic_path_distance_m')
-  .clip(catchmentGeometry);
-var upstreamHydroState = ee.List.sequence(
-  1, CONFIG.HYDRO_MAX_UPSTREAM_STEPS
-).iterate(function(step, state) {
-  var distance = ee.Image(ee.Dictionary(state).get('distance'));
-  var updated = distance;
-  d8Codes.forEach(function(code) {
-    var downstreamDistance = distance.reduceNeighborhood({
-      reducer: ee.Reducer.max(),
-      kernel: d8UpstreamKernels[code],
-      skipMasked: false
-    }).unmask(-1);
-    var candidate = meritDirection.eq(code)
-      .and(meritChannelMask)
-      .and(distance.lt(0))
-      .and(downstreamDistance.gte(0));
-    updated = updated.where(candidate,
-      downstreamDistance.add(d8StepLength[code]));
-  });
-  return ee.Dictionary({distance: updated});
-}, ee.Dictionary({distance: initialHydroDistance}));
-var hydroPathDistance = ee.Image(
-  ee.Dictionary(upstreamHydroState).get('distance')
-).updateMask(ee.Image(
-  ee.Dictionary(upstreamHydroState).get('distance')
-).gte(0)).rename('hydraulic_path_distance_m').clip(catchmentGeometry);
-var longestFlowPathM = reduceStat(hydroPathDistance, ee.Reducer.max(),
-  'hydraulic_path_distance_m', CONFIG.MERIT_SCALE_M, 0);
-var longestEndpointMask = hydroPathDistance.eq(longestFlowPathM)
-  .and(longestFlowPathM.gt(0)).selfMask();
-
-// Trace the selected farthest endpoint downstream using the MERIT D8
-// direction codes. This creates the displayed path and allows an explicit
-// reachability test at the snapped outlet instead of accepting a distance-only
-// raster as a hydraulic path.
-var initialTrace = longestEndpointMask.unmask(0).byte();
-var downstreamTraceState = ee.List.sequence(
-  1, CONFIG.HYDRO_MAX_UPSTREAM_STEPS
-).iterate(function(step, state) {
-  var stateDictionary = ee.Dictionary(state);
-  var current = ee.Image(stateDictionary.get('current')).byte();
-  var trace = ee.Image(stateDictionary.get('trace')).byte();
-  var active = current.and(meritOutletChannelSeed.not()).unmask(0);
-  var next = ee.Image(0).byte();
-  d8Codes.forEach(function(code) {
-    var directedSource = active.and(meritDirection.eq(code)).unmask(0);
-    var target = directedSource.reduceNeighborhood({
-      reducer: ee.Reducer.max(),
-      kernel: d8DownstreamKernels[code],
-      skipMasked: false
-    }).gt(0);
-    next = next.or(target);
-  });
-  next = next.and(meritChannelMask).and(trace.not()).byte();
-  return ee.Dictionary({
-    current: next,
-    trace: trace.or(next).byte()
-  });
-}, ee.Dictionary({current: initialTrace, trace: initialTrace}));
-var hydraulicPath = ee.Image(
-  ee.Dictionary(downstreamTraceState).get('trace')
-).updateMask(meritChannelMask).clip(catchmentGeometry)
-  .rename('hydraulic_longest_path');
-var pathReachesOutletDictionary = hydraulicPath
-  .and(meritOutletChannelSeed)
-  .reduceRegion({
-    reducer: ee.Reducer.anyNonZero(),
-    geometry: catchmentGeometry,
-    scale: CONFIG.MERIT_SCALE_M,
-    maxPixels: CONFIG.MAX_PIXELS,
-    bestEffort: true,
-    tileScale: 4
-  });
-var pathReachesOutlet = ee.Number(ee.Algorithms.If(
-  ee.Dictionary(pathReachesOutletDictionary).contains('hydraulic_longest_path'),
-  ee.Dictionary(pathReachesOutletDictionary).get('hydraulic_longest_path'),
-  0
-));
-var pathLengthSanityLimitM = areaM2.sqrt()
-  .multiply(CONFIG.HYDRO_MAX_PATH_TO_AREA_ROOT_RATIO);
-var hydraulicPathValid = ee.Algorithms.If(
-  outletConfigured,
-  outletWithinCatchmentNumber.eq(1)
-    .and(meritSnapDistanceM.gte(0))
-    .and(meritSnapDistanceM.lte(CONFIG.HYDRO_OUTLET_SNAP_MAX_M))
-    .and(pathReachesOutlet.eq(1))
-    .and(longestFlowPathM.gt(0))
-    .and(longestFlowPathM.lte(pathLengthSanityLimitM)),
-  false
-);
-var hydraulicPathValidNumber = ee.Number(ee.Algorithms.If(
-  hydraulicPathValid, 1, 0));
-
-function calculateTcForDem(demImage) {
-  var outletElevation = reduceStatGeometry(
-    demImage, ee.Reducer.mean(), 'elevation_m', outletPoint,
-    CONFIG.TERRAIN_SCALE_M, 0
-  );
-  var remoteElevation = reduceStat(
-    demImage.updateMask(longestEndpointMask),
-    ee.Reducer.max(), 'elevation_m', CONFIG.TERRAIN_SCALE_M, 0
-  );
-  var gradient = remoteElevation.subtract(outletElevation)
-    .divide(longestFlowPathM.max(1))
-    .max(CONFIG.TC_MIN_GRADIENT);
-  var tcMinutesComputed = ee.Number(0.0195)
-    .multiply(longestFlowPathM.pow(0.77))
-    .divide(gradient.pow(0.385));
-  var tcMinutes = ee.Number(ee.Algorithms.If(
-    hydraulicPathValid, tcMinutesComputed, -9999));
-  return ee.Dictionary({
-    outlet_elevation_m: outletElevation,
-    remote_elevation_m: remoteElevation,
-    channel_gradient: gradient,
-    tc_minutes: tcMinutes,
-    path_valid: hydraulicPathValidNumber,
-    path_reaches_outlet: pathReachesOutlet,
-    outlet_configured: outletConfigured,
-    outlet_within_catchment: outletWithinCatchment,
-    merit_outlet_snap_distance_m: meritSnapDistanceM,
-    path_sanity_limit_m: pathLengthSanityLimitM
-  });
-}
-
-var tcCopernicus = calculateTcForDem(demCopernicus);
-var tcSrtm = calculateTcForDem(demSrtm);
-var tcSelected = CONFIG.DEM_SOURCE === 'SRTM' ? tcSrtm : tcCopernicus;
-var tcSelectedMinutes = ee.Number(tcSelected.get('tc_minutes'));
-var tcAlternateMinutes = ee.Number(
-  (CONFIG.DEM_SOURCE === 'SRTM' ? tcCopernicus : tcSrtm).get('tc_minutes')
-);
-var tcDifferencePct = ee.Number(ee.Algorithms.If(
-  hydraulicPathValid,
-  tcSelectedMinutes.subtract(tcAlternateMinutes).abs()
-    .divide(tcAlternateMinutes.max(0.001)).multiply(100),
-  -9999
-));
-var flowDistance = hydroPathDistance;
-var longestFlowPathMask = hydraulicPath;
 
 var slopeDegrees = ee.Terrain.slope(dem).rename('slope_degrees');
 var slopePct = slopeDegrees.multiply(Math.PI / 180).tan()
@@ -2387,25 +1957,6 @@ var bareModerateConfidenceAreaHa = reduceStat(
   ee.Reducer.sum(), 'bare_moderate_confidence_area_m2', CONFIG.LULC_SCALE_M, 0
 ).divide(10000);
 
-var initialPeakQ = weightedC
-  .multiply(CONFIG.DESIGN_INTENSITY_MMHR)
-  .multiply(areaHa)
-  .divide(360);
-var designRainfallSourceConfigured = CONFIG.DESIGN_RAINFALL_SOURCE !== '' &&
-  CONFIG.DESIGN_RAINFALL_SOURCE.toUpperCase().indexOf('USER INPUT REQUIRED') < 0;
-var designRainfallSourceFlag = ee.Number(
-  designRainfallSourceConfigured ? 1 : 0).eq(1);
-// FIX: hydraulicPathValid can resolve to the literal JS `false` (typed as
-// Boolean) whenever outletConfigured is false, since ee.Algorithms.If's
-// false-branch is that literal. Number.and() requires its argument to be
-// Number, not Boolean, so pass the already-cast hydraulicPathValidNumber
-// (0/1) instead of the raw value.
-var designReadyCAndPath = validCoveragePct.gte(
-  CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT).and(hydraulicPathValidNumber.eq(1))
-  .and(designRainfallSourceFlag);
-var designReadyPeakQ = ee.Number(ee.Algorithms.If(
-  designReadyCAndPath, initialPeakQ, -9999));
-
 print('Catchment area result', ee.Dictionary({
   area_m2: areaM2,
   area_ha: areaHa,
@@ -2422,7 +1973,7 @@ print('Rainfall climatology context only', ee.Dictionary({
   mean_annual_rainfall_mm: meanAnnualRainfall,
   source: CONFIG.CHIRPS_ID,
   period: CONFIG.CHIRPS_CONTEXT_START_YEAR + '-' + CONFIG.CHIRPS_CONTEXT_END_YEAR,
-  note: 'Do not use this annual average as Rational-Method design intensity.'
+  note: 'Context/diagnostic layer only; this phase does not compute design rainfall intensity or peak discharge.'
 }));
 print('Terrain-aware grassland correction', ee.Dictionary({
   enabled: CONFIG.BARE_ROCK_CORRECTION_ENABLED,
@@ -2455,24 +2006,6 @@ print('Indian C source tables', {
   irc_sp13_fixed: IRC_SP13_FIXED_C,
   primary_method: '0-30% Government/WAPCOS table; >30% independent IRC surface-condition branch; no arbitrary slope extrapolation'
 });
-// Keep this print scalar-only. The detailed MERIT path and provenance products
-// are available as map layers and exports; the console report stays compact.
-print('Time of concentration screening', ee.Dictionary({
-  longest_flow_path_m: longestFlowPathM,
-  longest_flow_path_km: longestFlowPathM.divide(1000),
-  outlet_configured: outletConfigured,
-  outlet_within_catchment: outletWithinCatchment,
-  merit_outlet_snap_distance_m: meritSnapDistanceM,
-  path_reaches_outlet: pathReachesOutlet,
-  hydraulic_path_valid: hydraulicPathValidNumber,
-  path_sanity_limit_m: pathLengthSanityLimitM,
-  selected_dem: CONFIG.DEM_SOURCE,
-  tc_copernicus_minutes: tcCopernicus.get('tc_minutes'),
-  tc_srtm_minutes: tcSrtm.get('tc_minutes'),
-  selected_tc_minutes: tcSelectedMinutes,
-  dem_tc_difference_pct: tcDifferencePct,
-  method: 'MERIT Hydro ~90 m D8 directed upstream path from configured outlet; Tc is unresolved unless the path reaches the outlet and passes sanity checks.'
-}));
 print('Independent SCS-CN cross-check', ee.Dictionary({
   weighted_cn: weightedCN,
   storm_depth_mm: CONFIG.SCS_CN_STORM_DEPTH_MM,
@@ -2490,10 +2023,9 @@ print('Primary runoff coefficient result', ee.Dictionary({
   valid_C_coverage_percent: validCoveragePct,
   valid_C_area_ha: validAreaM2.divide(10000),
   unresolved_C_area_ha: unresolvedAreaM2.divide(10000),
-  coverage_closure_error_percent: coverageClosureErrorPct,
-  design_ready_peak_Q_m3s: designReadyPeakQ
+  coverage_closure_error_percent: coverageClosureErrorPct
 }));
-print('FINAL CHECK-DAM CATCHMENT REPORT', ee.Dictionary({
+print('FINAL CHECK-DAM CATCHMENT C REPORT', ee.Dictionary({
   catchment_area_ha: areaHa,
   valid_c_area_ha: validAreaM2.divide(10000),
   unresolved_c_area_ha: unresolvedAreaM2.divide(10000),
@@ -2514,25 +2046,10 @@ print('FINAL CHECK-DAM CATCHMENT REPORT', ee.Dictionary({
   weighted_c: weightedC,
   minimum_c: cMinimum,
   maximum_c: cMaximum,
-  longest_hydraulic_flow_path_m: longestFlowPathM,
-  longest_hydraulic_flow_path_km: longestFlowPathM.divide(1000),
-  channel_gradient_copernicus: tcCopernicus.get('channel_gradient'),
-  tc_copernicus_minutes: tcCopernicus.get('tc_minutes'),
-  tc_srtm_minutes: tcSrtm.get('tc_minutes'),
-  dem_difference_percent: tcDifferencePct,
-  hydraulic_path_valid: hydraulicPathValidNumber,
-  path_reaches_outlet: pathReachesOutlet,
-  design_return_period_years: CONFIG.RETURN_PERIOD_YEARS,
-  design_duration_minutes: CONFIG.STORM_DURATION_MIN,
-  design_rainfall_intensity_mmhr: CONFIG.DESIGN_INTENSITY_MMHR,
-  peak_discharge_m3s: designReadyPeakQ,
   scs_cn_runoff_depth_mm: weightedSCSRunoffDepthMm,
   scs_cn_runoff_volume_m3: scsRunoffVolumeM3,
-  overall_dss_confidence: hydraulicPathValidNumber.eq(1)
-    .and(validCoveragePct.gte(CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT))
+  coverage_target_met: validCoveragePct.gte(CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT)
     .and(coverageClosureErrorPct.lte(1))
-    .and(tcDifferencePct.gte(0))
-    .and(designRainfallSourceFlag)
 }));
 
 // ==========================================================================
@@ -2545,11 +2062,6 @@ Map.setOptions('SATELLITE');
 var boundaryLayer = Map.addLayer(
   catchment.style({color: '00ffff', fillColor: '00000000', width: 3}),
   {}, 'Catchment boundary (always visible)', true
-);
-var outletLayer = Map.addLayer(
-  ee.FeatureCollection([outletFeature]).style({color: 'ffffff', pointSize: 6}),
-  {}, outletConfigured ? 'Configured check-dam outlet' :
-    'Outlet proxy (lowest boundary DEM sample)', true
 );
 var demLayer = Map.addLayer(dem, {
   min: 0,
@@ -2718,25 +2230,6 @@ var cConfidenceLayer = Map.addLayer(cConfidence, {
   max: 3,
   palette: ['d73027', 'fdae61', '91cf60', '1a9850']
 }, 'C confidence map (0 unresolved, 1 low, 2 moderate, 3 high)', false);
-var flowDistanceLayer = Map.addLayer(flowDistance, {
-  min: 0,
-  max: 5000,
-  palette: ['ffffff', 'c6dbef', '6baed6', '2171b5', '08306b']
-}, 'MERIT directed upstream path distance (m)', false);
-var hydraulicPathLayer = Map.addLayer(hydraulicPath.selfMask(), {
-  palette: ['ff00ff']
-}, 'Longest hydraulic flow path (MERIT D8)', true);
-var meritDirectionLayer = Map.addLayer(meritDirection, {
-  min: -1,
-  max: 128,
-  palette: ['000000', '1a9850', '66bd63', 'a6d96a', 'd9ef8b',
-    'fee08b', 'fdae61', 'f46d43', 'd73027']
-}, 'MERIT flow direction', false);
-var meritUpstreamAreaLayer = Map.addLayer(meritUpstreamArea, {
-  min: 0,
-  max: 0.5,
-  palette: ['ffffff', 'c6dbef', '6baed6', '2171b5', '08306b']
-}, 'MERIT upstream drainage area (km2)', false);
 var cnLayer = Map.addLayer(cnImage, {
   min: 0,
   max: 100,
@@ -2773,7 +2266,7 @@ if (CONFIG.STREAM_ASSET !== '') {
   print('Optional stream asset', CONFIG.STREAM_ASSET);
 } else {
   print('Drainage/streams',
-    'No stream asset supplied; the DSS does not infer drainage from the DSM.');
+    'No stream asset supplied; this C-only phase does not infer drainage from the DSM.');
 }
 
 // ==========================================================================
@@ -2783,11 +2276,6 @@ if (CONFIG.STREAM_ASSET !== '') {
 var metricLabels = {};
 var weightedCClient = null;
 var areaHaClient = null;
-var tcClient = null;
-var tcDifferenceClient = null;
-var tcPathValidClient = null;
-var pathReachesOutletClient = null;
-var outletSnapDistanceClient = null;
 var cCoverageClient = null;
 var cnCoverageClient = null;
 var weightedCNClient = null;
@@ -2801,10 +2289,6 @@ var observedCModelBiasClient = null;
 var observedCModelMaeClient = null;
 var observedCModelRmseClient = null;
 var observedCModelErrorPctClient = null;
-var currentDesignIntensity = CONFIG.DESIGN_INTENSITY_MMHR;
-var currentReturnPeriod = CONFIG.RETURN_PERIOD_YEARS;
-var currentDurationMinutes = CONFIG.STORM_DURATION_MIN;
-var currentRainfallSource = CONFIG.DESIGN_RAINFALL_SOURCE;
 
 var dashboard = ui.Panel({
   style: {
@@ -2817,11 +2301,12 @@ var dashboard = ui.Panel({
 dashboard.add(ui.Label('CHECK-DAM CATCHMENT', {
   fontSize: '20px', fontWeight: 'bold', color: '#124559'
 }));
-dashboard.add(ui.Label('RUNOFF & PEAK DISCHARGE DSS', {
+dashboard.add(ui.Label('RUNOFF COEFFICIENT DSS (C-ONLY)', {
   fontSize: '15px', fontWeight: 'bold', color: '#124559', margin: '0 0 8px 0'
 }));
 dashboard.add(ui.Label(
-  'Analysis boundary: the uploaded upstream contributing catchment only.',
+  'Analysis boundary: the uploaded upstream contributing catchment only. ' +
+  'Peak discharge / time of concentration are a separate later module.',
   {fontSize: '12px', color: '#555555', margin: '0 0 8px 0'}
 ));
 
@@ -2834,19 +2319,6 @@ makeMetricRow(summaryPanel, 'area_km2', 'Catchment area', 'km2');
 makeMetricRow(summaryPanel, 'mean_elevation_m', 'Mean elevation', 'm');
 makeMetricRow(summaryPanel, 'mean_slope_pct', 'Mean slope', '%');
 makeMetricRow(summaryPanel, 'max_slope_pct', 'Maximum slope', '%');
-makeMetricRow(summaryPanel, 'longest_flow_path_m', 'Longest hydraulic flow path', 'm');
-makeMetricRow(summaryPanel, 'longest_flow_path_km', 'Longest hydraulic flow path', 'km');
-makeMetricRow(summaryPanel, 'outlet_elevation_m', 'Outlet elevation', 'm');
-makeMetricRow(summaryPanel, 'upstream_elevation_m', 'Upstream/effective elevation', 'm');
-makeMetricRow(summaryPanel, 'elevation_drop_m', 'Elevation drop', 'm');
-makeMetricRow(summaryPanel, 'tc_minutes', 'Time of concentration', 'min');
-makeMetricRow(summaryPanel, 'channel_gradient', 'Channel gradient', 'm/m');
-makeMetricRow(summaryPanel, 'tc_copernicus_minutes', 'Tc Copernicus', 'min');
-makeMetricRow(summaryPanel, 'tc_srtm_minutes', 'Tc SRTM', 'min');
-makeMetricRow(summaryPanel, 'tc_dem_difference_pct', 'Tc DEM difference', '%');
-makeMetricRow(summaryPanel, 'outlet_snap_distance_m', 'Outlet snap to MERIT channel', 'm');
-makeMetricRow(summaryPanel, 'path_reaches_outlet', 'Path reaches outlet', '');
-makeMetricRow(summaryPanel, 'tc_path_valid', 'Hydraulic path valid', '');
 makeMetricRow(summaryPanel, 'c_raster_area_ha', '30-m C-grid area', 'ha');
 makeMetricRow(summaryPanel, 'coverage_closure_error_pct', 'C area closure error', '%');
 makeMetricRow(summaryPanel, 'reason_closure_error_pct', 'C reason closure error', '%');
@@ -2986,80 +2458,14 @@ var confidenceUiLabel = ui.Label('Confidence: computing...', {
 });
 runoffPanel.add(confidenceUiLabel);
 runoffPanel.add(ui.Label(
-  'Primary C uses the Indian Government/WAPCOS land-cover + soil-texture + slope table. Rainfall intensity is used only in Q = C*I*A/360; no numeric C range is claimed.',
+  'Primary C uses the Indian Government/WAPCOS land-cover + soil-texture + slope table. No peak discharge or rainfall intensity is computed in this phase.',
   {fontSize: '11px', color: '#666666', margin: '4px 0 0 0'}
 ));
+var inputStatus = ui.Label('', {
+  fontSize: '11px', color: '#9b2226', margin: '4px 0 0 0'
+});
+runoffPanel.add(inputStatus);
 dashboard.add(runoffPanel);
-
-var rainfallPanel = ui.Panel({style: {margin: '4px 0 8px 0'}});
-rainfallPanel.add(ui.Label('DESIGN RAINFALL / RATIONAL METHOD', {
-  fontWeight: 'bold', color: '#124559'
-}));
-rainfallPanel.add(ui.Label(
-  'Use an applicable design-storm IDF intensity. Annual average rainfall is not used as I.',
-  {fontSize: '11px', color: '#666666', margin: '2px 0 5px 0'}
-));
-makeMetricRow(rainfallPanel, 'mean_annual_rainfall_mm',
-  'CHIRPS annual context', 'mm/yr');
-makeMetricRow(rainfallPanel, 'tc_rainfall_minutes', 'Computed Tc', 'min');
-
-var intensityInput = ui.Textbox({
-  value: String(CONFIG.DESIGN_INTENSITY_MMHR),
-  placeholder: 'e.g. 50',
-  style: {width: '95px'}
-});
-var returnPeriodInput = ui.Select({
-  items: ['2', '5', '10', '25', '50', '100'],
-  value: CONFIG.RETURN_PERIOD_YEARS,
-  style: {width: '95px'}
-});
-var durationInput = ui.Textbox({
-  value: String(CONFIG.STORM_DURATION_MIN),
-  placeholder: 'minutes',
-  style: {width: '95px'}
-});
-var rainfallSourceInput = ui.Textbox({
-  value: CONFIG.DESIGN_RAINFALL_SOURCE,
-  placeholder: 'official/local IDF source',
-  style: {width: '210px'}
-});
-rainfallPanel.add(ui.Panel([
-  ui.Label('Intensity (mm/hr)', {width: '115px'}), intensityInput
-], ui.Panel.Layout.flow('horizontal')));
-rainfallPanel.add(ui.Panel([
-  ui.Label('Return period (yr)', {width: '115px'}), returnPeriodInput
-], ui.Panel.Layout.flow('horizontal')));
-rainfallPanel.add(ui.Panel([
-  ui.Label('Storm duration (min)', {width: '115px'}), durationInput
-], ui.Panel.Layout.flow('horizontal')));
-rainfallPanel.add(ui.Panel([
-  ui.Label('Rainfall source', {width: '115px'}), rainfallSourceInput
-], ui.Panel.Layout.flow('horizontal')));
-rainfallPanel.add(ui.Label(
-  'Duration is set to the computed Tc after loading. Design intensity must be supplied from an applicable local/official IDF source.',
-  {fontSize: '11px', color: '#666666', margin: '4px 0 0 0'}
-));
-
-var updateButton = ui.Button({
-  label: 'Update design Q',
-  onClick: updatePeakDischarge,
-  style: {stretch: 'horizontal', margin: '6px 0 2px 0'}
-});
-rainfallPanel.add(updateButton);
-var peakQLabel = ui.Label('Q = computing...', {
-  fontSize: '17px', fontWeight: 'bold', color: '#9b2226'
-});
-rainfallPanel.add(peakQLabel);
-var sensitivityLabel = ui.Label('C uncertainty range: not configured by the adopted table.', {
-  fontSize: '12px', color: '#555555'
-});
-rainfallPanel.add(sensitivityLabel);
-var inputStatus = ui.Label(
-  'Default intensity is a placeholder. Replace it with the official/local IDF value; it multiplies the primary C in Q = C*I*A/360.',
-  {fontSize: '11px', color: '#9b2226', margin: '4px 0 0 0'}
-);
-rainfallPanel.add(inputStatus);
-dashboard.add(rainfallPanel);
 
 var scsPanel = ui.Panel({style: {margin: '4px 0 8px 0'}});
 scsPanel.add(ui.Label('INDEPENDENT SCS-CN CROSS-CHECK', {
@@ -3100,6 +2506,10 @@ var validationPanel = ui.Panel({style: {margin: '4px 0 8px 0'}});
 validationPanel.add(ui.Label('FIELD VALIDATION / CALIBRATION', {
   fontWeight: 'bold', color: '#124559'
 }));
+validationPanel.add(ui.Label(
+  'Optional: enter independently observed rainfall + peak discharge (or runoff volume) to back-calculate an observed C and compare it against the modeled weighted C.',
+  {fontSize: '11px', color: '#666666', margin: '2px 0 5px 0'}
+));
 var observedRainfallInput = ui.Textbox({placeholder: 'mm/hr', style: {width: '85px'}});
 var observedDischargeInput = ui.Textbox({placeholder: 'm3/s', style: {width: '85px'}});
 var observedVolumeInput = ui.Textbox({placeholder: 'm3', style: {width: '85px'}});
@@ -3130,7 +2540,6 @@ dashboard.add(validationPanel);
 var layersPanel = ui.Panel({style: {margin: '4px 0 8px 0'}});
 layersPanel.add(ui.Label('MAP LAYERS', {fontWeight: 'bold', color: '#124559'}));
 addLayerToggle(layersPanel, 'Elevation / DEM', demLayer);
-addLayerToggle(layersPanel, outletConfigured ? 'Configured outlet' : 'Outlet proxy', outletLayer);
 addLayerToggle(layersPanel, 'Hillshade', hillshadeLayer);
 addLayerToggle(layersPanel, 'Slope', slopeLayer);
 addLayerToggle(layersPanel, 'LULC', lulcLayer);
@@ -3168,10 +2577,6 @@ addLayerToggle(layersPanel, 'Primary C slope class', cSlopeClassLayer);
 addLayerToggle(layersPanel, 'IRC >30% surface class', ircSurfaceClassLayer);
 addLayerToggle(layersPanel, 'C source map', cSourceLayer);
 addLayerToggle(layersPanel, 'C confidence map', cConfidenceLayer);
-addLayerToggle(layersPanel, 'Hydraulic path distance', flowDistanceLayer);
-addLayerToggle(layersPanel, 'Longest hydraulic flow path', hydraulicPathLayer);
-addLayerToggle(layersPanel, 'MERIT flow direction', meritDirectionLayer);
-addLayerToggle(layersPanel, 'MERIT upstream drainage area', meritUpstreamAreaLayer);
 addLayerToggle(layersPanel, 'SCS-CN map', cnLayer);
 addLayerToggle(layersPanel, 'SCS-CN runoff depth', scsRunoffDepthLayer);
 addLayerToggle(layersPanel, 'C map', cLayer);
@@ -3206,7 +2611,7 @@ warningPanel.add(ui.Label(
   {fontSize: '11px', color: '#9b2226', whiteSpace: 'pre-wrap'}
 ));
 warningPanel.add(ui.Label(
-  'C source: Indian Government/WAPCOS land-cover + soil-texture + slope table for 0-30% slope, plus an independent IRC:SP:13/IRC:SP:42 surface-condition branch above 30%. Slope alone never assigns an IRC value. Confirm the adopted project edition for final design. HSG and rainfall intensity are not hidden multipliers in primary C.',
+  'C source: Indian Government/WAPCOS land-cover + soil-texture + slope table for 0-30% slope, plus an independent IRC:SP:13/IRC:SP:42 surface-condition branch above 30%. Slope alone never assigns an IRC value. Confirm the adopted project edition for final design.',
   {fontSize: '11px', color: '#9b2226', whiteSpace: 'pre-wrap'}
 ));
 warningPanel.add(ui.Label(
@@ -3222,11 +2627,11 @@ warningPanel.add(ui.Label(
   {fontSize: '11px', color: '#9b2226', whiteSpace: 'pre-wrap'}
 ));
 warningPanel.add(ui.Label(
-  'Final Q is blocked unless valid C coverage reaches ' + CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT + '%. Missing-C reasons are exported and mapped; no average C is used to fill gaps.',
+  'Exports are blocked unless valid C coverage reaches ' + CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT + '%. Missing-C reasons are exported and mapped; no average C is used to fill gaps.',
   {fontSize: '11px', color: '#9b2226', whiteSpace: 'pre-wrap'}
 ));
 warningPanel.add(ui.Label(
-  'Hydraulic-path gate: configure the actual proposed check-dam outlet coordinates in CONFIG.OUTLET_LON and CONFIG.OUTLET_LAT. The current lowest-boundary point is only a proxy. MERIT Hydro D8 tracing must reach the outlet and pass the path-length sanity check before Tc/Q or exports are design-ready.',
+  'SCOPE: peak discharge, rainfall intensity, time of concentration, IDF, return period and check-dam hydraulic design are NOT part of this phase. A prior attempt at a MERIT-Hydro-based hydraulic path/Tc module was removed because Earth Engine rejected its iterative expression graph as "too complex" to evaluate; that will need a different (non-iterative) approach in a later module.',
   {fontSize: '11px', color: '#9b2226', whiteSpace: 'pre-wrap'}
 ));
 dashboard.add(warningPanel);
@@ -3239,18 +2644,15 @@ var methodologyText = [
   'Catchment: user-provided upstream contributing watershed, dissolved when multiple features exist.',
   'LULC: ESA WorldCover 2021 v200, 10 m.',
   'LULC correction: WorldCover grassland is screened with Sentinel-2 NDVI/BSI and Dynamic World bare probability. The optional very-steep local override is disabled by default because slope alone is not bare-rock evidence.',
-  'Terrain: configurable Copernicus GLO-30 DSM or SRTM, approximately 30 m.',
+  'Terrain: configurable Copernicus GLO-30 DSM or SRTM, approximately 30 m; used for slope classification only in this phase.',
   'Soil: OpenLandMap texture, sand, clay, bulk density and water-content evidence at native 250 m; HSG is a proxy unless field-confirmed.',
-  'Rainfall context: CHIRPS mean annual rainfall for a fixed climatology period; not design I.',
+  'Rainfall context: CHIRPS mean annual rainfall for a fixed climatology period; context/diagnostic layer only, not used in the C computation.',
   'Runoff coefficient: 0-30% uses the Indian Government/WAPCOS land-cover + soil-texture + slope table. >30% activates an IRC:SP:13/IRC:SP:42 surface-condition branch: steep bare rock 0.90, rock with vegetation 0.80, plateau/light cover 0.70, bare stiff clay 0.60, stiff clay with vegetation 0.50, loam lightly covered 0.40, loam covered/turfed 0.30, sandy light growth 0.20 and sandy woodland/forest 0.10. These are suggested surface coefficients, not exact measured C values. NDVI/BSI/Dynamic World/Sentinel-1 are evidence only.',
   'Analysis grid: 30-m hydrological C grid using 10-m land-cover evidence and 250-m native soil evidence.',
-  'Hydraulic path: MERIT Hydro approximately 90-m D8 local drainage direction and upstream drainage area; upstream path traced from the configured outlet. The displayed path must pass outlet/reachability/sanity checks; otherwise Tc is unresolved.',
-  'Time of concentration: Kirpich Tc = 0.0195 L^0.77 / S^0.385 using the validated longest hydraulic path in metres and channel slope in m/m; Copernicus and SRTM elevation sensitivity are compared.',
-  'Design rainfall: duration should equal Tc and intensity must come from the selected return-period local/official IDF source.',
-  'Peak discharge: Rational Method Q = C x I x A / 360. A=ha, I=mm/hour, Q=m3/s.',
-  'Independent cross-check: SCS-CN reports runoff depth/volume only and is never mixed with Rational-Method C or Q.',
-  'Final methodology statement: The spatial runoff coefficient is derived using an Indian Government/WAPCOS land-cover-soil-texture-slope framework up to 30% slope, supplemented by source-based IRC surface-condition coefficients for steeper terrain. Remote-sensing datasets classify and validate conditions but do not arbitrarily multiply C. Soil retains native spatial resolution. C is area-weighted over the delineated upstream catchment, and Qp=CIA/360 uses independently established design rainfall intensity.',
-  'Final design requires applicable standards, IDF rainfall, field validation and competent review.'
+  'Independent cross-check: SCS-CN reports runoff depth/volume only and is never mixed with Rational-Method C.',
+  'Out of scope this phase: peak discharge Q, rainfall intensity I, time of concentration Tc, IDF curves, return period, flood routing, check-dam hydraulic design.',
+  'Final methodology statement: The spatial runoff coefficient is derived using an Indian Government/WAPCOS land-cover-soil-texture-slope framework up to 30% slope, supplemented by source-based IRC surface-condition coefficients for steeper terrain. Remote-sensing datasets classify and validate conditions but do not arbitrarily multiply C. Soil retains native spatial resolution. C is area-weighted over the delineated upstream catchment.',
+  'Final design requires applicable standards, field validation and competent review.'
 ].join('\n');
 methodologyPanel.add(ui.Label(
   methodologyText,
@@ -3270,21 +2672,6 @@ var uiSummaryValues = {
   mean_elevation_m: meanElevation,
   mean_slope_pct: meanSlopePct,
   max_slope_pct: maxSlopePct,
-  longest_flow_path_m: longestFlowPathM,
-  longest_flow_path_km: longestFlowPathM.divide(1000),
-  outlet_elevation_m: ee.Number(tcSelected.get('outlet_elevation_m')),
-  upstream_elevation_m: ee.Number(tcSelected.get('remote_elevation_m')),
-  elevation_drop_m: ee.Number(tcSelected.get('remote_elevation_m'))
-    .subtract(ee.Number(tcSelected.get('outlet_elevation_m'))),
-  tc_minutes: tcSelectedMinutes,
-  tc_rainfall_minutes: tcSelectedMinutes,
-  channel_gradient: ee.Number(tcSelected.get('channel_gradient')),
-  tc_copernicus_minutes: ee.Number(tcCopernicus.get('tc_minutes')),
-  tc_srtm_minutes: ee.Number(tcSrtm.get('tc_minutes')),
-  tc_dem_difference_pct: tcDifferencePct,
-  outlet_snap_distance_m: meritSnapDistanceM,
-  path_reaches_outlet: pathReachesOutlet,
-  tc_path_valid: hydraulicPathValidNumber,
   c_raster_area_ha: cRasterAreaM2.divide(10000),
   valid_c_area_ha: validAreaM2.divide(10000),
   unresolved_c_area_ha: unresolvedAreaM2.divide(10000),
@@ -3364,11 +2751,6 @@ ee.Dictionary(uiSummaryValues).evaluate(function(values, error) {
     return;
   }
   areaHaClient = Number(values.area_ha);
-  tcClient = Number(values.tc_minutes);
-  tcDifferenceClient = Number(values.tc_dem_difference_pct);
-  tcPathValidClient = Number(values.tc_path_valid);
-  pathReachesOutletClient = Number(values.path_reaches_outlet);
-  outletSnapDistanceClient = Number(values.outlet_snap_distance_m);
   cCoverageClient = Number(values.c_coverage_pct);
   cnCoverageClient = Number(values.cn_coverage_pct);
   weightedCNClient = Number(values.weighted_cn);
@@ -3381,20 +2763,6 @@ ee.Dictionary(uiSummaryValues).evaluate(function(values, error) {
   setMetric('mean_elevation_m', values.mean_elevation_m, 1);
   setMetric('mean_slope_pct', values.mean_slope_pct, 2);
   setMetric('max_slope_pct', values.max_slope_pct, 2);
-  setMetric('longest_flow_path_m', values.longest_flow_path_m, 1);
-  setMetric('longest_flow_path_km', values.longest_flow_path_km, 3);
-  setMetric('outlet_elevation_m', values.outlet_elevation_m, 1);
-  setMetric('upstream_elevation_m', values.upstream_elevation_m, 1);
-  setMetric('elevation_drop_m', values.elevation_drop_m, 1);
-  setMetric('tc_minutes', values.tc_minutes, 1);
-  setMetric('tc_rainfall_minutes', values.tc_rainfall_minutes, 1);
-  setMetric('channel_gradient', values.channel_gradient, 4);
-  setMetric('tc_copernicus_minutes', values.tc_copernicus_minutes, 1);
-  setMetric('tc_srtm_minutes', values.tc_srtm_minutes, 1);
-  setMetric('tc_dem_difference_pct', values.tc_dem_difference_pct, 1);
-  setMetric('outlet_snap_distance_m', values.outlet_snap_distance_m, 1);
-  setMetric('path_reaches_outlet', values.path_reaches_outlet, 0);
-  setMetric('tc_path_valid', values.tc_path_valid, 0);
   setMetric('c_raster_area_ha', values.c_raster_area_ha, 2);
   setMetric('coverage_closure_error_pct', values.coverage_closure_error_pct, 3);
   setMetric('reason_closure_error_pct', values.reason_closure_error_pct, 3);
@@ -3462,13 +2830,6 @@ ee.Dictionary(uiSummaryValues).evaluate(function(values, error) {
     setMetric('cover_' + definition.field + '_ha',
       values['cover_' + definition.field + '_ha'], 2);
   });
-
-  if (isFinite(tcClient) && tcClient > 0) {
-    durationInput.setValue(tcClient.toFixed(1));
-    currentDurationMinutes = tcClient;
-  }
-
-  updatePeakDischarge();
 });
 
 ee.Dictionary({
@@ -3492,15 +2853,6 @@ ee.Dictionary({
   bare_rock_correction_area_ha: bareRockCorrectionAreaHa,
   unsupported_c_lulc_area_ha: unsupportedCLulcAreaHa,
   cn_coverage_pct: cnCoveragePct,
-  tc_selected_minutes: tcSelectedMinutes,
-  tc_dem_difference_pct: tcDifferencePct,
-  hydraulic_path_valid: hydraulicPathValidNumber,
-  path_reaches_outlet: pathReachesOutlet,
-  outlet_configured: outletConfigured,
-  outlet_within_catchment: outletWithinCatchment,
-  outlet_snap_distance_m: meritSnapDistanceM,
-  longest_flow_path_m: longestFlowPathM,
-  path_sanity_limit_m: pathLengthSanityLimitM,
   lookup_row_count: C_LOOKUP_ROWS.length
 }).evaluate(function(checks, error) {
   if (error || !checks) {
@@ -3535,7 +2887,7 @@ ee.Dictionary({
     messages.push('WARNING: catchment is small relative to the 250 m soil source; soil-derived C may have significant uncertainty.');
   }
   if (Number(checks.valid_c_coverage_pct) < CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT) {
-    messages.push('ERROR: valid C coverage is below ' + CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT + '%. Final Q is blocked; inspect the C missing-reason image/table.');
+    messages.push('ERROR: valid C coverage is below ' + CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT + '%. Exports are blocked; inspect the C missing-reason image/table.');
   }
   if (Number(checks.valid_c_coverage_pct) < 90) {
     messages.push('NOT DESIGN READY: valid C coverage is below 90%.');
@@ -3565,28 +2917,8 @@ ee.Dictionary({
   if (Number(checks.dynamic_world_scene_count) === 0) {
     messages.push('WARNING: no Dynamic World scenes were found; remote-sensing surface evidence is reduced, but the supporting layer is not a mandatory C mask.');
   }
-  if (CONFIG.DESIGN_INTENSITY_MMHR <= 0) {
-    messages.push('WARNING: no design rainfall intensity is configured; peak discharge is not available.');
-  } else {
-    messages.push('WARNING: design intensity must come from the applicable Indian IDF/design-storm analysis; it is not derived automatically by this script.');
-  }
   if (Number(checks.sentinel1_scene_count) === 0) {
     messages.push('WARNING: no Sentinel-1 VV/VH scenes were found; radar validation evidence is unavailable.');
-  }
-  if (Number(checks.tc_dem_difference_pct) > 20) {
-    messages.push('WARNING: Copernicus-vs-SRTM Tc difference exceeds 20%; DEM sensitivity is material.');
-  }
-  if (checks.outlet_configured !== true) {
-    messages.push('ERROR: actual check-dam outlet coordinates are not configured; current outlet is only a lowest-boundary proxy. Tc and Q remain unresolved.');
-  }
-  if (checks.outlet_within_catchment !== true) {
-    messages.push('ERROR: configured outlet is outside the contributing catchment geometry.');
-  }
-  if (Number(checks.outlet_snap_distance_m) > CONFIG.HYDRO_OUTLET_SNAP_MAX_M) {
-    messages.push('ERROR: outlet-to-MERIT-channel snap distance exceeds the configured limit.');
-  }
-  if (Number(checks.path_reaches_outlet) !== 1 || Number(checks.hydraulic_path_valid) !== 1) {
-    messages.push('ERROR: longest hydraulic path does not pass the directed MERIT outlet reachability/sanity checks. Tc is unresolved.');
   }
   if (Number(checks.cn_coverage_pct) < CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT) {
     messages.push('WARNING: SCS-CN cross-check coverage is below the target; it is not a complete catchment cross-check.');
@@ -3616,4 +2948,4 @@ ee.Dictionary({
   });
 });
 
-print('Ready: use the dashboard to update Q and create exports.');
+print('Ready: use the dashboard to create exports.');
