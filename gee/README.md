@@ -1,10 +1,14 @@
-# Kuppanur Watershed — Proposed Intervention Map (Google Earth Engine)
+# Kuppanur Watershed — Proposed Interventions (Google Earth Engine)
 
-`kuppanur_watershed_intervention_map.js` is a self-contained Earth Engine
-Code Editor script that maps the 14 proposed gully-plugging / stream
-engineering interventions surveyed at Kuppanur village (Tamil Nadu),
-against Sentinel-2 imagery, DEM-derived hillshade/contours, a locally
-derived drainage network, and the uploaded `gully_tr` gully-training asset.
+`kuppanur_watershed_intervention_map.js` is a lightweight Earth Engine Code
+Editor script that shows only the 14 proposed gully-plugging / stream
+engineering intervention locations surveyed at Kuppanur village (Tamil
+Nadu), each marked by type and labelled with its ID, on Google's HYBRID
+basemap. There is no satellite composite, hillshade, contours, drainage
+network, or gully-training asset layer — those were removed because they
+pushed the Code Editor's per-tile computation past Earth Engine's memory
+limit ("Tile error: Earth Engine memory capacity exceeded"), most notably
+the label layer, which previously had no bound on its computation extent.
 
 ## How to run
 
@@ -12,31 +16,25 @@ derived drainage network, and the uploaded `gully_tr` gully-training asset.
 2. Create a new script and paste in the full contents of
    `kuppanur_watershed_intervention_map.js`.
 3. Click **Run**.
-4. Check the **Console** tab for the asset-inspection output (geometry type
-   of `gully_tr`) and the printed intervention schedule.
-5. Check the **Map** for the title block, layers, legend, and north arrow.
-6. Check the **Tasks** tab for the queued exports (intervention points as
-   SHP/CSV/GeoJSON, gully-training layer, and a composited map image) — each
-   must be started manually by clicking **Run** next to it.
+4. Check the **Console** tab for the validation output and the printed
+   intervention schedule.
+5. Check the **Map** for the title block, marker layers, legend, and north
+   arrow.
+6. Check the **Tasks** tab for the queued intervention exports (SHP, CSV,
+   GeoJSON) — each must be started manually by clicking **Run** next to it.
 
 ## What's editable
 
 Everything a user should need to change lives in **Section 01 — PROJECT
-CONFIGURATION** at the top of the script: DEM asset, contour interval,
-drainage thresholds, date range for the Sentinel-2 composite, the
-`gully_tr` asset ID, and the (currently unset) Catchment A boundary asset
-ID. The 14 intervention records themselves live in **Section 02**.
+CONFIGURATION** at the top of the script: titles, basemap style, and the
+label rendering settings. The 14 intervention records live in **Section
+02**.
 
 ## Data sources
 
 - Intervention coordinates, types and elevations: `gully_plugging_treatment.kml`
   (GPS survey, Kuppanur village) — "I Series Points", 14 points (I5 is
   absent in the source; I4A and I9AP are additional points).
-- Gully/stream-training layer: user-uploaded GEE asset
-  `projects/raygadh-range/assets/gully_tr`.
-- DEM: USGS SRTM GL1, 30 m (`USGS/SRTMGL1_003`).
-- Satellite basemap: Sentinel-2 Surface Reflectance Harmonized, cloud-masked
-  with Cloud Score+.
 
 ## Known limitations (by design)
 
@@ -44,15 +42,14 @@ ID. The 14 intervention records themselves live in **Section 02**.
 - No structural dimensions (dam height, wall length, apron size, discharge,
   design flood, etc.) are fabricated — only surveyed coordinates and
   elevations are used.
-- The drainage network (Section 08) is a simplified, locally computed D8
-  flow-accumulation approximation for terrain *context*, not a certified
-  hydrological model.
-- Point labels (Section 12) depend on the community `users/gena/packages:text`
-  module. If that module is unavailable, set `showLabels = false`; every
-  other layer, the legend, and the table are unaffected.
+- Point ID labels (Section 05) depend on the community
+  `users/gena/packages:text` module, now tightly clipped per-point and
+  reprojected to a fixed grid so it renders cheaply at any zoom. If it ever
+  causes trouble again, set `showLabels = false` — every other layer
+  (symbols, legend, table, exports) is unaffected.
 - Title, legend, north arrow and the intervention table are Code Editor UI
-  panels, not baked into the exported GeoTIFF. For a fully composited A3
-  print layout, combine the exported image with those elements in a GIS or
-  desktop-publishing tool, or export a screenshot of the annotated Map view.
-- Catchment A is not drawn until `catchmentAssetId` in Section 01 is set to
-  a real boundary asset.
+  panels, not part of any exported file.
+- The satellite/hillshade/contour/drainage/gully-training layers from the
+  earlier version of this script are removed. If you want them back, ask —
+  they should be re-added as separate, individually toggled layers so a
+  problem in one can't take down the whole map again.
