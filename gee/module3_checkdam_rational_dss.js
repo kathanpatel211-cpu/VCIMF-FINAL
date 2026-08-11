@@ -417,7 +417,14 @@ var C_CLASSES = [
 
 function dictionaryNumber(dictionary, key, fallback) {
   var d = ee.Dictionary(dictionary);
-  return ee.Number(ee.Algorithms.If(d.contains(key), d.get(key), fallback));
+  // reduceRegion() over a fully-masked image (e.g. no MERIT Hydro channel
+  // pixel found near the outlet) returns the key present but set to null,
+  // not omitted. d.contains(key) alone doesn't catch that, so the fallback
+  // never fires and downstream .divide()/.gt()/.max() calls blow up with
+  // "Parameter 'left' is required and may not be null." Guard against both
+  // "key missing" and "key present but null" in one pass.
+  var rawValue = ee.Algorithms.If(d.contains(key), d.get(key), null);
+  return ee.Number(ee.Algorithms.If(rawValue, rawValue, fallback));
 }
 
 function safeString(value, fallback) {
@@ -2388,8 +2395,13 @@ var designRainfallSourceConfigured = CONFIG.DESIGN_RAINFALL_SOURCE !== '' &&
   CONFIG.DESIGN_RAINFALL_SOURCE.toUpperCase().indexOf('USER INPUT REQUIRED') < 0;
 var designRainfallSourceFlag = ee.Number(
   designRainfallSourceConfigured ? 1 : 0).eq(1);
+// FIX: hydraulicPathValid can resolve to the literal JS `false` (typed as
+// Boolean) whenever outletConfigured is false, since ee.Algorithms.If's
+// false-branch is that literal. Number.and() requires its argument to be
+// Number, not Boolean, so pass the already-cast hydraulicPathValidNumber
+// (0/1) instead of the raw value.
 var designReadyCAndPath = validCoveragePct.gte(
-  CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT).and(hydraulicPathValid)
+  CONFIG.C_COMPLETE_COVERAGE_TARGET_PCT).and(hydraulicPathValidNumber.eq(1))
   .and(designRainfallSourceFlag);
 var designReadyPeakQ = ee.Number(ee.Algorithms.If(
   designReadyCAndPath, initialPeakQ, -9999));
