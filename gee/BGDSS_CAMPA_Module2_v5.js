@@ -166,6 +166,33 @@
  *  2. Run. Read the AUDIT block in the Console FIRST - it tells you which
  *     criteria actually informed the ranking.
  *  3. Ranked results print to Console; CSV/GeoTIFF/SHP exports queue in Tasks.
+ *
+ * ----------------------------------------------------------------------------
+ *  IF YOU HIT "User memory limit exceeded"
+ * ----------------------------------------------------------------------------
+ *  Every criterion here is a computation chain, not a stored raster: a
+ *  whole-ROI statistic re-evaluates 25 years of Landsat Theil-Sen, three years
+ *  of Sentinel-2 compositing, kilometre-scale focal kernels and distance
+ *  transforms on every pixel it touches. The audit therefore SAMPLES rather
+ *  than reducing the full ROI, and the heavy geometric operations run on
+ *  coarser working grids. All of it is tunable - turn these knobs in order:
+ *
+ *    1. CONFIG.runProductivityTrend = false   (by far the most expensive:
+ *       25 yr of harmonised Landsat across four sensors)
+ *    2. CONFIG.runValidation = false, CONFIG.runFutureClimate = false
+ *    3. CONFIG.audit.sampleScale      30 -> 60 or 100
+ *       CONFIG.audit.samplePixels   5000 -> 2000
+ *    4. CONFIG.blockStatsScale        20 -> 30
+ *    5. CONFIG.perf.patchScale        60 -> 100
+ *       CONFIG.perf.distanceScale     30 -> 60
+ *    6. CONFIG.scale                  10 -> 20 or 30. Given that half the
+ *       inputs are 250 m or coarser, a 20-30 m output grid loses far less
+ *       than the 10 m figure implies - see KNOWN LIMITS.
+ *
+ *  None of these change the METHOD, only the working resolution of the
+ *  statistics. Coarsening the audit sample does not weaken the integrity
+ *  checks: a few thousand samples estimate a percentile or a standard
+ *  deviation far more precisely than the drop thresholds care about.
  * ============================================================================
  */
 
@@ -181,6 +208,7 @@ var CONFIG = {
   unitName: 'BEAT',
 
   scale: 10,                        // OUTPUT grid. NOT the effective resolution - see Section 21.
+  blockStatsScale: 20,              // working scale for per-block means (raise to 30 if memory is tight)
   blockSizeM: 300,                  // ~9 ha planning blocks
   exportFolder: 'BGDSS',
   exportPrefix: 'BGDSS_CAMPA_v5',
@@ -201,7 +229,25 @@ var CONFIG = {
     minCoverage: 0.70,              // drop if valid data on < 70% of eligible pixels
     minStdDev: 0.02,                // drop if ROI stdDev of normalized layer < this (spatially inert)
     maxCorrelation: 0.80,           // flag redundant pairs above |r| this
-    autoDrop: true                  // false = warn only, keep in the score
+    autoDrop: true,                 // false = warn only, keep in the score
+
+    // The audit needs a DISTRIBUTION, not per-pixel precision. Sampling keeps
+    // the work bounded: a whole-ROI percentile+stdDev reduction at 10 m over
+    // ~18 bands re-evaluates every criterion's full computation chain (25 yr
+    // Landsat Theil-Sen, 3 yr S2 composites, km-scale focal kernels) and blows
+    // the user memory limit. 5000 samples give the same stretch bounds.
+    samplePixels: 5000,
+    sampleScale: 30                 // raise to 60-100 if memory is still tight
+  },
+
+  // ---- Performance ---------------------------------------------------------
+  // Distance transforms and patch analysis are computed at a coarser scale than
+  // CONFIG.scale. Both are spatially smooth, so this costs nothing meaningful
+  // in accuracy and is the difference between running and not running.
+  perf: {
+    distanceScale: 30,              // distance-transform working scale (m)
+    patchScale: 60,                 // connectivity/patch working scale (m)
+    vizScale: 30                    // scale for the display quintile breaks
   },
 
   // FSI (Forest Survey of India) official canopy-density classification,
@@ -336,10 +382,16 @@ function safeFC(id, label) {
 
 // Distance transform, reprojected explicitly so the pixel size is the one we
 // think it is (v4 relied on the default projection here).
+// Computed at CONFIG.perf.distanceScale rather than CONFIG.scale: a distance
+// surface is smooth, so a 30 m working grid is indistinguishable from 10 m in
+// the ranking while costing ~9x less. The neighbourhood is sized to the actual
+// maximum distance needed instead of a blanket 1024.
 function distanceTo(sourceMask, maxDistM) {
-  var m = sourceMask.unmask(0).reproject({ crs: PROJ, scale: CONFIG.scale });
-  return m.fastDistanceTransform(1024).sqrt()
-          .multiply(CONFIG.scale).clamp(0, maxDistM);
+  var ds = CONFIG.perf.distanceScale;
+  var neighborhood = Math.min(1024, Math.max(32, Math.ceil((maxDistM / ds) * 1.5)));
+  var m = sourceMask.unmask(0).reproject({ crs: PROJ, scale: ds });
+  return m.fastDistanceTransform(neighborhood).sqrt()
+          .multiply(ds).clamp(0, maxDistM);
 }
 
 // Inverted-U preference: peaks at `opt`, falls off to 0 at `lo` and `hi`.
@@ -739,7 +791,7 @@ if (sand && clay) {
 // ============================================================================
 var productivityTrendRaw = null;
 if (CONFIG.runProductivityTrend) {
-  function maskLandsatSR(img) {
+  var maskLandsatSR = function (img) {
     var qa = img.select('QA_PIXEL');
     // bits 3 cloud, 4 cloud shadow, 5 snow, 1 dilated cloud
     var clear = qa.bitwiseAnd(1 << 3).eq(0)
@@ -747,11 +799,11 @@ if (CONFIG.runProductivityTrend) {
       .and(qa.bitwiseAnd(1 << 5).eq(0))
       .and(qa.bitwiseAnd(1 << 1).eq(0));
     return img.updateMask(clear);
-  }
-  function ndviL(img, redB, nirB) {
+  };
+  var ndviL = function (img, redB, nirB) {
     var sr = img.select([redB, nirB]).multiply(0.0000275).add(-0.2);
     return sr.normalizedDifference([nirB, redB]).rename('ndvi');
-  }
+  };
 
   var l5 = safeCollection('LANDSAT/LT05/C02/T1_L2', 'Landsat 5');
   var l7 = safeCollection('LANDSAT/LE07/C02/T1_L2', 'Landsat 7');
@@ -810,10 +862,10 @@ if (s2Col) {
     s2Base = s2Base.linkCollection(csPlus, ['cs_cdf']);
     prov('GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED', 'S2 cloud masking', 10, 'current', 'Pasquarella et al. 2023');
   }
-  function maskS2(img) {
+  var maskS2 = function (img) {
     if (useCsPlus) {
       return img.updateMask(img.select('cs_cdf').gte(0.60)).divide(10000);
-    }
+    };
     var scl = img.select('SCL');
     var clear = scl.neq(3).and(scl.neq(8)).and(scl.neq(9)).and(scl.neq(10)).and(scl.neq(11));
     return img.updateMask(clear).divide(10000);
@@ -860,20 +912,28 @@ if (forestMask) {
   // ---- Structural connectivity - reinstates v4's removed corridor criterion
   // Patch area via connectedPixelCount, then how much large-patch habitat sits
   // within reach. A corridor polygon would refine this; it is not required.
-  var patchPixels = forestMask.selfMask()
+  // Patch analysis runs on a coarser grid. A 1 km neighbourhood at 10 m is a
+  // ~31,400-pixel kernel per output pixel, which alone can exhaust the user
+  // memory limit; at 60 m the same 1 km reach costs ~875 pixels.
+  var ps = CONFIG.perf.patchScale;
+  var forestCoarse = forestMask.reproject({ crs: PROJ, scale: ps });
+  var patchPixels = forestCoarse.selfMask()
     .connectedPixelCount({ maxSize: 256, eightConnected: true });
-  var patchAreaHa = patchPixels.multiply(CONFIG.scale * CONFIG.scale / 1e4).unmask(0);
-  var habitatNearby = patchAreaHa.focal_mean({ radius: 100, kernelType: 'circle', units: 'pixels' });
+  var patchAreaHa = patchPixels.multiply(ps * ps / 1e4).unmask(0);
+  var habitatNearby = patchAreaHa.focal_mean({ radius: 1000, kernelType: 'circle', units: 'meters' });
 
   connectivityRaw = habitatNearby.rename('structuralConnectivity');
   if (wdpaImg) {
     // Blend in proximity to formally protected habitat.
     var distWdpa = distanceTo(wdpaImg.clip(roi).eq(1), 10000);
     var wdpaProx = ee.Image(1).subtract(distWdpa.divide(10000).clamp(0, 1));
-    var habNorm = habitatNearby.divide(habitatNearby.reduceRegion({
-      reducer: ee.Reducer.percentile([95]), geometry: roi, scale: 30,
-      maxPixels: 1e12, bestEffort: true
-    }).values().get(0)).clamp(0, 1);
+    var habP95 = ee.Number(ee.Dictionary(habitatNearby.reduceRegion({
+      reducer: ee.Reducer.percentile([95]), geometry: roi, scale: ps,
+      maxPixels: 1e10, bestEffort: true, tileScale: 4
+    })).values().get(0));
+    // Guard against an all-zero patch surface (no forest in the ROI at all),
+    // which would otherwise divide by zero and mask the whole criterion.
+    var habNorm = habitatNearby.divide(habP95.max(1e-6)).clamp(0, 1);
     connectivityRaw = habNorm.multiply(0.6).add(wdpaProx.multiply(0.4))
                              .rename('structuralConnectivity');
   }
@@ -1190,100 +1250,131 @@ var rawStack = ee.Image.cat(active.map(function (c) {
 // Band name must start with a letter - Earth Engine rejects a leading underscore.
 var denomBand = ee.Image(1).updateMask(eligibleMask).rename('eligibleDenom');
 
-var auditReducer = ee.Reducer.percentile([2, 50, 98])
-  .combine(ee.Reducer.count(), '', true)
-  .combine(ee.Reducer.stdDev(), '', true)
-  .combine(ee.Reducer.minMax(), '', true);
-
-var auditStats = ee.Image.cat([rawStack, denomBand]).reduceRegion({
-  reducer: auditReducer,
-  geometry: roi,
-  scale: CONFIG.scale,
-  maxPixels: 1e13,
+// ONE bounded sample supplies everything the audit needs: coverage, the
+// percentile stretch bounds, and - after a client-side affine transform - the
+// normalized spread.
+//
+// Sampling rather than reducing the whole ROI is what keeps this inside the
+// user memory limit. A combined percentile/count/stdDev/minMax reduction over
+// ~18 bands at 10 m re-evaluates every criterion's ENTIRE computation chain
+// (25 yr Landsat Theil-Sen, 3 yr Sentinel-2 composites, km-scale focal
+// kernels, distance transforms) on every pixel of the ROI, and will not
+// complete. The audit needs a DISTRIBUTION, not per-pixel precision, and a few
+// thousand samples estimate percentiles and standard deviations to a precision
+// far finer than any of these thresholds care about.
+var auditSample = ee.Image.cat([rawStack, denomBand]).sample({
+  region: roi,
+  scale: CONFIG.audit.sampleScale,
+  numPixels: CONFIG.audit.samplePixels,
+  seed: 7,
+  dropNulls: false,
   tileScale: 8,
-  bestEffort: true
+  geometries: false
 }).getInfo();
 
-var nEligible = auditStats['eligibleDenom_count'] || 0;
+var sampleRows = ((auditSample && auditSample.features) || [])
+  .map(function (f) { return f.properties || {}; })
+  .filter(function (p) { return p.eligibleDenom !== null && p.eligibleDenom !== undefined; });
+
+var nEligible = sampleRows.length;
 
 print('================================================================');
 print('CRITERION INTEGRITY AUDIT  (read this before the rankings)');
 print('================================================================');
-print('Eligible pixels sampled: ' + nEligible);
+print('Eligible pixels sampled: ' + nEligible +
+      '  (at ' + CONFIG.audit.sampleScale + ' m, requested ' + CONFIG.audit.samplePixels + ')');
 if (missing.length > 0) {
   print('NO DATA (never entered scoring): ' + missing.join(', '));
 }
+if (nEligible < 200) {
+  warn('Only ' + nEligible + ' eligible pixels sampled. Percentile stretch bounds and ' +
+       'the INERT test are unreliable below ~200. Raise CONFIG.audit.samplePixels, lower ' +
+       'CONFIG.audit.sampleScale, or check the ROI actually contains treatable area.');
+}
+
+// ---- Client-side statistics ------------------------------------------------
+var pctOf = function (sortedVals, p) {
+  if (sortedVals.length === 0) { return null; }
+  if (sortedVals.length === 1) { return sortedVals[0]; }
+  var idx = (p / 100) * (sortedVals.length - 1);
+  var lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) { return sortedVals[lo]; }
+  return sortedVals[lo] + (sortedVals[hi] - sortedVals[lo]) * (idx - lo);
+};
+var stdDevOf = function (vals) {
+  if (vals.length < 2) { return 0; }
+  var mu = vals.reduce(function (s, x) { return s + x; }, 0) / vals.length;
+  return Math.sqrt(vals.reduce(function (s, x) { return s + (x - mu) * (x - mu); }, 0) / vals.length);
+};
 
 var auditRows = [];
 active.forEach(function (c) {
-  var cnt = auditStats[c.name + '_count'] || 0;
-  var sd  = auditStats[c.name + '_stdDev'];
-  var p2  = auditStats[c.name + '_p2'];
-  var p98 = auditStats[c.name + '_p98'];
-  var mn  = auditStats[c.name + '_min'];
-  var mx  = auditStats[c.name + '_max'];
-
-  c.coverage = nEligible > 0 ? cnt / nEligible : 0;
-  c.rawStdDev = sd;
-  c.p2 = p2; c.p98 = p98; c.min = mn; c.max = mx;
+  var vals = [];
+  for (var i = 0; i < sampleRows.length; i++) {
+    var v = sampleRows[i][c.name];
+    if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) { vals.push(v); }
+  }
+  c.sampleVals = vals;
+  c.coverage = nEligible > 0 ? vals.length / nEligible : 0;
   c.dropped = false; c.dropReason = null;
+
+  var sorted = vals.slice().sort(function (a, b) { return a - b; });
+  c.p2  = pctOf(sorted, 2);
+  c.p98 = pctOf(sorted, 98);
+  c.min = sorted.length ? sorted[0] : null;
+  c.max = sorted.length ? sorted[sorted.length - 1] : null;
+  c.rawStdDev = stdDevOf(vals);
 
   if (c.coverage < CONFIG.audit.minCoverage) {
     c.dropped = true;
     c.dropReason = 'SPARSE (' + (c.coverage * 100).toFixed(1) + '% coverage, need '
                  + (CONFIG.audit.minCoverage * 100) + '%)';
-  } else if (p2 === null || p98 === null || sd === null) {
+  } else if (c.p2 === null || c.p98 === null) {
     c.dropped = true;
     c.dropReason = 'NO VALID STATISTICS';
-  } else if (Math.abs(p98 - p2) < 1e-9) {
+  } else if (Math.abs(c.p98 - c.p2) < 1e-9) {
     c.dropped = true;
     c.dropReason = 'INERT (zero spread across the ROI - cannot change any ranking)';
   }
   auditRows.push(c);
 });
 
-// ---- Build normalized images using the audited bounds ----------------------
-function buildNormalized(c) {
-  var lo, hi;
-  if (c.mode === 'absolute') { lo = c.lo; hi = c.hi; }
-  else { lo = c.p2; hi = c.p98; }
-  if (lo === hi) { return null; }
-  var n = c.img.toFloat().subtract(lo).divide(hi - lo).clamp(0, 1);
-  if (c.dir === -1) { n = ee.Image(1).subtract(n); }
-  return n.rename(c.name);
-}
+// ---- Normalized spread, from the SAME sample - no second round trip --------
+// Normalization is a pure affine transform plus an optional inversion, so the
+// normalized spread follows directly from the raw sample. This is the check
+// that catches a 25 km climate layer masquerading as a 10 m criterion, and
+// anything else effectively constant over one Beat.
+var normBounds = function (c) {
+  return (c.mode === 'absolute') ? { lo: c.lo, hi: c.hi } : { lo: c.p2, hi: c.p98 };
+};
 
 active.forEach(function (c) {
   if (c.dropped) { return; }
-  c.norm = buildNormalized(c);
-  if (!c.norm) { c.dropped = true; c.dropReason = 'DEGENERATE RANGE'; }
+  var b = normBounds(c);
+  if (b.lo === b.hi) { c.dropped = true; c.dropReason = 'DEGENERATE RANGE'; return; }
+
+  var nv = c.sampleVals.map(function (v) {
+    var t = (v - b.lo) / (b.hi - b.lo);
+    t = Math.max(0, Math.min(1, t));
+    return c.dir === -1 ? 1 - t : t;
+  });
+  c.normStdDev = stdDevOf(nv);
+  c.normMean = nv.length ? nv.reduce(function (s, x) { return s + x; }, 0) / nv.length : null;
+
+  if (c.normStdDev < CONFIG.audit.minStdDev) {
+    c.dropped = true;
+    c.dropReason = 'INERT (normalized stdDev ' + c.normStdDev.toFixed(4) +
+      ' < ' + CONFIG.audit.minStdDev + ' - carries weight but cannot change a ranking)';
+    return;
+  }
+
+  // Only a surviving criterion is worth building a server-side image for.
+  var nImg = c.img.toFloat().subtract(b.lo).divide(b.hi - b.lo).clamp(0, 1);
+  if (c.dir === -1) { nImg = ee.Image(1).subtract(nImg); }
+  c.norm = nImg.rename(c.name);
 });
 
 var surviving = active.filter(function (c) { return !c.dropped && c.norm; });
-
-// ---- Second pass: spatial variance of the NORMALIZED layer ----------------
-// This is the check that catches a 25 km climate layer masquerading as a 10 m
-// criterion, and anything else that is effectively constant over one Beat.
-if (surviving.length > 0) {
-  var normStack = ee.Image.cat(surviving.map(function (c) { return c.norm; }))
-                    .updateMask(eligibleMask);
-  var normStats = normStack.reduceRegion({
-    reducer: ee.Reducer.stdDev().combine(ee.Reducer.mean(), '', true),
-    geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 8, bestEffort: true
-  }).getInfo();
-
-  surviving.forEach(function (c) {
-    c.normStdDev = normStats[c.name + '_stdDev'];
-    c.normMean   = normStats[c.name + '_mean'];
-    if (c.normStdDev === null || c.normStdDev < CONFIG.audit.minStdDev) {
-      c.dropped = true;
-      c.dropReason = 'INERT (normalized stdDev ' +
-        (c.normStdDev === null ? 'null' : c.normStdDev.toFixed(4)) +
-        ' < ' + CONFIG.audit.minStdDev + ' - carries weight but cannot change a ranking)';
-    }
-  });
-  surviving = surviving.filter(function (c) { return !c.dropped; });
-}
 
 // ---- Print the audit ------------------------------------------------------
 print('--- KEPT ---');
@@ -1303,7 +1394,21 @@ if (droppedList.length > 0) {
 }
 if (!CONFIG.audit.autoDrop && droppedList.length > 0) {
   warn('CONFIG.audit.autoDrop is false - flagged criteria are STILL SCORED. The warnings above are advisory only.');
-  surviving = active.filter(function (c) { return c.norm; });
+  // Normalized images are built only for survivors, so a flagged criterion has
+  // no `norm` yet. Build one here for any that still has usable bounds; a
+  // criterion with no valid statistics at all cannot be scored either way.
+  droppedList.forEach(function (c) {
+    if (c.norm) { return; }
+    var b = normBounds(c);
+    if (b.lo == null || b.hi == null || b.lo === b.hi) {
+      warn('  ' + c.name + ' cannot be scored even with autoDrop off (' + c.dropReason + ')');
+      return;
+    }
+    var nImg = c.img.toFloat().subtract(b.lo).divide(b.hi - b.lo).clamp(0, 1);
+    if (c.dir === -1) { nImg = ee.Image(1).subtract(nImg); }
+    c.norm = nImg.rename(c.name);
+  });
+  surviving = active.filter(function (c) { return !!c.norm; });
 }
 
 if (surviving.length === 0) {
@@ -1352,10 +1457,15 @@ var blockReducer = ee.Reducer.mean()
   .combine(ee.Reducer.sum(), '', true)
   .combine(ee.Reducer.mode(), '', true);
 
+// Block means are computed at CONFIG.blockStatsScale. A 300 m block holds 900
+// pixels at 10 m and 100 at 30 m - both far more than a mean over a criterion
+// stack needs, and the coarser grid is what makes this affordable alongside
+// everything else. Only eligibleAreaHa depends on the fine grid, and pixelArea
+// scales with it, so the hectare totals stay correct either way.
 var blockStats = blockInput.reduceRegions({
   collection: grid,
   reducer: blockReducer,
-  scale: CONFIG.scale,
+  scale: CONFIG.blockStatsScale,
   tileScale: 8
 });
 
@@ -1970,9 +2080,12 @@ var displayScore = surviving.reduce(function (acc, c) {
   return acc ? acc.add(term) : term;
 }, null).updateMask(eligibleMask).rename('priorityScore').clip(roi);
 
+// Quintile breaks are for the legend only, so they run at CONFIG.perf.vizScale
+// rather than the output scale - a percentile reduction over the full
+// criterion stack at 10 m is another route to the user memory limit.
 var pctBreaks = displayScore.reduceRegion({
   reducer: ee.Reducer.percentile([20, 40, 60, 80]),
-  geometry: roi, scale: CONFIG.scale, maxPixels: 1e13, tileScale: 8, bestEffort: true
+  geometry: roi, scale: CONFIG.perf.vizScale, maxPixels: 1e10, tileScale: 8, bestEffort: true
 }).getInfo();
 var p20 = (pctBreaks && pctBreaks.priorityScore_p20 != null) ? pctBreaks.priorityScore_p20 : 0.2;
 var p40 = (pctBreaks && pctBreaks.priorityScore_p40 != null) ? pctBreaks.priorityScore_p40 : 0.4;

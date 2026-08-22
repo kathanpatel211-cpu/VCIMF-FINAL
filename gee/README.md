@@ -23,6 +23,32 @@ Runtime is roughly 3–8 minutes depending on which optional modules are enabled
 (`runValidation`, `runFutureClimate`, `runProductivityTrend`). Turn all three
 off for a fast iteration pass.
 
+### If you hit `User memory limit exceeded`
+
+Every criterion is a *computation chain*, not a stored raster. Any whole-ROI
+statistic re-evaluates 25 years of Landsat Theil–Sen, three years of Sentinel-2
+compositing, kilometre-scale focal kernels and distance transforms on every
+pixel it touches. So the audit **samples** instead of reducing the full ROI, and
+the heavy geometric operations run on coarser working grids.
+
+Turn these knobs in order:
+
+| Step | Setting | Change |
+|---|---|---|
+| 1 | `runProductivityTrend` | `false` — by far the most expensive (25 yr, four Landsat sensors) |
+| 2 | `runValidation`, `runFutureClimate` | `false` |
+| 3 | `audit.sampleScale` / `audit.samplePixels` | 30 → 60 or 100 / 5000 → 2000 |
+| 4 | `blockStatsScale` | 20 → 30 |
+| 5 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
+| 6 | `scale` | 10 → 20 or 30 |
+
+None of these change the **method**, only the working resolution of the
+statistics. Coarsening the audit sample does not weaken the integrity checks —
+a few thousand samples estimate a percentile or standard deviation far more
+precisely than the drop thresholds care about. And since half the inputs are
+250 m or coarser, dropping `scale` to 20–30 m loses far less than the 10 m
+figure implies.
+
 ---
 
 ## What v5 changes
