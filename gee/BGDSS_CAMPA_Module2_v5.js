@@ -177,17 +177,24 @@
  *  than reducing the full ROI, and the heavy geometric operations run on
  *  coarser working grids. All of it is tunable - turn these knobs in order:
  *
- *    1. CONFIG.runProductivityTrend = false   (by far the most expensive:
- *       25 yr of harmonised Landsat across four sensors)
- *    2. CONFIG.runValidation = false, CONFIG.runFutureClimate = false
- *    3. CONFIG.audit.sampleScale      30 -> 60 or 100
- *       CONFIG.audit.samplePixels   5000 -> 2000
- *    4. CONFIG.blockStatsScale        20 -> 30
- *    5. CONFIG.perf.patchScale        60 -> 100
+ *    1. CONFIG.audit.batchSize         3 -> 1. One criterion per round trip is
+ *       the safest possible setting; it is slower, not weaker.
+ *    2. CONFIG.audit.samplePixels   5000 -> 2000
+ *       CONFIG.audit.sampleScale     30 -> 60 or 100
+ *    3. CONFIG.runProductivityTrend = false   (the most expensive single
+ *       chain; already limited to Landsat 8/9 from 2013 by default)
+ *    4. CONFIG.runValidation = false, CONFIG.runFutureClimate = false
+ *    5. CONFIG.blockStatsScale        20 -> 30
+ *    6. CONFIG.perf.patchScale        60 -> 100
  *       CONFIG.perf.distanceScale     30 -> 60
- *    6. CONFIG.scale                  10 -> 20 or 30. Given that half the
+ *    7. CONFIG.scale                  10 -> 20 or 30. Given that half the
  *       inputs are 250 m or coarser, a 20-30 m output grid loses far less
  *       than the 10 m figure implies - see KNOWN LIMITS.
+ *
+ *  A criterion that still cannot be evaluated is reported as AUDIT FAILED and
+ *  dropped with its weight redistributed, rather than aborting the run. Check
+ *  that list before reading the rankings: a criterion dropped for cost is a
+ *  criterion that did not inform the plan.
  *
  *  None of these change the METHOD, only the working resolution of the
  *  statistics. Coarsening the audit sample does not weaken the integrity
@@ -237,7 +244,14 @@ var CONFIG = {
     // Landsat Theil-Sen, 3 yr S2 composites, km-scale focal kernels) and blows
     // the user memory limit. 5000 samples give the same stretch bounds.
     samplePixels: 5000,
-    sampleScale: 30                 // raise to 60-100 if memory is still tight
+    sampleScale: 30,                // raise to 60-100 if memory is still tight
+
+    // Criteria are audited in batches of this size, each isolated by its own
+    // try/catch. Sampling all ~18 at once makes Earth Engine materialise every
+    // computation chain simultaneously and exceeds the memory limit however few
+    // pixels are wanted. Lower to 1 for maximum safety (slower: one round trip
+    // per criterion); raise for fewer round trips if your ROI is small.
+    batchSize: 3
   },
 
   // ---- Performance ---------------------------------------------------------
@@ -339,7 +353,18 @@ var CONFIG = {
   },
 
   fireHistoryYears: 10,
-  trendStartYear: 2000,             // Landsat productivity trend window
+
+  // ---- Land productivity trend window --------------------------------------
+  // Default is Landsat 8/9 only, 2013-present. That is both far cheaper (the
+  // trend is the single most expensive chain in the script) and arguably
+  // cleaner: Landsat 7's scan-line corrector failed in 2003, so every post-2003
+  // L7 scene carries wedge-shaped data gaps that bias an annual-maximum
+  // composite. UNCCD guidance asks for a 10-15 yr baseline, which 2013-present
+  // satisfies.
+  // Set trendIncludeLegacy = true for the full 2000-present record via L5/L7 -
+  // a longer trend, at materially higher compute cost and with SLC-off gaps.
+  trendStartYear: 2013,
+  trendIncludeLegacy: false,
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
@@ -805,16 +830,25 @@ if (CONFIG.runProductivityTrend) {
     return sr.normalizedDifference([nirB, redB]).rename('ndvi');
   };
 
-  var l5 = safeCollection('LANDSAT/LT05/C02/T1_L2', 'Landsat 5');
-  var l7 = safeCollection('LANDSAT/LE07/C02/T1_L2', 'Landsat 7');
   var l8 = safeCollection('LANDSAT/LC08/C02/T1_L2', 'Landsat 8');
   var l9 = safeCollection('LANDSAT/LC09/C02/T1_L2', 'Landsat 9');
+  var l5 = CONFIG.trendIncludeLegacy ? safeCollection('LANDSAT/LT05/C02/T1_L2', 'Landsat 5') : null;
+  var l7 = CONFIG.trendIncludeLegacy ? safeCollection('LANDSAT/LE07/C02/T1_L2', 'Landsat 7') : null;
+
+  // Bound every collection to the trend window before mapping - without this
+  // the NDVI map runs over each sensor's entire archive.
+  var trendStart = ee.Date.fromYMD(CONFIG.trendStartYear, 1, 1);
+  var prep = function (col, redB, nirB) {
+    return col.filterBounds(roi).filterDate(trendStart, yEnd)
+      .map(maskLandsatSR)
+      .map(function (i) { return ndviL(i, redB, nirB).copyProperties(i, ['system:time_start']); });
+  };
 
   var ndviCols = [];
-  if (l5) { ndviCols.push(l5.filterBounds(roi).map(maskLandsatSR).map(function (i) { return ndviL(i, 'SR_B3', 'SR_B4').copyProperties(i, ['system:time_start']); })); }
-  if (l7) { ndviCols.push(l7.filterBounds(roi).map(maskLandsatSR).map(function (i) { return ndviL(i, 'SR_B3', 'SR_B4').copyProperties(i, ['system:time_start']); })); }
-  if (l8) { ndviCols.push(l8.filterBounds(roi).map(maskLandsatSR).map(function (i) { return ndviL(i, 'SR_B4', 'SR_B5').copyProperties(i, ['system:time_start']); })); }
-  if (l9) { ndviCols.push(l9.filterBounds(roi).map(maskLandsatSR).map(function (i) { return ndviL(i, 'SR_B4', 'SR_B5').copyProperties(i, ['system:time_start']); })); }
+  if (l5) { ndviCols.push(prep(l5, 'SR_B3', 'SR_B4')); }
+  if (l7) { ndviCols.push(prep(l7, 'SR_B3', 'SR_B4')); }
+  if (l8) { ndviCols.push(prep(l8, 'SR_B4', 'SR_B5')); }
+  if (l9) { ndviCols.push(prep(l9, 'SR_B4', 'SR_B5')); }
 
   if (ndviCols.length > 0) {
     var allNdvi = ndviCols.reduce(function (a, b) { return a.merge(b); });
@@ -1242,49 +1276,86 @@ if (!eligibleMask || active.length === 0) {
 //     every criterion on every run and refuses to let a criterion carry weight
 //     it cannot justify.
 // ============================================================================
-var rawStack = ee.Image.cat(active.map(function (c) {
-  return c.img.toFloat().rename(c.name);
-})).updateMask(eligibleMask);
-
 // A constant band masked to the eligible set gives the denominator for coverage.
 // Band name must start with a letter - Earth Engine rejects a leading underscore.
 var denomBand = ee.Image(1).updateMask(eligibleMask).rename('eligibleDenom');
 
-// ONE bounded sample supplies everything the audit needs: coverage, the
-// percentile stretch bounds, and - after a client-side affine transform - the
-// normalized spread.
+// The audit samples rather than reducing the whole ROI, and it does so in SMALL
+// BATCHES. Both are forced by the same fact: every criterion here is a
+// computation chain, not a stored raster. Asking for statistics over all ~18 at
+// once makes Earth Engine materialise 25 yr of Landsat Theil-Sen, 3 yr of
+// Sentinel-2 compositing, km-scale focal kernels and distance transforms
+// simultaneously over every tile touched - which exceeds the user memory limit
+// however few pixels are ultimately wanted.
 //
-// Sampling rather than reducing the whole ROI is what keeps this inside the
-// user memory limit. A combined percentile/count/stdDev/minMax reduction over
-// ~18 bands at 10 m re-evaluates every criterion's ENTIRE computation chain
-// (25 yr Landsat Theil-Sen, 3 yr Sentinel-2 composites, km-scale focal
-// kernels, distance transforms) on every pixel of the ROI, and will not
-// complete. The audit needs a DISTRIBUTION, not per-pixel precision, and a few
-// thousand samples estimate percentiles and standard deviations to a precision
-// far finer than any of these thresholds care about.
-var auditSample = ee.Image.cat([rawStack, denomBand]).sample({
-  region: roi,
-  scale: CONFIG.audit.sampleScale,
-  numPixels: CONFIG.audit.samplePixels,
-  seed: 7,
-  dropNulls: false,
-  tileScale: 8,
-  geometries: false
-}).getInfo();
-
-var sampleRows = ((auditSample && auditSample.features) || [])
-  .map(function (f) { return f.properties || {}; })
-  .filter(function (p) { return p.eligibleDenom !== null && p.eligibleDenom !== undefined; });
-
-var nEligible = sampleRows.length;
+// Batching bounds peak memory to a few chains at a time. Each batch also gets
+// its own try/catch, so a single criterion too expensive to evaluate degrades
+// to "AUDIT FAILED" and is dropped, instead of taking the whole run down.
+//
+// Each batch draws its own sample points. That is fine here: coverage is a
+// ratio and the stretch bounds are per-criterion, so nothing in the audit needs
+// the batches to share one sample frame.
+var sampleBatch = function (batch) {
+  var imgs = batch.map(function (c) { return c.img.toFloat().rename(c.name); });
+  var fc = ee.Image.cat(imgs.concat([denomBand]))
+    .updateMask(eligibleMask)
+    .sample({
+      region: roi,
+      scale: CONFIG.audit.sampleScale,
+      numPixels: CONFIG.audit.samplePixels,
+      seed: 7,
+      dropNulls: false,
+      tileScale: 8,
+      geometries: false
+    }).getInfo();
+  return ((fc && fc.features) || [])
+    .map(function (f) { return f.properties || {}; })
+    .filter(function (p) { return p.eligibleDenom !== null && p.eligibleDenom !== undefined; });
+};
 
 print('================================================================');
 print('CRITERION INTEGRITY AUDIT  (read this before the rankings)');
 print('================================================================');
+
+var batchSize = Math.max(1, CONFIG.audit.batchSize);
+var nEligible = 0;
+var auditFailed = [];
+
+for (var bi = 0; bi < active.length; bi += batchSize) {
+  var batch = active.slice(bi, bi + batchSize);
+  var rows = null;
+  try {
+    rows = sampleBatch(batch);
+  } catch (eBatch) {
+    rows = null;
+    warn('Audit batch [' + batch.map(function (c) { return c.name; }).join(', ') +
+         '] failed as a group - retrying one criterion at a time.');
+    batch.forEach(function (c) {
+      try {
+        c.sampleRows = sampleBatch([c]);
+        nEligible = Math.max(nEligible, c.sampleRows.length);
+      } catch (eOne) {
+        c.auditFailed = true;
+        auditFailed.push(c.name);
+      }
+    });
+  }
+  if (rows) {
+    batch.forEach(function (c) { c.sampleRows = rows; });
+    nEligible = Math.max(nEligible, rows.length);
+  }
+}
+
 print('Eligible pixels sampled: ' + nEligible +
-      '  (at ' + CONFIG.audit.sampleScale + ' m, requested ' + CONFIG.audit.samplePixels + ')');
+      '  (at ' + CONFIG.audit.sampleScale + ' m, requested ' + CONFIG.audit.samplePixels +
+      ', in batches of ' + batchSize + ')');
 if (missing.length > 0) {
   print('NO DATA (never entered scoring): ' + missing.join(', '));
+}
+if (auditFailed.length > 0) {
+  warn('TOO EXPENSIVE TO EVALUATE (dropped): ' + auditFailed.join(', ') +
+       '. Lower CONFIG.audit.samplePixels or raise CONFIG.audit.sampleScale to keep these; ' +
+       'see the memory-tuning guide in the header.');
 }
 if (nEligible < 200) {
   warn('Only ' + nEligible + ' eligible pixels sampled. Percentile stretch bounds and ' +
@@ -1309,14 +1380,28 @@ var stdDevOf = function (vals) {
 
 var auditRows = [];
 active.forEach(function (c) {
+  c.dropped = false; c.dropReason = null;
+
+  if (c.auditFailed) {
+    c.coverage = 0; c.sampleVals = []; c.rawStdDev = 0;
+    c.p2 = null; c.p98 = null; c.min = null; c.max = null;
+    c.dropped = true;
+    c.dropReason = 'AUDIT FAILED (too expensive to evaluate at this sample size)';
+    auditRows.push(c);
+    return;
+  }
+
+  // Each criterion reads its OWN batch's rows, which carry that batch's
+  // denominator - batches do not share a sample frame.
+  var rowsFor = c.sampleRows || [];
   var vals = [];
-  for (var i = 0; i < sampleRows.length; i++) {
-    var v = sampleRows[i][c.name];
+  for (var i = 0; i < rowsFor.length; i++) {
+    var v = rowsFor[i][c.name];
     if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) { vals.push(v); }
   }
   c.sampleVals = vals;
-  c.coverage = nEligible > 0 ? vals.length / nEligible : 0;
-  c.dropped = false; c.dropReason = null;
+  c.sampleN = rowsFor.length;
+  c.coverage = rowsFor.length > 0 ? vals.length / rowsFor.length : 0;
 
   var sorted = vals.slice().sort(function (a, b) { return a - b; });
   c.p2  = pctOf(sorted, 2);

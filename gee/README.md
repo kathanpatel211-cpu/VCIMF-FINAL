@@ -31,16 +31,24 @@ compositing, kilometre-scale focal kernels and distance transforms on every
 pixel it touches. So the audit **samples** instead of reducing the full ROI, and
 the heavy geometric operations run on coarser working grids.
 
+The audit is therefore run in **small batches**, each isolated by its own
+`try`/`catch`. Asking for statistics over all ~18 criteria at once makes Earth
+Engine materialise every chain simultaneously, which exceeds the limit however
+few pixels are ultimately wanted. Batching bounds peak memory to a few chains at
+a time, and a criterion too expensive to evaluate is reported as `AUDIT FAILED`
+and dropped with its weight redistributed — rather than aborting the run.
+
 Turn these knobs in order:
 
 | Step | Setting | Change |
 |---|---|---|
-| 1 | `runProductivityTrend` | `false` — by far the most expensive (25 yr, four Landsat sensors) |
-| 2 | `runValidation`, `runFutureClimate` | `false` |
-| 3 | `audit.sampleScale` / `audit.samplePixels` | 30 → 60 or 100 / 5000 → 2000 |
-| 4 | `blockStatsScale` | 20 → 30 |
-| 5 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
-| 6 | `scale` | 10 → 20 or 30 |
+| 1 | `audit.batchSize` | 3 → **1** — one criterion per round trip, the safest setting. Slower, not weaker. |
+| 2 | `audit.samplePixels` / `audit.sampleScale` | 5000 → 2000 / 30 → 60 or 100 |
+| 3 | `runProductivityTrend` | `false` — the most expensive single chain |
+| 4 | `runValidation`, `runFutureClimate` | `false` |
+| 5 | `blockStatsScale` | 20 → 30 |
+| 6 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
+| 7 | `scale` | 10 → 20 or 30 |
 
 None of these change the **method**, only the working resolution of the
 statistics. Coarsening the audit sample does not weaken the integrity checks —
@@ -48,6 +56,21 @@ a few thousand samples estimate a percentile or standard deviation far more
 precisely than the drop thresholds care about. And since half the inputs are
 250 m or coarser, dropping `scale` to 20–30 m loses far less than the 10 m
 figure implies.
+
+**Check the `AUDIT FAILED` list before reading any ranking.** A criterion
+dropped for cost is a criterion that did not inform the plan.
+
+### Land productivity trend window
+
+Defaults to **Landsat 8/9, 2013–present**. This is both far cheaper and
+arguably cleaner than the full record: Landsat 7's scan-line corrector failed in
+2003, so every post-2003 L7 scene carries wedge-shaped data gaps that bias an
+annual-maximum composite. UNCCD guidance asks for a 10–15 year baseline, which
+2013–present satisfies.
+
+Set `trendIncludeLegacy: true` and `trendStartYear: 2000` for the full 25-year
+record via L5/L7 — a longer trend, at materially higher compute cost and with
+the SLC-off gaps.
 
 ---
 
