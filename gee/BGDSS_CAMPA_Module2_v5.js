@@ -1187,7 +1187,8 @@ var rawStack = ee.Image.cat(active.map(function (c) {
 })).updateMask(eligibleMask);
 
 // A constant band masked to the eligible set gives the denominator for coverage.
-var denomBand = ee.Image(1).updateMask(eligibleMask).rename('__eligible__');
+// Band name must start with a letter - Earth Engine rejects a leading underscore.
+var denomBand = ee.Image(1).updateMask(eligibleMask).rename('eligibleDenom');
 
 var auditReducer = ee.Reducer.percentile([2, 50, 98])
   .combine(ee.Reducer.count(), '', true)
@@ -1203,7 +1204,7 @@ var auditStats = ee.Image.cat([rawStack, denomBand]).reduceRegion({
   bestEffort: true
 }).getInfo();
 
-var nEligible = auditStats['__eligible___count'] || 0;
+var nEligible = auditStats['eligibleDenom_count'] || 0;
 
 print('================================================================');
 print('CRITERION INTEGRITY AUDIT  (read this before the rankings)');
