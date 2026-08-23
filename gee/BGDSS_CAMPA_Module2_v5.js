@@ -1358,7 +1358,10 @@ if (!eligibleMask || active.length === 0) {
 var grid = roi.coveringGrid(PROJ, CONFIG.blockSizeM)
   .map(function (f) {
     var g = f.intersection(roi, 1);
-    var ctr = g.centroid(10).transform(PROJ, 1).coordinates();
+    // cx/cy are projected metres, used client-side for the contiguity test.
+    // transform() returns an untyped computed object, so it must be cast back
+    // to ee.Geometry before coordinates() can be resolved.
+    var ctr = ee.Geometry(g.centroid(10).transform(PROJ, 1)).coordinates();
     return ee.Feature(g).set({ cx: ctr.get(0), cy: ctr.get(1) });
   });
 
