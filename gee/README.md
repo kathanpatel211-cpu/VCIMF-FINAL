@@ -23,6 +23,21 @@ Runtime is roughly 3–8 minutes depending on which optional modules are enabled
 (`runValidation`, `runFutureClimate`, `runProductivityTrend`). Turn all three
 off for a fast iteration pass.
 
+### If the page freezes ("Page Unresponsive")
+
+A frozen tab and a memory error are **different faults**. A freeze means
+something is calling `getInfo()` and blocking the Code Editor's UI thread —
+which happens regardless of how little memory the call uses, because the browser
+simply cannot repaint while it waits.
+
+Every heavy call in this script uses `.evaluate()` instead, so the page stays
+live while work runs and results appear in the Console as each stage returns.
+The only blocking calls left are the ~20 cheap dataset availability probes near
+the top, which have to be synchronous because the graph is built differently
+depending on which datasets exist.
+
+**If you extend this script, never put `getInfo()` in a loop.**
+
 ### If you hit `User memory limit exceeded`
 
 Every criterion is a *computation chain*, not a stored raster. Any whole-ROI

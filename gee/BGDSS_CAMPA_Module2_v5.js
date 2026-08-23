@@ -168,7 +168,18 @@
  *  3. Ranked results print to Console; CSV/GeoTIFF/SHP exports queue in Tasks.
  *
  * ----------------------------------------------------------------------------
- *  IF YOU HIT "User memory limit exceeded"
+ *  IF THE PAGE FREEZES, OR YOU HIT "User memory limit exceeded"
+ * ----------------------------------------------------------------------------
+ *  A FROZEN TAB and a MEMORY ERROR are different faults with different fixes.
+ *
+ *  Frozen tab ("Page Unresponsive"): something is calling getInfo() and
+ *  blocking the Code Editor's UI thread. Every heavy call in this script uses
+ *  evaluate() instead, so the page stays live while work runs; the only
+ *  blocking calls left are the ~20 cheap dataset availability probes near the
+ *  top, which must be synchronous because the graph is built differently
+ *  depending on what exists. If you add code, never put getInfo() in a loop.
+ *
+ *  Memory error: too much computation materialised at once. Tune below.
  * ----------------------------------------------------------------------------
  *  Every criterion here is a computation chain, not a stored raster: a
  *  whole-ROI statistic re-evaluates 25 years of Landsat Theil-Sen, three years
@@ -385,18 +396,28 @@ function prov(id, label, nativeRes, epoch, citation) {
 function log(msg)  { print('✓ ' + msg); }
 function warn(msg) { print('⚠ ' + msg); }
 
+// Availability probes. These are the only remaining BLOCKING calls in the
+// script, and they have to be: the rest of the graph is built differently
+// depending on which datasets exist (the WorldCover v200/v100, GEDI/CCI/NDVI
+// and SoilGrids/OpenLandMap fallback chains all branch on the answer), so the
+// answer is needed before construction can continue.
+//
+// They are kept cheap. `col.first().bandNames()` looks harmless but `first()`
+// on an unfiltered global collection has to scan it, which is seconds per probe
+// and ~20 probes of frozen UI before any real work starts. `limit(1).size()`
+// short-circuits and validates the asset just as well.
 function safeImage(id, label) {
   try { var img = ee.Image(id); img.bandNames().getInfo(); return img; }
   catch (e) { warn(label + ' unavailable (' + id + ')'); return null; }
 }
 function safeCollection(id, label) {
-  try { var col = ee.ImageCollection(id); col.first().bandNames().getInfo(); return col; }
+  try { var col = ee.ImageCollection(id); col.limit(1).size().getInfo(); return col; }
   catch (e) { warn(label + ' unavailable (' + id + ')'); return null; }
 }
 function safeMosaic(id, band, label) {
   try {
     var col = ee.ImageCollection(id);
-    col.first().bandNames().getInfo();
+    col.limit(1).size().getInfo();
     return band ? col.select([band]).mosaic() : col.mosaic();
   } catch (e) { warn(label + ' unavailable (' + id + ')'); return null; }
 }
@@ -1280,24 +1301,31 @@ if (!eligibleMask || active.length === 0) {
 // Band name must start with a letter - Earth Engine rejects a leading underscore.
 var denomBand = ee.Image(1).updateMask(eligibleMask).rename('eligibleDenom');
 
-// The audit samples rather than reducing the whole ROI, and it does so in SMALL
-// BATCHES. Both are forced by the same fact: every criterion here is a
-// computation chain, not a stored raster. Asking for statistics over all ~18 at
-// once makes Earth Engine materialise 25 yr of Landsat Theil-Sen, 3 yr of
-// Sentinel-2 compositing, km-scale focal kernels and distance transforms
-// simultaneously over every tile touched - which exceeds the user memory limit
-// however few pixels are ultimately wanted.
+// The audit samples rather than reducing the whole ROI; it does so in SMALL
+// BATCHES; and every call is ASYNCHRONOUS. Three constraints, three reasons:
 //
-// Batching bounds peak memory to a few chains at a time. Each batch also gets
-// its own try/catch, so a single criterion too expensive to evaluate degrades
-// to "AUDIT FAILED" and is dropped, instead of taking the whole run down.
+//  - SAMPLING, because a whole-ROI statistic re-evaluates every criterion's
+//    computation chain on every pixel.
+//  - BATCHING, because ee.Image.cat over all ~18 criteria makes Earth Engine
+//    materialise 25 yr of Landsat Theil-Sen, 3 yr of Sentinel-2 compositing,
+//    km-scale focal kernels and distance transforms SIMULTANEOUSLY over every
+//    tile touched, before a single pixel is selected. Few pixels requested does
+//    not mean little work done.
+//  - ASYNCHRONY, because getInfo() blocks the Code Editor's UI thread. A dozen
+//    blocking round trips of 30-60 s each freezes the browser tab outright,
+//    however little memory any one of them uses. evaluate() hands the work to a
+//    callback and leaves the page live.
+//
+// Each batch also gets its own error branch, so a criterion too expensive to
+// evaluate degrades to "AUDIT FAILED" and is dropped with its weight
+// redistributed, instead of taking the whole run down.
 //
 // Each batch draws its own sample points. That is fine here: coverage is a
 // ratio and the stretch bounds are per-criterion, so nothing in the audit needs
 // the batches to share one sample frame.
-var sampleBatch = function (batch) {
+var auditSampleFC = function (batch) {
   var imgs = batch.map(function (c) { return c.img.toFloat().rename(c.name); });
-  var fc = ee.Image.cat(imgs.concat([denomBand]))
+  return ee.Image.cat(imgs.concat([denomBand]))
     .updateMask(eligibleMask)
     .sample({
       region: roi,
@@ -1307,7 +1335,9 @@ var sampleBatch = function (batch) {
       dropNulls: false,
       tileScale: 8,
       geometries: false
-    }).getInfo();
+    });
+};
+var extractRows = function (fc) {
   return ((fc && fc.features) || [])
     .map(function (f) { return f.properties || {}; })
     .filter(function (p) { return p.eligibleDenom !== null && p.eligibleDenom !== undefined; });
@@ -1320,31 +1350,53 @@ print('================================================================');
 var batchSize = Math.max(1, CONFIG.audit.batchSize);
 var nEligible = 0;
 var auditFailed = [];
-
+var auditBatches = [];
 for (var bi = 0; bi < active.length; bi += batchSize) {
-  var batch = active.slice(bi, bi + batchSize);
-  var rows = null;
-  try {
-    rows = sampleBatch(batch);
-  } catch (eBatch) {
-    rows = null;
-    warn('Audit batch [' + batch.map(function (c) { return c.name; }).join(', ') +
-         '] failed as a group - retrying one criterion at a time.');
-    batch.forEach(function (c) {
-      try {
-        c.sampleRows = sampleBatch([c]);
-        nEligible = Math.max(nEligible, c.sampleRows.length);
-      } catch (eOne) {
-        c.auditFailed = true;
-        auditFailed.push(c.name);
-      }
-    });
-  }
-  if (rows) {
+  auditBatches.push(active.slice(bi, bi + batchSize));
+}
+print('Auditing ' + active.length + ' criteria in ' + auditBatches.length +
+      ' batch(es) of up to ' + batchSize + '. Results below when complete - the page stays responsive.');
+
+// Retry a failed batch one criterion at a time, so one expensive layer cannot
+// disqualify the others that happened to share its batch.
+var auditOneByOne = function (batch, j, done) {
+  if (j >= batch.length) { done(); return; }
+  var c = batch[j];
+  auditSampleFC([c]).evaluate(function (fc, err) {
+    if (err || !fc) {
+      c.auditFailed = true;
+      auditFailed.push(c.name);
+    } else {
+      c.sampleRows = extractRows(fc);
+      nEligible = Math.max(nEligible, c.sampleRows.length);
+    }
+    auditOneByOne(batch, j + 1, done);
+  });
+};
+
+var runAuditBatch = function (i, done) {
+  if (i >= auditBatches.length) { done(); return; }
+  var batch = auditBatches[i];
+  auditSampleFC(batch).evaluate(function (fc, err) {
+    if (err || !fc) {
+      warn('Audit batch ' + (i + 1) + ' [' +
+           batch.map(function (c) { return c.name; }).join(', ') +
+           '] failed as a group - retrying one criterion at a time.');
+      auditOneByOne(batch, 0, function () { runAuditBatch(i + 1, done); });
+      return;
+    }
+    var rows = extractRows(fc);
     batch.forEach(function (c) { c.sampleRows = rows; });
     nEligible = Math.max(nEligible, rows.length);
-  }
-}
+    runAuditBatch(i + 1, done);
+  });
+};
+
+// Everything downstream of the audit runs in this callback. It cannot execute
+// until every batch has returned, and the batches are asynchronous, so the
+// sequence has to be expressed as a continuation rather than straight-line
+// code. The payoff is that the browser tab stays responsive throughout.
+var afterAudit = function () {
 
 print('Eligible pixels sampled: ' + nEligible +
       '  (at ' + CONFIG.audit.sampleScale + ' m, requested ' + CONFIG.audit.samplePixels +
@@ -1498,7 +1550,8 @@ if (!CONFIG.audit.autoDrop && droppedList.length > 0) {
 
 if (surviving.length === 0) {
   warn('STOPPING - every criterion failed the integrity audit. Check data availability for this ROI.');
-} else {
+  return;
+}
 
 // ---- Renormalize weights over the survivors -------------------------------
 var wSum = surviving.reduce(function (s, c) { return s + (CONFIG.weights[c.name] || 0); }, 0);
@@ -1557,7 +1610,13 @@ var blockStats = blockInput.reduceRegions({
 // ============================================================================
 // 15-19. CLIENT-SIDE MCDA
 // ============================================================================
-blockStats.evaluate(function (fc) {
+blockStats.evaluate(function (fc, blockErr) {
+  if (blockErr) {
+    warn('Block aggregation failed (' + blockErr + '). No ranking was produced. ' +
+         'Raise CONFIG.blockStatsScale or CONFIG.blockSizeM and re-run - see the ' +
+         'memory-tuning guide in the header.');
+    return;
+  }
   var feats = (fc && fc.features) || [];
   var critNames = surviving.map(function (c) { return c.name; });
   var weightsArr = surviving.map(function (c) { return c.weight; });
@@ -2102,7 +2161,12 @@ if (CONFIG.runValidation && hansen && surviving.length > 0) {
     ee.Dictionary({
       pos: posSample.aggregate_array('valScore'),
       neg: negSample.aggregate_array('valScore')
-    }).evaluate(function (d) {
+    }).evaluate(function (d, valErr) {
+      if (valErr) {
+        warn('Validation back-test failed (' + valErr + '). Rankings are unaffected; ' +
+             'only the AUC is missing. Set CONFIG.runValidation = false to skip it.');
+        return;
+      }
       if (!d) { warn('Validation returned nothing.'); return; }
       var pos = (d.pos || []).filter(function (x) { return x != null; });
       var neg = (d.neg || []).filter(function (x) { return x != null; });
@@ -2165,20 +2229,6 @@ var displayScore = surviving.reduce(function (acc, c) {
   return acc ? acc.add(term) : term;
 }, null).updateMask(eligibleMask).rename('priorityScore').clip(roi);
 
-// Quintile breaks are for the legend only, so they run at CONFIG.perf.vizScale
-// rather than the output scale - a percentile reduction over the full
-// criterion stack at 10 m is another route to the user memory limit.
-var pctBreaks = displayScore.reduceRegion({
-  reducer: ee.Reducer.percentile([20, 40, 60, 80]),
-  geometry: roi, scale: CONFIG.perf.vizScale, maxPixels: 1e10, tileScale: 8, bestEffort: true
-}).getInfo();
-var p20 = (pctBreaks && pctBreaks.priorityScore_p20 != null) ? pctBreaks.priorityScore_p20 : 0.2;
-var p40 = (pctBreaks && pctBreaks.priorityScore_p40 != null) ? pctBreaks.priorityScore_p40 : 0.4;
-var p60 = (pctBreaks && pctBreaks.priorityScore_p60 != null) ? pctBreaks.priorityScore_p60 : 0.6;
-var p80 = (pctBreaks && pctBreaks.priorityScore_p80 != null) ? pctBreaks.priorityScore_p80 : 0.8;
-print('Priority Score quintile breaks: ' + p20.toFixed(3) + ' / ' + p40.toFixed(3) +
-      ' / ' + p60.toFixed(3) + ' / ' + p80.toFixed(3));
-
 var PRIORITY_CLASSES = [
   { code: 1, label: 'Very Low',  color: '1a9850' },
   { code: 2, label: 'Low',       color: 'a6d96a' },
@@ -2186,17 +2236,55 @@ var PRIORITY_CLASSES = [
   { code: 4, label: 'High',      color: 'fdae61' },
   { code: 5, label: 'Very High', color: 'd7191c' }
 ];
-var priorityClassImg = ee.Image(1)
-  .where(displayScore.gt(p20), 2)
-  .where(displayScore.gt(p40), 3)
-  .where(displayScore.gt(p60), 4)
-  .where(displayScore.gt(p80), 5)
-  .updateMask(displayScore.mask()).rename('priorityClass');
+
+// Quintile breaks run at CONFIG.perf.vizScale rather than the output scale, and
+// ASYNCHRONOUSLY. getInfo() blocks the Code Editor's UI thread; a percentile
+// reduction over the full criterion stack takes long enough to freeze the tab
+// outright. Everything that depends on the breaks is therefore built inside the
+// callback - the rest of the map and all exports are queued immediately.
+displayScore.reduceRegion({
+  reducer: ee.Reducer.percentile([20, 40, 60, 80]),
+  geometry: roi, scale: CONFIG.perf.vizScale, maxPixels: 1e10, tileScale: 8, bestEffort: true
+}).evaluate(function (pctBreaks, pctErr) {
+  if (pctErr) {
+    warn('Quintile breaks unavailable (' + pctErr + ') - falling back to fixed 0.2/0.4/0.6/0.8 cuts.');
+  }
+  var p20 = (pctBreaks && pctBreaks.priorityScore_p20 != null) ? pctBreaks.priorityScore_p20 : 0.2;
+  var p40 = (pctBreaks && pctBreaks.priorityScore_p40 != null) ? pctBreaks.priorityScore_p40 : 0.4;
+  var p60 = (pctBreaks && pctBreaks.priorityScore_p60 != null) ? pctBreaks.priorityScore_p60 : 0.6;
+  var p80 = (pctBreaks && pctBreaks.priorityScore_p80 != null) ? pctBreaks.priorityScore_p80 : 0.8;
+  print('Priority Score quintile breaks: ' + p20.toFixed(3) + ' / ' + p40.toFixed(3) +
+        ' / ' + p60.toFixed(3) + ' / ' + p80.toFixed(3));
+
+  var priorityClassImg = ee.Image(1)
+    .where(displayScore.gt(p20), 2)
+    .where(displayScore.gt(p40), 3)
+    .where(displayScore.gt(p60), 4)
+    .where(displayScore.gt(p80), 5)
+    .updateMask(displayScore.mask()).rename('priorityClass');
+
+  Map.addLayer(priorityClassImg,
+    { min: 1, max: 5, palette: PRIORITY_CLASSES.map(function (c) { return c.color; }) },
+    'CAMPA Priority Score (5-class)', false);
+
+  try {
+    var lg = ui.Panel({ style: { position: 'bottom-right', padding: '8px 15px' } });
+    lg.add(ui.Label('CAMPA Priority Score', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
+    lg.add(ui.Label('v5 - ' + surviving.length + ' audited criteria',
+      { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
+    PRIORITY_CLASSES.slice().reverse().forEach(function (c) {
+      lg.add(ui.Panel({
+        widgets: [ui.Label('', { backgroundColor: c.color, padding: '8px', margin: '0 0 4px 0' }),
+                  ui.Label(c.label, { margin: '0 0 4px 6px', fontSize: '12px' })],
+        layout: ui.Panel.Layout.flow('horizontal')
+      }));
+    });
+    Map.add(lg);
+  } catch (eLegend) {}
+});
 
 Map.addLayer(treatment.selfMask(), { min: 1, max: 2, palette: ['1a9850', '2b83ba'] },
   'Recommended Treatment (green=New Plantation, blue=ANR)', true);
-Map.addLayer(priorityClassImg, { min: 1, max: 5, palette: PRIORITY_CLASSES.map(function (c) { return c.color; }) },
-  'CAMPA Priority Score (5-class)', false);
 Map.addLayer(fsiClass, { min: 1, max: 4, palette: ['d73027', 'fee08b', '91cf60', '1a9850'] },
   'FSI Canopy Class (current-data fused)', false);
 Map.addLayer(canopyDensity, { min: 0, max: 80, palette: ['ffffcc', '78c679', '006837'] },
@@ -2220,20 +2308,6 @@ if (twi) {
 Map.addLayer(constraintMask.not().selfMask(), { palette: ['000000'] },
   'Excluded by hard constraints', false);
 
-try {
-  var lg = ui.Panel({ style: { position: 'bottom-right', padding: '8px 15px' } });
-  lg.add(ui.Label('CAMPA Priority Score', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
-  lg.add(ui.Label('v5 - ' + surviving.length + ' audited criteria', { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
-  PRIORITY_CLASSES.slice().reverse().forEach(function (c) {
-    lg.add(ui.Panel({
-      widgets: [ui.Label('', { backgroundColor: c.color, padding: '8px', margin: '0 0 4px 0' }),
-                ui.Label(c.label, { margin: '0 0 4px 6px', fontSize: '12px' })],
-      layout: ui.Panel.Layout.flow('horizontal')
-    }));
-  });
-  Map.add(lg);
-} catch (e) {}
-
 // ---- Raster exports --------------------------------------------------------
 Export.image.toDrive({ image: displayScore, description: CONFIG.exportPrefix + '_PriorityScore',
   folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_PriorityScore',
@@ -2247,5 +2321,10 @@ Export.image.toDrive({ image: fsiClass.toInt(), description: CONFIG.exportPrefix
 Export.table.toDrive({ collection: grid, description: CONFIG.exportPrefix + '_PlanningBlocks',
   folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_PlanningBlocks', fileFormat: 'SHP' });
 
-}  // end: surviving.length > 0
+
+};
+
+// Kick off the asynchronous audit. Everything above this line only DEFINES
+// work; this is the call that starts it.
+runAuditBatch(0, afterAudit);
 }  // end: eligibleMask && active.length > 0
