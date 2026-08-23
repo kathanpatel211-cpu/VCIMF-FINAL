@@ -387,7 +387,11 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.0.10  (map layers restored and drawn immediately)';
+var SCRIPT_BUILD = 'v5.1.0  (canopy fraction fix; eligibility diagnostic)';
+
+// FSI canopy-density class thresholds. Declared here because the canopy fusion
+// in Section 4 needs them, which runs before the classification in Section 5.
+var C = CONFIG.fsiCanopyClasses;
 
 var roi = CONFIG.roi.geometry();
 var PROJ = 'EPSG:32643';
@@ -607,21 +611,40 @@ if (hansen) {
   prov('UMD/hansen/global_forest_change_2023_v1_11', 'Canopy baseline + loss/gain', 30, '2000-2023', 'Hansen et al. 2013');
 }
 
-if (dw) {
-  // Dynamic World tree probability is not canopy fraction, but over a
-  // deciduous landscape it tracks it closely enough to serve as the current
-  // signal. Scale to 0-100 to match the FSI convention.
-  var dwCanopy = dw.select('trees').multiply(100).rename('canopyDW');
-  if (hansenCurrent) {
-    // Fuse: take the current-data product as primary, but let the rolled-forward
-    // Hansen layer temper it where the two disagree sharply (DW can over-call
-    // trees on dense scrub and under-call leafless deciduous canopy).
-    canopyDensity = dwCanopy.multiply(0.65).add(hansenCurrent.multiply(0.35)).rename('canopyDensity');
-    canopySource = 'Dynamic World (65%) fused with loss/gain-updated Hansen (35%)';
-  } else {
-    canopyDensity = dwCanopy.rename('canopyDensity');
-    canopySource = 'Dynamic World tree probability only';
-  }
+if (dw && hansenCurrent) {
+  // CATEGORY ERROR FIXED IN v5.1.0.
+  // Dynamic World's `trees` band is the PROBABILITY that a pixel is labelled
+  // trees. It is NOT canopy cover fraction. Earlier builds multiplied it by 100
+  // and fed it to the FSI thresholds, so confidently-forested hills came back at
+  // 50-80 "percent canopy" and landed in FSI class 3 (Moderately Dense), which
+  // is not eligible for treatment. With the plains excluded as cropland, that
+  // left almost nothing eligible anywhere - an empty Recommended Treatment map.
+  //
+  // Hansen treecover2000 IS a calibrated canopy fraction, so it supplies the
+  // MAGNITUDE (rolled forward through loss/gain for currency). Dynamic World
+  // supplies CURRENCY only, as a bounded correction where the two disagree
+  // strongly - it can veto canopy that is no longer there, and flag canopy that
+  // has since grown, without its probability being read as a percentage.
+  var dwTrees = dw.select('trees');
+  var adjusted = hansenCurrent
+    // Confidently NOT trees now: cap canopy below the Open-forest ceiling.
+    .where(dwTrees.lt(0.20), hansenCurrent.min(C.scrubMax))
+    .where(dwTrees.gte(0.20).and(dwTrees.lt(0.40)), hansenCurrent.min(C.openMax - 5))
+    // Confidently trees now: do not let a stale 2000 baseline call it bare.
+    .where(dwTrees.gt(0.80), hansenCurrent.max(C.openMax + 10));
+  canopyDensity = adjusted.clamp(0, 100).rename('canopyDensity');
+  canopySource = 'Hansen canopy fraction (loss/gain updated), corrected by Dynamic World currency';
+} else if (dw && !hansenCurrent) {
+  // No calibrated fraction available. DW probability is the only signal, but it
+  // must not be read as a percentage - map it onto FSI bands by class instead.
+  var dwT = dw.select('trees');
+  canopyDensity = ee.Image(0)
+    .where(dwT.gte(0.20), C.scrubMax + 5)
+    .where(dwT.gte(0.40), C.openMax + 10)
+    .where(dwT.gte(0.70), C.moderatelyDenseMax + 10)
+    .rename('canopyDensity');
+  canopySource = 'Dynamic World class bands only (NO calibrated canopy fraction - indicative)';
+  warn('No Hansen canopy fraction. FSI classes are inferred from Dynamic World probability bands and are indicative only.');
 } else if (hansenCurrent) {
   canopyDensity = hansenCurrent.rename('canopyDensity');
   canopySource = 'Hansen 2000 baseline updated by loss/gain (NO current-year data - treat FSI classes as indicative)';
@@ -643,7 +666,6 @@ else { warn('No canopy data at all. STOPPING - degradation status cannot be asse
 // ============================================================================
 // 5. FSI CLASSIFICATION + HARD CONSTRAINTS + TREATMENT ELIGIBILITY
 // ============================================================================
-var C = CONFIG.fsiCanopyClasses;
 var fsiClass = null, forestMask = null, treatment = null, eligibleMask = null;
 
 if (canopyDensity) {
@@ -1447,6 +1469,57 @@ ee.Dictionary({ roiHa: roi.area(100).divide(1e4), blocks: grid.size() })
       warn('Very few blocks - check that CONFIG.roi points at the intended asset.');
     }
   });
+
+// ---- ELIGIBILITY DIAGNOSTIC -----------------------------------------------
+// An empty Recommended Treatment map has many possible causes - every pixel
+// too densely canopied, everything screened out as cropland, a constraint
+// cutting more than intended. Guessing between them wastes runs, so the model
+// reports the funnel: how much land each stage keeps.
+(function () {
+  var haImg = ee.Image.pixelArea().divide(1e4);
+  var bands = [
+    haImg.updateMask(fsiClass.eq(1)).rename('fsi1_scrub'),
+    haImg.updateMask(fsiClass.eq(2)).rename('fsi2_open'),
+    haImg.updateMask(fsiClass.eq(3)).rename('fsi3_modDense'),
+    haImg.updateMask(fsiClass.eq(4)).rename('fsi4_veryDense'),
+    haImg.updateMask(fsiClass.lte(2)).rename('inEligibleBand'),
+    haImg.updateMask(fsiClass.lte(2).and(plantableMask)).rename('alsoPlantable'),
+    haImg.updateMask(eligibleMask).rename('finalEligible')
+  ];
+  if (slope)  { bands.push(haImg.updateMask(fsiClass.lte(2).and(slope.lte(CONFIG.constraints.maxSlopeDeg))).rename('passSlope')); }
+  if (handM)  { bands.push(haImg.updateMask(fsiClass.lte(2).and(handM.gte(CONFIG.constraints.maxHandM))).rename('passHand')); }
+  if (dw) {
+    bands.push(haImg.updateMask(fsiClass.lte(2).and(dw.select('bare').lt(0.55))).rename('passBare'));
+    bands.push(haImg.updateMask(fsiClass.lte(2).and(dw.select('trees').lt(CONFIG.constraints.minTreeProbExclude))).rename('passTreeProb'));
+  }
+  ee.Image.cat(bands).reduceRegion({
+    reducer: ee.Reducer.sum(), geometry: roi, scale: 60,
+    maxPixels: 1e10, bestEffort: true, tileScale: 8
+  }).evaluate(function (d, err) {
+    if (err || !d) { warn('Eligibility diagnostic unavailable (' + err + ').'); return; }
+    var r = function (k) { return Math.round(d[k] || 0); };
+    var fmt = function (k) { return r(k).toLocaleString('en-IN') + ' ha'; };
+    print('---- ELIGIBILITY FUNNEL (where the land goes) ----');
+    print('  FSI 1 Scrub        (<10% canopy) : ' + fmt('fsi1_scrub'));
+    print('  FSI 2 Open       (10-40% canopy) : ' + fmt('fsi2_open'));
+    print('  FSI 3 Mod.Dense  (40-70% canopy) : ' + fmt('fsi3_modDense') + '   [not eligible]');
+    print('  FSI 4 V.Dense      (>70% canopy) : ' + fmt('fsi4_veryDense') + '   [not eligible]');
+    print('  -> in eligible canopy band       : ' + fmt('inEligibleBand'));
+    print('     of which plantable land use   : ' + fmt('alsoPlantable'));
+    if (d.passSlope     !== undefined) { print('     of which passes slope limit   : ' + fmt('passSlope')); }
+    if (d.passHand      !== undefined) { print('     of which passes HAND limit    : ' + fmt('passHand')); }
+    if (d.passBare      !== undefined) { print('     of which passes bare screen   : ' + fmt('passBare')); }
+    if (d.passTreeProb  !== undefined) { print('     of which passes tree-prob cut : ' + fmt('passTreeProb')); }
+    print('  == FINAL ELIGIBLE                : ' + fmt('finalEligible'));
+    if (r('finalEligible') < 1) {
+      warn('NOTHING is eligible. The stage above where the number collapses is the cause -');
+      warn('relax that constraint in CONFIG.constraints, or check CONFIG.fsiCanopyClasses.');
+    } else if (r('finalEligible') < CONFIG.targetTreatmentAreaHa) {
+      warn('Eligible area (' + fmt('finalEligible') + ') is below the ' +
+           CONFIG.targetTreatmentAreaHa + ' ha target - the plan cannot reach it.');
+    }
+  });
+})();
 
 // ---- MAP LAYERS -----------------------------------------------------------
 // Added HERE, not inside the aggregation callback. None of these depends on the
