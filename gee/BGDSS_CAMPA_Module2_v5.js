@@ -239,6 +239,7 @@ var CONFIG = {
 
   scale: 10,                        // OUTPUT grid. NOT the effective resolution - see Section 21.
   blockStatsScale: 30,              // working scale for per-block means (matches most inputs' native res)
+  aggGroupSize: 3,                  // criteria reduced per server call - lower this first if aggregation fails
   blockSizeM: 300,                  // ~9 ha planning blocks
   exportFolder: 'BGDSS',
   exportPrefix: 'BGDSS_CAMPA_v5',
@@ -386,7 +387,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.0.7  (single-pass aggregation; bounded distance transforms)';
+var SCRIPT_BUILD = 'v5.0.8  (grouped aggregation; graded degradation on failure)';
 
 var roi = CONFIG.roi.geometry();
 var PROJ = 'EPSG:32643';
@@ -716,7 +717,12 @@ if (fsiClass && plantableMask) {
 // ============================================================================
 // 6. CLIMATE - CHIRPS (full record), TerraClimate, MODIS LST
 // ============================================================================
-var chirps = safeCollection('UCSB-CHG/CHIRPS/DAILY', 'CHIRPS rainfall');
+// PENTAD, not DAILY. The 30-year coefficient of variation needs 30 annual
+// sums; over daily data that is ~11,000 image operations for one criterion.
+// Pentad is 5-daily from the same source, so an annual total is identical to
+// within rounding while costing ~5x less to build.
+var chirps = safeCollection('UCSB-CHG/CHIRPS/PENTAD', 'CHIRPS rainfall (pentad)')
+          || safeCollection('UCSB-CHG/CHIRPS/DAILY', 'CHIRPS rainfall (daily fallback)');
 var rainfall = null, rainfallCV = null;
 if (chirps) {
   rainfall = chirps.filterDate(yStart.advance(-1, 'year'), yEnd)
@@ -732,7 +738,7 @@ if (chirps) {
   var rMean = annualSums.mean();
   var rStd  = annualSums.reduce(ee.Reducer.stdDev());
   rainfallCV = rStd.divide(rMean.max(1)).resample('bilinear').clip(roi).rename('rainfallCV');
-  prov('UCSB-CHG/CHIRPS/DAILY', 'Rainfall + 30 yr variability', 5566, '1981-present', 'Funk et al. 2015');
+  prov('UCSB-CHG/CHIRPS/PENTAD', 'Rainfall + 30 yr variability', 5566, '1981-present', 'Funk et al. 2015');
   log('CHIRPS rainfall + 30 yr coefficient of variation computed');
 }
 
@@ -1370,32 +1376,43 @@ var grid = roi.coveringGrid(PROJ, CONFIG.blockSizeM)
     // degrees are converted to metres client-side (see toMetres below), which
     // over a Beat-sized area is exact enough for an adjacency test.
     var ctr = ee.Geometry(g.centroid(10)).coordinates();
-    return ee.Feature(g).set({ lon: ctr.get(0), lat: ctr.get(1) });
+    // bid is the join key: each criterion group is reduced over this same grid
+    // in a separate call, and the results are merged client-side by bid.
+    // Feature ORDER is not guaranteed across calls, so an explicit key is
+    // required - an array index would silently mismatch.
+    return ee.Feature(g).set({ bid: f.get('system:index'), lon: ctr.get(0), lat: ctr.get(1) });
   });
 
-// RAW criterion values - normalization happens client-side once the audit has
-// established each criterion's bounds.
-var rawStack = ee.Image.cat(active.map(function (c) {
-  return c.img.toFloat().rename(c.name);
-}));
+// Criteria are reduced in GROUPS, not all at once. Coarsening the scale from
+// 30 m to 120 m - sixteen times fewer pixels - did not help, which is the
+// signal that pixel count was never the bound: GRAPH COMPLEXITY is. Seventeen
+// heavy computation chains (12 yr of Landsat, 3 yr of Sentinel-2 compositing,
+// 30 yr of CHIRPS, distance transforms, focal kernels) cannot be held open
+// simultaneously regardless of how few pixels each is asked for.
+//
+// Each group is a separate reduceRegions over the SAME grid, joined client-side
+// on bid. This is not the earlier sampling approach: reduceRegions is bounded
+// by the block geometries, so a group of three chains is genuinely small work.
+var aggGroups = [];
+for (var agi = 0; agi < active.length; agi += CONFIG.aggGroupSize) {
+  aggGroups.push(active.slice(agi, agi + CONFIG.aggGroupSize));
+}
 
 // Masked to the eligible set. pixelArea masked likewise is what fixes v4's
 // area over-credit: areaHa_sum is TREATABLE hectares, not whole-block hectares.
+// Only cheap bands here. phenoRaw, soilLoss and agbCurrent used to be carried
+// as extra bands, which meant computing the invasion, RUSLE and biomass chains
+// a SECOND time purely to report them. They are all recoverable from the
+// criterion means that are being computed anyway (see processBlocks), so the
+// duplicate chains are gone.
 var maskedExtras = [
   ee.Image.pixelArea().divide(1e4).rename('eligibleAreaHa'),
   ee.Image(1).rename('eligibleDenom'),
   treatment.eq(1).rename('isNewPlantation'),
   treatment.eq(2).rename('isAnr')
 ];
-if (phenoAnomalyRaw) { maskedExtras.push(phenoAnomalyRaw.rename('phenoRaw')); }
-if (currentAgb)      { maskedExtras.push(currentAgb.rename('agbCurrent')); }
-if (erosionRaw)      { maskedExtras.push(erosionRaw.rename('soilLossTHaYr')); }
 
-// totalAreaHa is deliberately NOT masked - it is the denominator of
-// eligibleFraction, so it must count the whole block.
-var blockInput = ee.Image.cat([rawStack].concat(maskedExtras))
-  .updateMask(eligibleMask)
-  .addBands(ee.Image.pixelArea().divide(1e4).clip(roi).rename('totalAreaHa'));
+
 
 // mean -> criterion values; count -> pixel-level coverage; sum -> areas and
 // treatment-class pixel counts. All three are cheap. (mode() is deliberately
@@ -1405,8 +1422,19 @@ var blockReducer = ee.Reducer.mean()
   .combine(ee.Reducer.count(), '', true)
   .combine(ee.Reducer.sum(), '', true);
 
-var makeBlockStats = function (scale) {
-  return blockInput.reduceRegions({
+// crits may be empty: that builds the cheap "extras only" call (areas, the
+// coverage denominator and the treatment-class masks), which must succeed for
+// anything else to be interpretable.
+var makeGroupStats = function (crits, includeExtras, scale) {
+  var parts = crits.map(function (c) { return c.img.toFloat().rename(c.name); });
+  if (includeExtras) { parts = parts.concat(maskedExtras); }
+  var img = ee.Image.cat(parts).updateMask(eligibleMask);
+  if (includeExtras) {
+    // totalAreaHa is deliberately NOT masked - it is the denominator of
+    // eligibleFraction, so it must count the whole block.
+    img = img.addBands(ee.Image.pixelArea().divide(1e4).clip(roi).rename('totalAreaHa'));
+  }
+  return img.reduceRegions({
     collection: grid, reducer: blockReducer, scale: scale, tileScale: 8
   });
 };
@@ -1442,6 +1470,9 @@ var stdDevOf = function (vals) {
 };
 var normBounds = function (c) {
   return (c.mode === 'absolute') ? { lo: c.lo, hi: c.hi } : { lo: c.p2, hi: c.p98 };
+};
+var numOrNull = function (v) {
+  return (typeof v === 'number' && isFinite(v)) ? v : null;
 };
 var normOne = function (c, v, b) {
   var t = (v - b.lo) / (b.hi - b.lo);
@@ -1604,9 +1635,13 @@ var processBlocks = function (fc, usedScale) {
       totalAreaHa: r.totHa,
       eligibleFraction: r.eligHa / r.totHa,
       treatmentCode: (nNew === 0 && nAnr === 0) ? 0 : (nNew >= nAnr ? 1 : 2),
-      phenoRaw: p.phenoRaw_mean,
-      agbCurrent: p.agbCurrent_mean,
-      soilLoss: p.soilLossTHaYr_mean,
+      // Recovered from the criterion means rather than recomputed:
+      // phenologicalAnomaly and erosionRisk ARE these raw values, and current
+      // AGB is the reference minus the carbon gap.
+      phenoRaw: numOrNull(p.phenologicalAnomaly_mean),
+      soilLoss: numOrNull(p.erosionRisk_mean),
+      agbCurrent: (typeof p.carbonGainPotential_mean === 'number' && isFinite(p.carbonGainPotential_mean))
+        ? CONFIG.carbon.referenceAgbTPerHa - p.carbonGainPotential_mean : null,
       v: vals
     });
   });
@@ -2244,30 +2279,6 @@ var processBlocks = function (fc, usedScale) {
     } catch (eLegend) {}
   });
 
-  Map.addLayer(treatment.selfMask(), { min: 1, max: 2, palette: ['1a9850', '2b83ba'] },
-    'Recommended Treatment (green=New Plantation, blue=ANR)', true);
-  Map.addLayer(fsiClass, { min: 1, max: 4, palette: ['d73027', 'fee08b', '91cf60', '1a9850'] },
-    'FSI Canopy Class (current-data fused)', false);
-  Map.addLayer(canopyDensity, { min: 0, max: 80, palette: ['ffffcc', '78c679', '006837'] },
-    'Current Canopy Density (%)', false);
-  if (productivityTrendRaw) {
-    Map.addLayer(productivityTrendRaw, { min: -0.01, max: 0.01, palette: ['d73027', 'ffffbf', '1a9850'] },
-      'Land Productivity Trend (red=degrading, UNCCD 15.3.1)', false);
-  }
-  if (erosionRaw) {
-    Map.addLayer(erosionRaw, { min: 0, max: 40, palette: ['ffffcc', 'fd8d3c', 'bd0026'] },
-      'RUSLE Soil Loss (t/ha/yr)', false);
-  }
-  if (phenoAnomalyRaw) {
-    Map.addLayer(phenoAnomalyRaw.gt(0.55).selfMask(), { palette: ['ff00ff'] },
-      'Invasion candidate (PROXY - field-verify)', false);
-  }
-  if (twi) {
-    Map.addLayer(twi, { min: 3, max: 15, palette: ['ffffcc', '41b6c4', '253494'] },
-      'Topographic Wetness Index', false);
-  }
-  Map.addLayer(constraintMask.not().selfMask(), { palette: ['000000'] },
-    'Excluded by hard constraints', false);
 
   // ---- Raster exports --------------------------------------------------------
   Export.image.toDrive({ image: displayScore, description: CONFIG.exportPrefix + '_PriorityScore',
@@ -2281,33 +2292,97 @@ var processBlocks = function (fc, usedScale) {
 };
 
 // ============================================================================
-// RUN IT - one server call, with automatic coarsening if it will not fit
+// RUN IT - one call per criterion group, merged on bid, then processed once
 // ============================================================================
-// If the aggregation exceeds the memory limit, retry at a coarser block-stats
-// scale rather than failing. Coarsening this scale changes how finely each
-// block's mean is estimated - it does NOT drop a criterion or alter a weight -
-// so the model stays whole; only the precision of the block averages softens.
-// A 300 m block still holds 100 samples at 30 m and 25 at 60 m.
-var runBlockStats = function (scale, attempt) {
-  print('Aggregating ' + active.length + ' criteria over the block grid at ' + scale + ' m' +
-        (attempt > 1 ? '  (attempt ' + attempt + ')' : '') + ' ...');
-  makeBlockStats(scale).evaluate(function (fc, blockErr) {
-    if (blockErr || !fc) {
-      if (attempt < 4) {
-        warn('Aggregation failed at ' + scale + ' m (' + (blockErr || 'no result') +
-             ') - retrying at ' + (scale * 2) + ' m.');
-        runBlockStats(scale * 2, attempt + 1);
-        return;
-      }
-      warn('Aggregation still failing at ' + scale + ' m after ' + attempt + ' attempts.');
-      warn('Turn off the heaviest modules and re-run: CONFIG.runProductivityTrend = false, ' +
-           'then runFutureClimate and runValidation. See the tuning guide in the header.');
-      return;
-    }
-    processBlocks(fc, scale);
+// Degradation is graded, so a run always produces something usable:
+//   group fails        -> retry the group at twice the scale (up to 4x)
+//   still fails        -> split the group and retry each criterion alone
+//   a criterion fails alone -> drop it, redistribute its weight, carry on
+// Only the extras call is load-bearing; if that cannot run, nothing downstream
+// is interpretable and the script stops with an explanation.
+var blockData = {};
+var aggFailed = [];
+
+var mergeRows = function (fc) {
+  ((fc && fc.features) || []).forEach(function (f) {
+    var p = f.properties || {};
+    if (p.bid === undefined || p.bid === null) { return; }
+    if (!blockData[p.bid]) { blockData[p.bid] = {}; }
+    var target = blockData[p.bid];
+    for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) { target[k] = p[k]; } }
   });
 };
 
-runBlockStats(CONFIG.blockStatsScale, 1);
+var label = function (crits) {
+  return crits.length ? crits.map(function (c) { return c.name; }).join(', ') : 'block areas & treatment class';
+};
+
+// One criterion, alone, with scale escalation. Last resort before dropping it.
+var runSingle = function (c, scale, attempt, done) {
+  makeGroupStats([c], false, scale).evaluate(function (fc, err) {
+    if (!err && fc) { mergeRows(fc); print('    ' + c.name + ' OK at ' + scale + ' m'); done(); return; }
+    if (attempt < 3) { runSingle(c, scale * 2, attempt + 1, done); return; }
+    c.aggFailed = true;
+    aggFailed.push(c.name);
+    warn('    ' + c.name + ' could not be aggregated even alone - dropping it.');
+    done();
+  });
+};
+var runSingles = function (crits, i, scale, done) {
+  if (i >= crits.length) { done(); return; }
+  runSingle(crits[i], scale, 1, function () { runSingles(crits, i + 1, scale, done); });
+};
+
+var runGroup = function (crits, includeExtras, scale, attempt, done) {
+  print('Aggregating [' + label(crits) + '] at ' + scale + ' m' +
+        (attempt > 1 ? '  (attempt ' + attempt + ')' : '') + ' ...');
+  makeGroupStats(crits, includeExtras, scale).evaluate(function (fc, err) {
+    if (!err && fc) { mergeRows(fc); done(true); return; }
+    if (attempt < 3) {
+      warn('  failed at ' + scale + ' m - retrying at ' + (scale * 2) + ' m.');
+      runGroup(crits, includeExtras, scale * 2, attempt + 1, done);
+      return;
+    }
+    if (includeExtras) { done(false); return; }        // extras are not optional
+    warn('  group still failing - splitting it and retrying each criterion alone.');
+    runSingles(crits, 0, CONFIG.blockStatsScale, function () { done(true); });
+  });
+};
+
+var runAllGroups = function (i, done) {
+  if (i >= aggGroups.length) { done(); return; }
+  runGroup(aggGroups[i], false, CONFIG.blockStatsScale, 1, function () {
+    runAllGroups(i + 1, done);
+  });
+};
+
+print('Aggregating ' + active.length + ' criteria in ' + aggGroups.length +
+      ' group(s) of up to ' + CONFIG.aggGroupSize + ', plus one call for block areas.');
+print('Each group is a separate call over the same block grid; results merge on a block id.');
+
+runGroup([], true, CONFIG.blockStatsScale, 1, function (extrasOk) {
+  if (!extrasOk) {
+    warn('Could not compute block areas and treatment classes - nothing downstream is');
+    warn('interpretable without them. Raise CONFIG.blockSizeM or CONFIG.blockStatsScale.');
+    return;
+  }
+  runAllGroups(0, function () {
+    if (aggFailed.length > 0) {
+      warn('DROPPED - could not be aggregated: ' + aggFailed.join(', '));
+      // Keep them in the exported audit trail: a criterion dropped for cost is
+      // a criterion that did not inform the plan, and that must stay on record.
+      aggFailed.forEach(function (nm) { missing.push(nm); });
+    }
+    var merged = [];
+    for (var k in blockData) {
+      if (Object.prototype.hasOwnProperty.call(blockData, k)) {
+        merged.push({ properties: blockData[k] });
+      }
+    }
+    // Criteria that never returned must not be scored on partial data.
+    active = active.filter(function (c) { return !c.aggFailed; });
+    processBlocks({ features: merged }, CONFIG.blockStatsScale);
+  });
+});
 
 }  // end: eligibleMask && active.length > 0
