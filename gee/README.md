@@ -57,13 +57,21 @@ Turn these knobs in order:
 
 | Step | Setting | Change |
 |---|---|---|
-| 1 | `audit.batchSize` | 3 → **1** — one criterion per round trip, the safest setting. Slower, not weaker. |
-| 2 | `audit.samplePixels` / `audit.sampleScale` | 5000 → 2000 / 30 → 60 or 100 |
-| 3 | `runProductivityTrend` | `false` — the most expensive single chain |
-| 4 | `runValidation`, `runFutureClimate` | `false` |
-| 5 | `blockStatsScale` | 20 → 30 |
-| 6 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
-| 7 | `scale` | 10 → 20 or 30 |
+| 1 | `audit.sampleScale` | 100 → **200 or 500** — the main lever, see below |
+| 2 | `runProductivityTrend` | `false` — the most expensive single chain |
+| 3 | `runValidation`, `runFutureClimate` | `false` |
+| 4 | `blockStatsScale` | 30 → 60 |
+| 5 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
+| 6 | `scale` | 10 → 20 or 30 |
+
+**Scale is the lever, not sample count.** `sample()` draws its points from
+across the whole region, so Earth Engine still computes the criterion over
+essentially every tile — asking for 5,000 scattered points costs nearly what a
+full reduction costs. Halving `samplePixels` changes little; coarsening
+`sampleScale` is roughly quadratic. And the audit only characterises
+*distributions* (percentile bounds, coverage, spread) whose coarsest inputs are
+250 m to 25 km, so 200–500 m costs it nothing real. It never decides any pixel's
+treatment.
 
 None of these change the **method**, only the working resolution of the
 statistics. Coarsening the audit sample does not weaken the integrity checks —

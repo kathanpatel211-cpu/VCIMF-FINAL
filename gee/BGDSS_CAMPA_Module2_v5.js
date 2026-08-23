@@ -196,10 +196,14 @@
  *  than reducing the full ROI, and the heavy geometric operations run on
  *  coarser working grids. All of it is tunable - turn these knobs in order:
  *
- *    1. CONFIG.audit.batchSize         3 -> 1. One criterion per round trip is
- *       the safest possible setting; it is slower, not weaker.
- *    2. CONFIG.audit.samplePixels   5000 -> 2000
- *       CONFIG.audit.sampleScale     30 -> 60 or 100
+ *    1. CONFIG.audit.sampleScale     100 -> 200 or 500. SCALE is the lever, not
+ *       sample count: sample() draws points from across the whole region, so
+ *       Earth Engine still computes the criterion over essentially every tile.
+ *       Asking for fewer points barely helps; coarsening the scale is roughly
+ *       quadratic. The audit only characterises distributions, and its coarsest
+ *       inputs are 250 m to 25 km, so 200-500 m costs it nothing real.
+ *    2. CONFIG.audit.batchSize (already 1 by default - do not raise it unless
+ *       you have confirmed batches succeed on your ROI)
  *    3. CONFIG.runProductivityTrend = false   (the most expensive single
  *       chain; already limited to Landsat 8/9 from 2013 by default)
  *    4. CONFIG.runValidation = false, CONFIG.runFutureClimate = false
@@ -234,7 +238,7 @@ var CONFIG = {
   unitName: 'BEAT',
 
   scale: 10,                        // OUTPUT grid. NOT the effective resolution - see Section 21.
-  blockStatsScale: 20,              // working scale for per-block means (raise to 30 if memory is tight)
+  blockStatsScale: 30,              // working scale for per-block means (matches most inputs' native res)
   blockSizeM: 300,                  // ~9 ha planning blocks
   exportFolder: 'BGDSS',
   exportPrefix: 'BGDSS_CAMPA_v5',
@@ -262,15 +266,24 @@ var CONFIG = {
     // ~18 bands re-evaluates every criterion's full computation chain (25 yr
     // Landsat Theil-Sen, 3 yr S2 composites, km-scale focal kernels) and blows
     // the user memory limit. 5000 samples give the same stretch bounds.
+    // SCALE is the real lever here, not sample count. sample() draws its points
+    // from across the whole region, so Earth Engine still computes the criterion
+    // over essentially every tile - asking for 5000 scattered points costs
+    // almost what a full reduction costs. Halving the sample count changes
+    // little; coarsening the scale from 30 m to 100 m is ~11x less work.
+    //
+    // 100 m is entirely adequate for what the audit does. It characterises
+    // DISTRIBUTIONS - percentile stretch bounds, coverage fraction, spatial
+    // spread - and the coarsest inputs feeding those distributions are 250 m to
+    // 25 km anyway. It does not decide any pixel's treatment.
     samplePixels: 5000,
-    sampleScale: 30,                // raise to 60-100 if memory is still tight
+    sampleScale: 100,
 
-    // Criteria are audited in batches of this size, each isolated by its own
-    // try/catch. Sampling all ~18 at once makes Earth Engine materialise every
-    // computation chain simultaneously and exceeds the memory limit however few
-    // pixels are wanted. Lower to 1 for maximum safety (slower: one round trip
-    // per criterion); raise for fewer round trips if your ROI is small.
-    batchSize: 3
+    // One criterion per round trip. Batching was an attempt to trade round
+    // trips for memory, but on a real Beat the batches failed and fell back to
+    // individual retries anyway, so the batch was pure wasted work. Raise this
+    // only if you have confirmed batches succeed on your ROI.
+    batchSize: 1
   },
 
   // ---- Performance ---------------------------------------------------------
@@ -689,6 +702,19 @@ if (fsiClass && plantableMask) {
     .rename('treatment').clip(roi);
   eligibleMask = treatment.gt(0);
   log('Treatment eligibility ready. Constraints applied: ' + (constraintNotes.join('; ') || 'none'));
+
+  // Queue the exports that do NOT depend on the audit straight away, so the
+  // Tasks tab has something in it while the audit runs. Everything downstream
+  // of the audit - the ranked CSV, the priority raster, the planning-block
+  // shapefile - can only be queued once the audit callback completes, which is
+  // why Tasks stays otherwise empty until then.
+  Export.image.toDrive({ image: treatment.toInt(), description: CONFIG.exportPrefix + '_TreatmentType',
+    folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_TreatmentType',
+    region: roi.bounds(), scale: CONFIG.scale, crs: PROJ, maxPixels: 1e13 });
+  Export.image.toDrive({ image: fsiClass.toInt(), description: CONFIG.exportPrefix + '_FSICanopyClass',
+    folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_FSICanopyClass',
+    region: roi.bounds(), scale: CONFIG.scale, crs: PROJ, maxPixels: 1e13 });
+  log('Queued TreatmentType and FSICanopyClass exports - check the Tasks tab now.');
 }
 
 // ============================================================================
@@ -1380,7 +1406,10 @@ for (var bi = 0; bi < active.length; bi += batchSize) {
   auditBatches.push(active.slice(bi, bi + batchSize));
 }
 print('Auditing ' + active.length + ' criteria in ' + auditBatches.length +
-      ' batch(es) of up to ' + batchSize + '. Results below when complete - the page stays responsive.');
+      ' batch(es) of up to ' + batchSize + ', sampling at ' + CONFIG.audit.sampleScale + ' m.');
+print('This runs asynchronously: the page stays responsive and each result prints as it lands.');
+print('The ranked CSV, priority raster and planning-block exports queue in Tasks only AFTER');
+print('the audit finishes - Tasks staying empty until then is expected, not a failure.');
 
 // Retry a failed batch one criterion at a time, so one expensive layer cannot
 // disqualify the others that happened to share its batch.
@@ -2340,12 +2369,6 @@ Map.addLayer(constraintMask.not().selfMask(), { palette: ['000000'] },
 // ---- Raster exports --------------------------------------------------------
 Export.image.toDrive({ image: displayScore, description: CONFIG.exportPrefix + '_PriorityScore',
   folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_PriorityScore',
-  region: roi.bounds(), scale: CONFIG.scale, crs: PROJ, maxPixels: 1e13 });
-Export.image.toDrive({ image: treatment.toInt(), description: CONFIG.exportPrefix + '_TreatmentType',
-  folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_TreatmentType',
-  region: roi.bounds(), scale: CONFIG.scale, crs: PROJ, maxPixels: 1e13 });
-Export.image.toDrive({ image: fsiClass.toInt(), description: CONFIG.exportPrefix + '_FSICanopyClass',
-  folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_FSICanopyClass',
   region: roi.bounds(), scale: CONFIG.scale, crs: PROJ, maxPixels: 1e13 });
 Export.table.toDrive({ collection: grid, description: CONFIG.exportPrefix + '_PlanningBlocks',
   folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_PlanningBlocks', fileFormat: 'SHP' });
