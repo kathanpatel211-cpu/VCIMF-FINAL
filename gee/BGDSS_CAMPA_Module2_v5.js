@@ -387,7 +387,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.1.1  (DEM projection fix - slope was rejecting everything)';
+var SCRIPT_BUILD = 'v5.2.0  (block-level CAMPA priority map + applied weight table)';
 
 // FSI canopy-density class thresholds. Declared here because the canopy fusion
 // in Section 4 needs them, which runs before the classification in Section 5.
@@ -1828,6 +1828,24 @@ var processBlocks = function (fc, usedScale) {
   var wSum = surviving.reduce(function (s, c) { return s + (CONFIG.weights[c.name] || 0); }, 0);
   surviving.forEach(function (c) { c.weight = (CONFIG.weights[c.name] || 0) / wSum; });
   print('Weights rescaled across ' + surviving.length + ' surviving criteria (original sum ' + wSum.toFixed(4) + ').');
+  print('---- APPLIED WEIGHTS (what the CAMPA Priority map is actually built from) ----');
+  var byCluster = {};
+  surviving.forEach(function (c) {
+    if (!byCluster[c.cluster]) { byCluster[c.cluster] = []; }
+    byCluster[c.cluster].push(c);
+  });
+  Object.keys(byCluster).forEach(function (cl) {
+    var tot = byCluster[cl].reduce(function (t, c) { return t + c.weight; }, 0);
+    print('  ' + cl + '  [' + (tot * 100).toFixed(1) + '% of the score]');
+    byCluster[cl].sort(function (x, y) { return y.weight - x.weight; }).forEach(function (c) {
+      print('      ' + (c.weight * 100).toFixed(2) + '%  ' + c.name +
+            '   (nominal ' + ((CONFIG.weights[c.name] || 0) * 100).toFixed(2) + '%, ' +
+            (c.dir > 0 ? 'higher = higher priority' : 'inverted') + ')');
+    });
+  });
+  print('  Weights sum to 100% across the surviving criteria. Any criterion dropped by');
+  print('  the audit had its weight redistributed proportionally, so the map always');
+  print('  reflects a complete 100% weighting of the evidence that was actually usable.');
 
   var critNames = surviving.map(function (c) { return c.name; });
   var weightsArr = surviving.map(function (c) { return c.weight; });
@@ -1849,6 +1867,7 @@ var processBlocks = function (fc, usedScale) {
     var nAnr = p.isAnr_sum || 0;
     blocks.push({
       id: r.idx + 1,
+      bid: p.bid,
       cx: toMetresX(p.lon, p.lat), cy: toMetresY(p.lat),
       eligibleAreaHa: r.eligHa,
       totalAreaHa: r.totHa,
@@ -2443,6 +2462,69 @@ var processBlocks = function (fc, usedScale) {
     var term = c.norm.multiply(c.weight);
     return acc ? acc.add(term) : term;
   }, null).updateMask(eligibleMask).rename('priorityScore').clip(roi);
+
+  // ---- BLOCK-LEVEL CAMPA PRIORITY MAP --------------------------------------
+  // The pixel raster below is the underlying surface; THIS is the map a DFO
+  // works from. Every block carries the score it was actually ranked on - the
+  // full weighted combination of every surviving criterion - so what is shown
+  // and what is in the ranked CSV are the same numbers.
+  var bidList = blocks.map(function (b) { return b.bid; });
+  var wlcList = blocks.map(function (b) { return b.wlc; });
+  var selList = blocks.map(function (b) { return b.selectedArea ? 1 : 0; });
+
+  var scoreDict = ee.Dictionary.fromLists(bidList, wlcList);
+  var selDict   = ee.Dictionary.fromLists(bidList, selList);
+  var scoredGrid = grid
+    .filter(ee.Filter.inList('bid', bidList))
+    .map(function (f) {
+      var k = f.get('bid');
+      return f.set({
+        priority: ee.Number(scoreDict.get(k)),
+        selected: ee.Number(selDict.get(k))
+      });
+    });
+
+  var blockPriorityImg = scoredGrid.reduceToImage(['priority'], ee.Reducer.first())
+                                   .rename('blockPriority');
+
+  // Quintile cuts taken from the block scores themselves - the values being
+  // ranked - rather than from the pixel surface.
+  var sortedScores = wlcList.slice().sort(function (a2, b2) { return a2 - b2; });
+  var q = function (f) {
+    var i = Math.min(sortedScores.length - 1, Math.max(0, Math.round(f * (sortedScores.length - 1))));
+    return sortedScores[i];
+  };
+  var b20 = q(0.2), b40 = q(0.4), b60 = q(0.6), b80 = q(0.8);
+
+  var blockClassImg = ee.Image(1)
+    .where(blockPriorityImg.gt(b20), 2)
+    .where(blockPriorityImg.gt(b40), 3)
+    .where(blockPriorityImg.gt(b60), 4)
+    .where(blockPriorityImg.gt(b80), 5)
+    .updateMask(blockPriorityImg.mask())
+    .rename('blockPriorityClass');
+
+  Map.addLayer(blockClassImg, { min: 1, max: 5, palette: ['1a9850', 'a6d96a', 'ffffbf', 'fdae61', 'd7191c'] },
+    'CAMPA PRIORITY (block, 5-class)', true);
+  Map.addLayer(blockPriorityImg, { min: b20, max: b80, palette: ['1a9850', 'ffffbf', 'd7191c'] },
+    'CAMPA Priority (block, continuous score)', false);
+  Map.addLayer(
+    scoredGrid.filter(ee.Filter.eq('selected', 1)),
+    { color: '00ffff' },
+    'SELECTED THIS CYCLE (' + CONFIG.targetTreatmentAreaHa + ' ha plan)', true);
+
+  print('CAMPA Priority block-score quintile cuts: ' +
+        b20.toFixed(4) + ' / ' + b40.toFixed(4) + ' / ' +
+        b60.toFixed(4) + ' / ' + b80.toFixed(4));
+
+  // Scored blocks as a shapefile - the grid export was geometry only.
+  Export.table.toDrive({
+    collection: scoredGrid,
+    description: CONFIG.exportPrefix + '_PriorityBlocks',
+    folder: CONFIG.exportFolder,
+    fileNamePrefix: CONFIG.exportPrefix + '_PriorityBlocks',
+    fileFormat: 'SHP'
+  });
 
   var PRIORITY_CLASSES = [
     { code: 1, label: 'Very Low',  color: '1a9850' },
