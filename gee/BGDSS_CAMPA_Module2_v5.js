@@ -2562,7 +2562,7 @@ var processBlocks = function (fc, usedScale) {
 
     Map.addLayer(priorityClassImg,
       { min: 1, max: 5, palette: PRIORITY_CLASSES.map(function (c) { return c.color; }) },
-      'CAMPA Priority Score (5-class)', false);
+      'CAMPA Priority Score (pixel surface, 5-class)', true);
 
     try {
       var lg = ui.Panel({ style: { position: 'bottom-right', padding: '8px 15px' } });
