@@ -40,48 +40,40 @@ depending on which datasets exist.
 
 ### If you hit `User memory limit exceeded`
 
-Every criterion is a *computation chain*, not a stored raster. Any whole-ROI
-statistic re-evaluates 25 years of Landsat Theil–Sen, three years of Sentinel-2
-compositing, kilometre-scale focal kernels and distance transforms on every
-pixel it touches. So the audit **samples** instead of reducing the full ROI, and
-the heavy geometric operations run on coarser working grids.
+The model makes **one** server call: a single `reduceRegions` over the planning
+block grid, which returns each criterion's mean and valid-pixel count per block.
+The integrity audit is derived from that same call, so it costs nothing extra.
 
-The audit is therefore run in **small batches**, each isolated by its own
-`try`/`catch`. Asking for statistics over all ~18 criteria at once makes Earth
-Engine materialise every chain simultaneously, which exceeds the limit however
-few pixels are ultimately wanted. Batching bounds peak memory to a few chains at
-a time, and a criterion too expensive to evaluate is reported as `AUDIT FAILED`
-and dropped with its weight redistributed — rather than aborting the run.
+If the call exceeds the limit, the script **coarsens the block-statistics scale
+automatically** (30 → 60 → 120 → 240 m) and retries before giving up. Coarsening
+that scale changes how finely each block's mean is estimated — it does not drop
+a criterion or alter a weight — so the model stays whole. A 300 m block still
+holds 100 samples at 30 m and 25 at 60 m.
 
-Turn these knobs in order:
+If it exhausts those retries:
 
 | Step | Setting | Change |
 |---|---|---|
-| 1 | `audit.sampleScale` | 100 → **200 or 500** — the main lever, see below |
-| 2 | `runProductivityTrend` | `false` — the most expensive single chain |
-| 3 | `runValidation`, `runFutureClimate` | `false` |
-| 4 | `blockStatsScale` | 30 → 60 |
-| 5 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
-| 6 | `scale` | 10 → 20 or 30 |
+| 1 | `runProductivityTrend` | `false` — the most expensive single chain |
+| 2 | `runFutureClimate`, `runValidation` | `false` |
+| 3 | `blockSizeM` | 300 → 500 (fewer, larger blocks) |
+| 4 | `perf.patchScale` / `perf.distanceScale` | 60 → 100 / 30 → 60 |
+| 5 | `scale` | 10 → 20 or 30 |
 
-**Scale is the lever, not sample count.** `sample()` draws its points from
-across the whole region, so Earth Engine still computes the criterion over
-essentially every tile — asking for 5,000 scattered points costs nearly what a
-full reduction costs. Halving `samplePixels` changes little; coarsening
-`sampleScale` is roughly quadratic. And the audit only characterises
-*distributions* (percentile bounds, coverage, spread) whose coarsest inputs are
-250 m to 25 km, so 200–500 m costs it nothing real. It never decides any pixel's
-treatment.
+Note what is **not** on that list: dropping criteria or changing weights. Every
+knob changes the working resolution of a statistic, never the model's content.
 
-None of these change the **method**, only the working resolution of the
-statistics. Coarsening the audit sample does not weaken the integrity checks —
-a few thousand samples estimate a percentile or standard deviation far more
-precisely than the drop thresholds care about. And since half the inputs are
-250 m or coarser, dropping `scale` to 20–30 m loses far less than the 10 m
-figure implies.
+### `unmask()` unbounds an image — always re-clip
 
-**Check the `AUDIT FAILED` list before reading any ranking.** A criterion
-dropped for cost is a criterion that did not inform the plan.
+The fault that made `distanceToForest`, `hydrologicalConnectivity` and
+`structuralConnectivity` fail no matter how coarsely they were sampled.
+`unmask()` strips the mask, and an unmasked image in Earth Engine has **infinite
+extent**. A distance transform or a kilometre-scale focal mean over an unbounded
+image does not cost "one Beat's worth" of work — it costs effectively a planet's
+worth, and no sampling scale rescues it.
+
+Every `unmask()` in this script is followed by a `.clip()` to the ROI plus
+whatever halo the operation needs to reach. If you add one, do the same.
 
 ### Land productivity trend window
 
