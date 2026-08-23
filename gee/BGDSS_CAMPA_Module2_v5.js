@@ -386,9 +386,15 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
+var SCRIPT_BUILD = 'v5.0.7  (single-pass aggregation; bounded distance transforms)';
+
 var roi = CONFIG.roi.geometry();
 var PROJ = 'EPSG:32643';
 try { Map.centerObject(CONFIG.roi, 12); Map.setOptions('SATELLITE'); } catch (e) {}
+
+// Printed first, so a stale paste is obvious from the Console rather than from
+// a line number in an error message.
+print('BGDSS CAMPA Module 2 - build ' + SCRIPT_BUILD);
 
 // PROVENANCE - every dataset used, its native resolution and epoch.
 // Printed and exported (Section 21). Required for any government/audit context.
@@ -1358,11 +1364,13 @@ if (!eligibleMask || active.length === 0) {
 var grid = roi.coveringGrid(PROJ, CONFIG.blockSizeM)
   .map(function (f) {
     var g = f.intersection(roi, 1);
-    // cx/cy are projected metres, used client-side for the contiguity test.
-    // transform() returns an untyped computed object, so it must be cast back
-    // to ee.Geometry before coordinates() can be resolved.
-    var ctr = ee.Geometry(g.centroid(10).transform(PROJ, 1)).coordinates();
-    return ee.Feature(g).set({ cx: ctr.get(0), cy: ctr.get(1) });
+    // Centroid in plain lon/lat. transform() is deliberately NOT used here: it
+    // returns an untyped computed object that needs casting before coordinates()
+    // resolves, and it is a server-side operation this does not need. The
+    // degrees are converted to metres client-side (see toMetres below), which
+    // over a Beat-sized area is exact enough for an adjacency test.
+    var ctr = ee.Geometry(g.centroid(10)).coordinates();
+    return ee.Feature(g).set({ lon: ctr.get(0), lat: ctr.get(1) });
   });
 
 // RAW criterion values - normalization happens client-side once the audit has
@@ -1401,6 +1409,22 @@ var makeBlockStats = function (scale) {
   return blockInput.reduceRegions({
     collection: grid, reducer: blockReducer, scale: scale, tileScale: 8
   });
+};
+
+// Local equirectangular conversion for the contiguity test. Only DIFFERENCES
+// between nearby block centroids matter, and over a Beat-sized area this is
+// accurate to well under a metre - far finer than the 300 m block spacing it is
+// used to compare against.
+// Return null rather than NaN on a missing coordinate: the contiguity test
+// checks for null, and a NaN would silently make every distance comparison
+// false, quietly reporting every selected block as isolated.
+var toMetresY = function (lat) {
+  return (typeof lat === 'number' && isFinite(lat)) ? lat * 110574 : null;
+};
+var toMetresX = function (lon, lat) {
+  if (typeof lon !== 'number' || !isFinite(lon)) { return null; }
+  if (typeof lat !== 'number' || !isFinite(lat)) { return null; }
+  return lon * 111320 * Math.cos(lat * Math.PI / 180);
 };
 
 var pctOf = function (sorted, q) {
@@ -1575,7 +1599,7 @@ var processBlocks = function (fc, usedScale) {
     var nAnr = p.isAnr_sum || 0;
     blocks.push({
       id: r.idx + 1,
-      cx: p.cx, cy: p.cy,
+      cx: toMetresX(p.lon, p.lat), cy: toMetresY(p.lat),
       eligibleAreaHa: r.eligHa,
       totalAreaHa: r.totHa,
       eligibleFraction: r.eligHa / r.totHa,
