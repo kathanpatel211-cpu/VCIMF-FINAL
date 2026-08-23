@@ -244,6 +244,22 @@ var CONFIG = {
   exportFolder: 'BGDSS',
   exportPrefix: 'BGDSS_CAMPA_v5',
 
+  // ANR (Assisted Natural Regeneration) is NOT operational under CAMPA in
+  // Gujarat - only New Plantation is executed in the field. With this false,
+  // every eligible site is prescribed New Plantation and costed at the New
+  // Plantation rate, because prescribing an operation the division cannot carry
+  // out is worse than useless. The FSI canopy class is still reported, since it
+  // describes the site regardless of what is done to it.
+  // Set true only if ANR becomes operational.
+  anrOperational: false,
+
+  // How the eligible area is split into the five priority classes:
+  //   'quantile'      - equal NUMBER of blocks per class (each class ~20% of
+  //                     blocks). Guarantees a usable Priority 1 list. Default.
+  //   'equalInterval' - equal SCORE range per class. Class sizes then vary and
+  //                     reflect how the scores actually cluster.
+  priorityClassMethod: 'quantile',
+
   targetTreatmentAreaHa: 200,       // ASSUMPTION - replace with confirmed APO figure
   budgetINR: 12000000,              // ASSUMPTION - replace with confirmed ceiling (Rs 1.2 cr)
   minEligibleFrac: 0.30,            // drop blocks less than 30% treatable (fixes v4 area over-credit)
@@ -387,7 +403,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.2.0  (block-level CAMPA priority map + applied weight table)';
+var SCRIPT_BUILD = 'v5.3.0  (5 priority classes with area; New Plantation only)';
 
 // FSI canopy-density class thresholds. Declared here because the canopy fusion
 // in Section 4 needs them, which runs before the classification in Section 5.
@@ -1872,7 +1888,13 @@ var processBlocks = function (fc, usedScale) {
       eligibleAreaHa: r.eligHa,
       totalAreaHa: r.totHa,
       eligibleFraction: r.eligHa / r.totHa,
-      treatmentCode: (nNew === 0 && nAnr === 0) ? 0 : (nNew >= nAnr ? 1 : 2),
+      // With ANR non-operational every eligible block is New Plantation. The
+      // Scrub/Open split is still recorded (fsiMix) because it describes the
+      // site and drives planting density in the field, but it no longer
+      // prescribes a different operation.
+      treatmentCode: (nNew === 0 && nAnr === 0) ? 0
+        : (CONFIG.anrOperational ? (nNew >= nAnr ? 1 : 2) : 1),
+      fsiMix: (nNew + nAnr) > 0 ? (nNew / (nNew + nAnr)) : null,
       // Recovered from the criterion means rather than recomputed:
       // phenologicalAnomaly and erosionRisk ARE these raw values, and current
       // AGB is the reference minus the carbon gap.
@@ -2086,6 +2108,10 @@ var processBlocks = function (fc, usedScale) {
 
   // ---- TREATMENT LABEL + COST --------------------------------------------
   var TREATMENT_LABEL = { 0: 'Not Prioritized', 1: 'New Plantation', 2: 'ANR' };
+  if (!CONFIG.anrOperational) {
+    print('NOTE: ANR is set non-operational (CONFIG.anrOperational = false), so every');
+    print('      eligible block is prescribed New Plantation and costed at that rate.');
+  }
   blocks.forEach(function (b) {
     b.treatmentLabel = TREATMENT_LABEL[b.treatmentCode] || 'Not Prioritized';
     b.needsClearance = (b.phenoRaw != null && b.phenoRaw > 0.55 && b.treatmentCode > 0);
@@ -2114,6 +2140,58 @@ var processBlocks = function (fc, usedScale) {
     b.tCO2e = b.tCO2ePerHa * b.eligibleAreaHa;
     b.costPerTCO2e = b.tCO2e > 0 ? b.costINR / b.tCO2e : null;
   });
+
+  // ========================================================================
+  // PRIORITY CLASSIFICATION - the flagship output
+  // ========================================================================
+  // Every eligible block is assigned to one of five priority classes, so the
+  // WHOLE treatable area is accounted for, not only the slice that fits this
+  // year's target. Class 1 is the highest priority: a Forest Department reads
+  // "Priority 1" as "act first", so the numbering runs highest-first rather
+  // than following the score direction.
+  var PRIORITY_LABELS = {
+    1: 'Priority 1 - IMMEDIATE',
+    2: 'Priority 2 - High',
+    3: 'Priority 3 - Medium',
+    4: 'Priority 4 - Low',
+    5: 'Priority 5 - Deferred'
+  };
+
+  var byScoreDesc = blocks.slice().sort(function (x, y) { return y.wlc - x.wlc; });
+
+  if (CONFIG.priorityClassMethod === 'equalInterval') {
+    var sMin = byScoreDesc[byScoreDesc.length - 1].wlc;
+    var sMax = byScoreDesc[0].wlc;
+    var span = (sMax - sMin) || 1;
+    blocks.forEach(function (b) {
+      var t = (b.wlc - sMin) / span;                 // 0 worst .. 1 best
+      var cls = 5 - Math.min(4, Math.floor(t * 5));  // 1 best .. 5 worst
+      b.priorityClass = cls;
+    });
+  } else {
+    // Quantile: equal number of blocks per class, class 1 = top fifth.
+    byScoreDesc.forEach(function (b, i) {
+      b.priorityClass = Math.min(5, Math.floor(i / (byScoreDesc.length / 5)) + 1);
+    });
+  }
+
+  // Per-class totals. These are the numbers the Department plans against.
+  var classStats = {};
+  [1, 2, 3, 4, 5].forEach(function (k) {
+    classStats[k] = { n: 0, ha: 0, cost: 0, co2: 0, scoreMin: Infinity, scoreMax: -Infinity };
+  });
+  blocks.forEach(function (b) {
+    var cs = classStats[b.priorityClass];
+    cs.n += 1;
+    cs.ha += b.eligibleAreaHa;
+    cs.cost += b.costINR || 0;
+    cs.co2 += b.tCO2e || 0;
+    cs.scoreMin = Math.min(cs.scoreMin, b.wlc);
+    cs.scoreMax = Math.max(cs.scoreMax, b.wlc);
+    b.priorityLabel = PRIORITY_LABELS[b.priorityClass];
+  });
+
+  var grandHa = blocks.reduce(function (t, b) { return t + b.eligibleAreaHa; }, 0);
 
   // ---- BUDGET-CONSTRAINED SELECTION --------------------------------------
   // Forest departments have budget ceilings, not only area targets. Greedy by
@@ -2205,6 +2283,47 @@ var processBlocks = function (fc, usedScale) {
   print('  NOTE: this plan differs from the area-constrained one because it');
   print('  ranks by score PER RUPEE. Decide which constraint actually binds.');
   print('');
+  print('================================================================');
+  print('CAMPA PRIORITY CLASSES - the whole treatable area, ranked');
+  print('================================================================');
+  print('Method: ' + (CONFIG.priorityClassMethod === 'equalInterval'
+    ? 'equal score interval (class sizes reflect how scores cluster)'
+    : 'quantile (each class holds ~20% of blocks)'));
+  print('Treatment: ' + (CONFIG.anrOperational ? 'New Plantation / ANR as per canopy'
+                                               : 'New Plantation only (ANR non-operational)'));
+  print('');
+  print('  Class                      Blocks        Area(ha)    % of area          Cost(Rs)        tCO2e');
+  [1, 2, 3, 4, 5].forEach(function (k) {
+    var cs = classStats[k];
+    var pad = function (v, w) { v = String(v); while (v.length < w) { v = ' ' + v; } return v; };
+    var padR = function (v, w) { v = String(v); while (v.length < w) { v = v + ' '; } return v; };
+    print('  ' + padR(PRIORITY_LABELS[k], 24) +
+          pad(cs.n, 7) +
+          pad(cs.ha.toFixed(1), 14) +
+          pad(grandHa > 0 ? (cs.ha / grandHa * 100).toFixed(1) + '%' : '-', 12) +
+          pad(Math.round(cs.cost).toLocaleString('en-IN'), 18) +
+          pad(Math.round(cs.co2).toLocaleString('en-IN'), 13));
+  });
+  var padR2 = function (v, w) { v = String(v); while (v.length < w) { v = v + ' '; } return v; };
+  var pad2 = function (v, w) { v = String(v); while (v.length < w) { v = ' ' + v; } return v; };
+  print('  ' + padR2('TOTAL TREATABLE', 24) +
+        pad2(blocks.length, 7) +
+        pad2(grandHa.toFixed(1), 14) +
+        pad2('100.0%', 12) +
+        pad2(Math.round(blocks.reduce(function (t, b) { return t + (b.costINR || 0); }, 0)).toLocaleString('en-IN'), 18) +
+        pad2(Math.round(blocks.reduce(function (t, b) { return t + (b.tCO2e || 0); }, 0)).toLocaleString('en-IN'), 13));
+  print('');
+  print('  Score range per class:');
+  [1, 2, 3, 4, 5].forEach(function (k) {
+    var cs = classStats[k];
+    if (cs.n === 0) { print('    ' + PRIORITY_LABELS[k] + ' : (no blocks)'); return; }
+    print('    ' + PRIORITY_LABELS[k] + ' : ' + cs.scoreMin.toFixed(4) + ' - ' + cs.scoreMax.toFixed(4));
+  });
+  print('');
+  print('  Priority 1 is where to act first. Cost and tCO2e are per class, so a');
+  print('  multi-year programme can be phased straight off this table.');
+  print('  Rates are ASSUMPTIONS until the APO figures are confirmed.');
+  print('');
   print('--- CONFIDENCE ---');
   print('  ROBUST (top-ranked under WLC, WGM and TOPSIS alike) : ' + robustCnt + ' blocks');
   print('  Selected in >=90% of ' + CONFIG.mcRuns + ' weight-perturbation runs  : ' + highConf + ' of ' + selArea.length);
@@ -2253,6 +2372,8 @@ var processBlocks = function (fc, usedScale) {
   var rows = blocks.slice().sort(function (x, y) { return y.wlc - x.wlc; }).map(function (b) {
     var props = {
       'Block ID': b.id,
+      'Priority Class': b.priorityClass,
+      'Priority Label': b.priorityLabel,
       'Treatable Area (ha)': Number(b.eligibleAreaHa.toFixed(2)),
       'Eligible Fraction': Number(b.eligibleFraction.toFixed(3)),
       'Priority Score (WLC)': Number(b.wlc.toFixed(4)),
@@ -2312,6 +2433,28 @@ var processBlocks = function (fc, usedScale) {
     description: CONFIG.exportPrefix + '_CriterionAudit',
     folder: CONFIG.exportFolder,
     fileNamePrefix: CONFIG.exportPrefix + '_CriterionAudit',
+    fileFormat: 'CSV'
+  });
+
+  Export.table.toDrive({
+    collection: ee.FeatureCollection([1, 2, 3, 4, 5].map(function (k) {
+      var cs = classStats[k];
+      return ee.Feature(null, {
+        'Priority Class': k,
+        'Label': PRIORITY_LABELS[k],
+        'Blocks': cs.n,
+        'Treatable Area (ha)': Number(cs.ha.toFixed(2)),
+        'Share of Treatable Area (%)': grandHa > 0 ? Number((cs.ha / grandHa * 100).toFixed(2)) : 0,
+        'Estimated Cost (Rs)': Math.round(cs.cost),
+        'Sequestration (tCO2e)': Number(cs.co2.toFixed(1)),
+        'Score Min': cs.n ? Number(cs.scoreMin.toFixed(4)) : '',
+        'Score Max': cs.n ? Number(cs.scoreMax.toFixed(4)) : '',
+        'Treatment': CONFIG.anrOperational ? 'New Plantation / ANR' : 'New Plantation only'
+      });
+    })),
+    description: CONFIG.exportPrefix + '_PriorityClassSummary',
+    folder: CONFIG.exportFolder,
+    fileNamePrefix: CONFIG.exportPrefix + '_PriorityClassSummary',
     fileFormat: 'CSV'
   });
 
@@ -2471,18 +2614,48 @@ var processBlocks = function (fc, usedScale) {
   var bidList = blocks.map(function (b) { return b.bid; });
   var wlcList = blocks.map(function (b) { return b.wlc; });
   var selList = blocks.map(function (b) { return b.selectedArea ? 1 : 0; });
+  var clsList = blocks.map(function (b) { return b.priorityClass; });
+  var haList  = blocks.map(function (b) { return b.eligibleAreaHa; });
 
   var scoreDict = ee.Dictionary.fromLists(bidList, wlcList);
   var selDict   = ee.Dictionary.fromLists(bidList, selList);
+  var clsDict   = ee.Dictionary.fromLists(bidList, clsList);
+  var haDict    = ee.Dictionary.fromLists(bidList, haList);
   var scoredGrid = grid
     .filter(ee.Filter.inList('bid', bidList))
     .map(function (f) {
       var k = f.get('bid');
       return f.set({
         priority: ee.Number(scoreDict.get(k)),
+        priorityClass: ee.Number(clsDict.get(k)),
+        treatableHa: ee.Number(haDict.get(k)),
         selected: ee.Number(selDict.get(k))
       });
     });
+
+  // THE map. Priority 1 red = act first, 5 green = defer.
+  var CLASS_PALETTE = ['d7191c', 'fdae61', 'ffffbf', 'a6d96a', '1a9850'];
+  var classImg = scoredGrid.reduceToImage(['priorityClass'], ee.Reducer.first())
+                           .rename('priorityClass');
+  Map.addLayer(classImg, { min: 1, max: 5, palette: CLASS_PALETTE },
+    'CAMPA PRIORITY CLASS (1 = act first)', true);
+
+  try {
+    var pcLegend = ui.Panel({ style: { position: 'bottom-right', padding: '8px 15px' } });
+    pcLegend.add(ui.Label('CAMPA Priority Class',
+      { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
+    pcLegend.add(ui.Label(CONFIG.anrOperational ? 'New Plantation / ANR' : 'New Plantation only',
+      { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
+    [1, 2, 3, 4, 5].forEach(function (k) {
+      pcLegend.add(ui.Panel({
+        widgets: [ui.Label('', { backgroundColor: CLASS_PALETTE[k - 1], padding: '8px', margin: '0 0 4px 0' }),
+                  ui.Label(PRIORITY_LABELS[k] + '  (' + classStats[k].ha.toFixed(0) + ' ha)',
+                    { margin: '0 0 4px 6px', fontSize: '12px' })],
+        layout: ui.Panel.Layout.flow('horizontal')
+      }));
+    });
+    Map.add(pcLegend);
+  } catch (ePC) {}
 
   var blockPriorityImg = scoredGrid.reduceToImage(['priority'], ee.Reducer.first())
                                    .rename('blockPriority');
