@@ -387,7 +387,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.0.9  (no per-block geometry intersection; ROI size diagnostic)';
+var SCRIPT_BUILD = 'v5.0.10  (map layers restored and drawn immediately)';
 
 var roi = CONFIG.roi.geometry();
 var PROJ = 'EPSG:32643';
@@ -1447,6 +1447,61 @@ ee.Dictionary({ roiHa: roi.area(100).divide(1e4), blocks: grid.size() })
       warn('Very few blocks - check that CONFIG.roi points at the intended asset.');
     }
   });
+
+// ---- MAP LAYERS -----------------------------------------------------------
+// Added HERE, not inside the aggregation callback. None of these depends on the
+// audit or the ranking, so there is no reason to make the map wait for a chain
+// of server calls before it shows anything - only the Priority Score class
+// layer needs the audit, and that one is added later from its own callback.
+//
+// Most are added switched OFF: they are diagnostic layers, and turning them all
+// on at once produces an unreadable stack. Open the Layers control (top right of
+// the map) and tick the ones you want.
+Map.addLayer(ee.Image().byte().paint({ featureCollection: CONFIG.roi, color: 1, width: 3 }),
+  { palette: ['ff0000'] }, 'ROI boundary', true);
+Map.addLayer(treatment.selfMask(), { min: 1, max: 2, palette: ['1a9850', '2b83ba'] },
+  'Recommended Treatment (green=New Plantation, blue=ANR)', true);
+Map.addLayer(canopyDensity, { min: 0, max: 80, palette: ['ffffcc', '78c679', '006837'] },
+  'Current Canopy Density (%)', false);
+Map.addLayer(fsiClass, { min: 1, max: 4, palette: ['d73027', 'fee08b', '91cf60', '1a9850'] },
+  'FSI Canopy Class (current-data fused)', false);
+if (productivityTrendRaw) {
+  Map.addLayer(productivityTrendRaw, { min: -0.01, max: 0.01, palette: ['d73027', 'ffffbf', '1a9850'] },
+    'Land Productivity Trend (red=degrading, UNCCD 15.3.1)', false);
+}
+if (erosionRaw) {
+  Map.addLayer(erosionRaw, { min: 0, max: 40, palette: ['ffffcc', 'fd8d3c', 'bd0026'] },
+    'RUSLE Soil Loss (t/ha/yr)', false);
+}
+if (phenoAnomalyRaw) {
+  Map.addLayer(phenoAnomalyRaw.gt(0.55).selfMask(), { palette: ['ff00ff'] },
+    'Invasion candidate (PROXY - field-verify)', false);
+}
+if (twi) {
+  Map.addLayer(twi, { min: 3, max: 15, palette: ['ffffcc', '41b6c4', '253494'] },
+    'Topographic Wetness Index', false);
+}
+Map.addLayer(constraintMask.not().selfMask(), { palette: ['000000'] },
+  'Excluded by hard constraints', false);
+Map.addLayer(ee.Image().byte().paint({ featureCollection: grid, color: 1, width: 1 }),
+  { palette: ['ffffff'] }, 'Planning blocks (' + CONFIG.blockSizeM + ' m)', false);
+
+try {
+  var treatLegend = ui.Panel({ style: { position: 'bottom-left', padding: '8px 15px' } });
+  treatLegend.add(ui.Label('Recommended Treatment',
+    { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
+  treatLegend.add(ui.Label('(untinted = not eligible / excluded)',
+    { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
+  [['1a9850', 'New Plantation (Scrub, <10% canopy)'],
+   ['2b83ba', 'ANR (Open, 10-40% canopy)']].forEach(function (item) {
+    treatLegend.add(ui.Panel({
+      widgets: [ui.Label('', { backgroundColor: item[0], padding: '8px', margin: '0 0 4px 0' }),
+                ui.Label(item[1], { margin: '0 0 4px 6px', fontSize: '12px' })],
+      layout: ui.Panel.Layout.flow('horizontal')
+    }));
+  });
+  Map.add(treatLegend);
+} catch (eTL) {}
 
 var blockReducer = ee.Reducer.mean()
   .combine(ee.Reducer.count(), '', true)
