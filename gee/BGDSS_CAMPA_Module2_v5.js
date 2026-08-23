@@ -387,7 +387,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.1.0  (canopy fraction fix; eligibility diagnostic)';
+var SCRIPT_BUILD = 'v5.1.1  (DEM projection fix - slope was rejecting everything)';
 
 // FSI canopy-density class thresholds. Declared here because the canopy fusion
 // in Section 4 needs them, which runs before the classification in Section 5.
@@ -461,7 +461,11 @@ function distanceTo(sourceMask, maxDistM) {
   // is later sampled. Re-clipping to the ROI plus the maximum search radius
   // restores a finite footprint. Every pixel that can influence a distance
   // within maxDistM of the ROI is inside that halo, so nothing is lost.
-  var halo = roi.buffer(maxDistM + ds * 4);
+  // bounds() first: buffering a Beat boundary with hundreds of vertices is an
+  // expensive geometry operation, and this runs once per distance criterion.
+  // A buffered bounding box costs almost nothing and covers strictly more area,
+  // so no source pixel that could influence a distance is lost.
+  var halo = roi.bounds().buffer(maxDistM + ds * 4);
 
   // Cost scales with the neighbourhood, so size it to the reach actually needed
   // and round up to a power of two.
@@ -486,12 +490,39 @@ function invertedU(img, lo, opt, hi) {
 // ============================================================================
 // 1. TERRAIN - elevation, slope, ravine/gully detection
 // ============================================================================
-var dem = safeMosaic('JAXA/ALOS/AW3D30/V3_2', 'DSM', 'ALOS AW3D30 DEM');
+// mosaic() DISCARDS the projection, and ee.Terrain.slope() on a
+// projection-less image returns nonsense - it has no pixel size with which to
+// turn an elevation difference into a gradient. That is what made the slope
+// constraint reject 100% of the ROI, which emptied `treatment`, which emptied
+// the priority map. Reprojecting afterwards did not rescue it: the source was
+// already degenerate.
+//
+// SRTM is preferred because it is a single ee.Image carrying a proper 30 m
+// projection, so nothing can be lost. ALOS is a collection and must have its
+// projection restored explicitly with setDefaultProjection before any terrain
+// operation touches it.
+var demSource = 'none';
+var dem = safeImage('USGS/SRTMGL1_003', 'SRTM 30 m DEM');
+if (dem) {
+  dem = dem.rename('elevation');
+  demSource = 'SRTM GL1 (30 m)';
+} else {
+  var alosCol = safeCollection('JAXA/ALOS/AW3D30/V3_2', 'ALOS AW3D30');
+  if (alosCol) {
+    dem = alosCol.select('DSM').mosaic()
+            .setDefaultProjection(alosCol.first().projection())
+            .rename('elevation');
+    demSource = 'ALOS AW3D30 (30 m, projection restored)';
+  }
+}
+
 var slope = null, tpi = null, roughness = null;
 if (dem) {
-  dem = dem.clip(roi).rename('elevation').toFloat()
-           .resample('bilinear').reproject({ crs: PROJ, scale: CONFIG.perf.demScale });
-  slope = ee.Terrain.slope(dem).rename('slope');
+  // Slope is computed on the DEM's OWN projection. No reproject, no resample:
+  // both are how the projection gets lost in the first place.
+  dem = dem.toFloat();
+  slope = ee.Terrain.slope(dem).rename('slope').clip(roi);
+  dem = dem.clip(roi);
 
   // Topographic Position Index and roughness. Sabarkantha sits in the
   // Sabarmati ravine belt - deeply dissected ground is both an erosion
@@ -503,8 +534,8 @@ if (dem) {
     kernel: ee.Kernel.circle({ radius: 5, units: 'pixels' })
   }).rename('roughness');
 
-  prov('JAXA/ALOS/AW3D30/V3_2', 'DEM / slope / TPI / ravine', 30, '2006-2011', 'Tadono et al. 2014');
-  log('Terrain ready (DEM, slope, TPI, roughness)');
+  prov(demSource, 'DEM / slope / TPI / ravine', 30, '2000-2011', 'Farr et al. 2007 / Tadono et al. 2014');
+  log('Terrain ready (DEM, slope, TPI, roughness) - source: ' + demSource);
 } else {
   warn('No DEM. Slope-dependent criteria (workability, erosion, TWI) will be dropped by the audit.');
 }
@@ -625,15 +656,24 @@ if (dw && hansenCurrent) {
   // supplies CURRENCY only, as a bounded correction where the two disagree
   // strongly - it can veto canopy that is no longer there, and flag canopy that
   // has since grown, without its probability being read as a percentage.
+  // v5.1.0 capped canopy hard wherever Dynamic World reported low tree
+  // probability. Over a DRY DECIDUOUS landscape that is exactly backwards: the
+  // annual DW composite is dominated by leaf-off months, so genuine forest
+  // reports low tree probability and got capped into Scrub. The result was
+  // 11,205 ha of Scrub and zero hectares above 40% canopy across 118 km2 of
+  // hill forest - wrong in the opposite direction from the bug it replaced.
+  //
+  // Hansen's fraction is therefore used AS IS for magnitude. Dynamic World is
+  // reduced to what it can state reliably despite phenology: a pixel it is
+  // *confident* is trees is not bare ground, whatever a 2000 baseline said.
+  // Low tree probability is NOT evidence of absent canopy in a deciduous
+  // forest, so it no longer vetoes anything. Land-use exclusion (crops, built,
+  // water) is handled separately by plantableMask, where DW is reliable.
   var dwTrees = dw.select('trees');
-  var adjusted = hansenCurrent
-    // Confidently NOT trees now: cap canopy below the Open-forest ceiling.
-    .where(dwTrees.lt(0.20), hansenCurrent.min(C.scrubMax))
-    .where(dwTrees.gte(0.20).and(dwTrees.lt(0.40)), hansenCurrent.min(C.openMax - 5))
-    // Confidently trees now: do not let a stale 2000 baseline call it bare.
-    .where(dwTrees.gt(0.80), hansenCurrent.max(C.openMax + 10));
-  canopyDensity = adjusted.clamp(0, 100).rename('canopyDensity');
-  canopySource = 'Hansen canopy fraction (loss/gain updated), corrected by Dynamic World currency';
+  canopyDensity = hansenCurrent
+    .where(dwTrees.gt(0.80).and(hansenCurrent.lt(C.scrubMax)), C.scrubMax + 5)
+    .clamp(0, 100).rename('canopyDensity');
+  canopySource = 'Hansen canopy fraction (loss/gain updated), regrowth lift from Dynamic World';
 } else if (dw && !hansenCurrent) {
   // No calibrated fraction available. DW probability is the only signal, but it
   // must not be read as a percentage - map it onto FSI bands by class instead.
@@ -1053,7 +1093,7 @@ if (forestMask) {
   // the image, and a 1 km focal mean over an unbounded surface is not a Beat's
   // worth of work. The halo covers every patch that can influence connectivity
   // within reach of the ROI.
-  var patchHalo = roi.buffer(2000);
+  var patchHalo = roi.bounds().buffer(2000);
   var patchAreaHa = patchPixels.multiply(ps * ps / 1e4).unmask(0).clip(patchHalo);
   var habitatNearby = patchAreaHa.focal_mean({ radius: 1000, kernelType: 'circle', units: 'meters' })
                                  .clip(roi);
@@ -1492,13 +1532,34 @@ ee.Dictionary({ roiHa: roi.area(100).divide(1e4), blocks: grid.size() })
     bands.push(haImg.updateMask(fsiClass.lte(2).and(dw.select('bare').lt(0.55))).rename('passBare'));
     bands.push(haImg.updateMask(fsiClass.lte(2).and(dw.select('trees').lt(CONFIG.constraints.minTreeProbExclude))).rename('passTreeProb'));
   }
-  ee.Image.cat(bands).reduceRegion({
+  // Distribution bands are reduced with percentile, area bands with sum, so
+  // the two reducers run over their own band sets and are merged.
+  var distBands = [canopyDensity.rename('canopyPct')];
+  if (slope) { distBands.push(slope.rename('slopeDeg')); }
+  var areaStats = ee.Image.cat(bands).reduceRegion({
     reducer: ee.Reducer.sum(), geometry: roi, scale: 60,
     maxPixels: 1e10, bestEffort: true, tileScale: 8
-  }).evaluate(function (d, err) {
+  });
+  var distStats = ee.Image.cat(distBands).reduceRegion({
+    reducer: ee.Reducer.percentile([5, 25, 50, 75, 95]), geometry: roi, scale: 60,
+    maxPixels: 1e10, bestEffort: true, tileScale: 8
+  });
+  areaStats.combine(distStats).evaluate(function (d, err) {
     if (err || !d) { warn('Eligibility diagnostic unavailable (' + err + ').'); return; }
     var r = function (k) { return Math.round(d[k] || 0); };
     var fmt = function (k) { return r(k).toLocaleString('en-IN') + ' ha'; };
+    print('---- CANOPY DISTRIBUTION (source: ' + canopySource + ') ----');
+    print('  canopy % at 5/25/50/75/95th percentile: ' +
+          [5, 25, 50, 75, 95].map(function (q) {
+            var v = d['canopyPct_p' + q];
+            return (v === null || v === undefined) ? 'n/a' : Number(v).toFixed(1);
+          }).join(' / '));
+    print('  slope deg at 5/50/95th percentile: ' +
+          [5, 50, 95].map(function (q) {
+            var v = d['slopeDeg_p' + q];
+            return (v === null || v === undefined) ? 'n/a' : Number(v).toFixed(1);
+          }).join(' / ') +
+          '   (if these are absurd, the DEM projection is wrong)');
     print('---- ELIGIBILITY FUNNEL (where the land goes) ----');
     print('  FSI 1 Scrub        (<10% canopy) : ' + fmt('fsi1_scrub'));
     print('  FSI 2 Open       (10-40% canopy) : ' + fmt('fsi2_open'));
