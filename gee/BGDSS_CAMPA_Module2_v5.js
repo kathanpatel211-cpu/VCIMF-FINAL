@@ -387,7 +387,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.0.8  (grouped aggregation; graded degradation on failure)';
+var SCRIPT_BUILD = 'v5.0.9  (no per-block geometry intersection; ROI size diagnostic)';
 
 var roi = CONFIG.roi.geometry();
 var PROJ = 'EPSG:32643';
@@ -1367,20 +1367,28 @@ if (!eligibleMask || active.length === 0) {
 //   be fitted to the values actually being compared. Pixel-level coverage is
 //   still measured exactly, via the per-band valid-pixel counts.
 // ============================================================================
+// NO per-feature intersection with the ROI. f.intersection(roi, 1) ran a
+// geometry intersection against the ROI polygon for EVERY block at 1 m
+// precision; against a real Beat boundary with many vertices, over thousands of
+// blocks, that is enormous work carried by every single call - including the
+// cheap block-areas one. It was also unnecessary: the ROI clip lives on the
+// IMAGE side (eligibleMask is clipped to roi, and totalAreaHa is clip(roi)), so
+// a block straddling the boundary already reports only the area inside it.
+// Square blocks, filtered to those that touch the ROI, give identical numbers
+// for a fraction of the cost.
+//
+// bid is the join key: each criterion group is reduced over this same grid in a
+// separate call and merged client-side on bid. Feature ORDER is not guaranteed
+// across calls, so an explicit key is required - an index would silently
+// mismatch.
 var grid = roi.coveringGrid(PROJ, CONFIG.blockSizeM)
+  .filterBounds(roi)
   .map(function (f) {
-    var g = f.intersection(roi, 1);
-    // Centroid in plain lon/lat. transform() is deliberately NOT used here: it
-    // returns an untyped computed object that needs casting before coordinates()
-    // resolves, and it is a server-side operation this does not need. The
-    // degrees are converted to metres client-side (see toMetres below), which
-    // over a Beat-sized area is exact enough for an adjacency test.
-    var ctr = ee.Geometry(g.centroid(10)).coordinates();
-    // bid is the join key: each criterion group is reduced over this same grid
-    // in a separate call, and the results are merged client-side by bid.
-    // Feature ORDER is not guaranteed across calls, so an explicit key is
-    // required - an array index would silently mismatch.
-    return ee.Feature(g).set({ bid: f.get('system:index'), lon: ctr.get(0), lat: ctr.get(1) });
+    // Centroid of the square: cheap, and transform() is deliberately avoided
+    // (it returns an untyped object needing a cast). Degrees are converted to
+    // metres client-side, which over a Beat is exact enough for adjacency.
+    var ctr = ee.Geometry(f.geometry().centroid(50)).coordinates();
+    return f.set({ bid: f.get('system:index'), lon: ctr.get(0), lat: ctr.get(1) });
   });
 
 // Criteria are reduced in GROUPS, not all at once. Coarsening the scale from
@@ -1418,6 +1426,28 @@ var maskedExtras = [
 // treatment-class pixel counts. All three are cheap. (mode() is deliberately
 // absent: it is costly on float bands, and the treatment class is recovered
 // from the isNewPlantation/isAnr pixel sums instead.)
+// ---- ROI diagnostic -------------------------------------------------------
+// Printed early and asynchronously, because how big the ROI is and how many
+// blocks it produces determines whether anything else can work, and nothing so
+// far has reported it. A Beat should be a few hundred to a few thousand blocks.
+// Tens of thousands means the asset is a Range or a Division, and every setting
+// in CONFIG is sized for the wrong thing.
+ee.Dictionary({ roiHa: roi.area(100).divide(1e4), blocks: grid.size() })
+  .evaluate(function (d, dErr) {
+    if (dErr || !d) { warn('Could not measure the ROI (' + dErr + ').'); return; }
+    var ha = d.roiHa, nb = d.blocks;
+    print('ROI: ' + Math.round(ha).toLocaleString('en-IN') + ' ha (' +
+          (ha / 100).toFixed(1) + ' km2)  ->  ' + nb + ' planning blocks of ' +
+          CONFIG.blockSizeM + ' m');
+    if (nb > 20000) {
+      warn('That is a very large number of blocks. This is sized for a Beat. If the asset is a');
+      warn('Range or Division, raise CONFIG.blockSizeM (300 -> 1000 gives ~11x fewer blocks)');
+      warn('or run one Beat at a time - otherwise expect memory failures whatever else is tuned.');
+    } else if (nb < 5) {
+      warn('Very few blocks - check that CONFIG.roi points at the intended asset.');
+    }
+  });
+
 var blockReducer = ee.Reducer.mean()
   .combine(ee.Reducer.count(), '', true)
   .combine(ee.Reducer.sum(), '', true);
