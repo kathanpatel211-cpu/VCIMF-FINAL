@@ -180,6 +180,14 @@
  *  depending on what exists. If you add code, never put getInfo() in a loop.
  *
  *  Memory error: too much computation materialised at once. Tune below.
+ *
+ *  The single biggest cost lever in Earth Engine is reproject(). It PINS
+ *  computation to the scale you give it, everywhere downstream, OVERRIDING the
+ *  scale a reducer or sample asks for. Reprojecting anything to 10 m forces its
+ *  whole upstream chain to run at 10 m no matter how coarsely you later sample.
+ *  Every reproject() here is set at or near its source data's NATIVE resolution
+ *  (see CONFIG.perf) - never finer, which would only invent detail that is not
+ *  in the data while multiplying the work. If you add one, do the same.
  * ----------------------------------------------------------------------------
  *  Every criterion here is a computation chain, not a stored raster: a
  *  whole-ROI statistic re-evaluates 25 years of Landsat Theil-Sen, three years
@@ -269,7 +277,15 @@ var CONFIG = {
   // Distance transforms and patch analysis are computed at a coarser scale than
   // CONFIG.scale. Both are spatially smooth, so this costs nothing meaningful
   // in accuracy and is the difference between running and not running.
+  // reproject() PINS computation to the given scale everywhere downstream - it
+  // overrides the scale a reducer or sample asks for. Reprojecting anything to
+  // 10 m therefore forces its whole upstream chain to run at 10 m no matter how
+  // coarsely you later sample it. Each of these is set at or near the source
+  // data's NATIVE resolution, so nothing is resampled up to invent detail that
+  // does not exist.
   perf: {
+    demScale: 30,                   // ALOS AW3D30 is 30 m native - do not pin finer
+    forestScale: 30,                // canopy/forest-mask working scale
     distanceScale: 30,              // distance-transform working scale (m)
     patchScale: 60,                 // connectivity/patch working scale (m)
     vizScale: 30                    // scale for the display quintile breaks
@@ -434,7 +450,12 @@ function safeFC(id, label) {
 // maximum distance needed instead of a blanket 1024.
 function distanceTo(sourceMask, maxDistM) {
   var ds = CONFIG.perf.distanceScale;
-  var neighborhood = Math.min(1024, Math.max(32, Math.ceil((maxDistM / ds) * 1.5)));
+  // fastDistanceTransform cost scales with the neighbourhood, so size it to the
+  // reach actually needed and round UP to a power of two (the algorithm halves
+  // repeatedly; a non-power-of-two is rounded up internally anyway).
+  var needed = Math.ceil(maxDistM / ds);
+  var neighborhood = 32;
+  while (neighborhood < needed && neighborhood < 1024) { neighborhood *= 2; }
   var m = sourceMask.unmask(0).reproject({ crs: PROJ, scale: ds });
   return m.fastDistanceTransform(neighborhood).sqrt()
           .multiply(ds).clamp(0, maxDistM);
@@ -455,7 +476,7 @@ var dem = safeMosaic('JAXA/ALOS/AW3D30/V3_2', 'DSM', 'ALOS AW3D30 DEM');
 var slope = null, tpi = null, roughness = null;
 if (dem) {
   dem = dem.clip(roi).rename('elevation').toFloat()
-           .resample('bilinear').reproject({ crs: PROJ, scale: CONFIG.scale });
+           .resample('bilinear').reproject({ crs: PROJ, scale: CONFIG.perf.demScale });
   slope = ee.Terrain.slope(dem).rename('slope');
 
   // Topographic Position Index and roughness. Sabarkantha sits in the
@@ -957,10 +978,14 @@ if (forestMask) {
   // is the proportion of edge in a neighbourhood - a real landscape metric,
   // structurally independent of distance-to-forest. Section 14 verifies that
   // independence rather than assuming it.
-  var fm = forestMask.reproject({ crs: PROJ, scale: CONFIG.scale });
+  // At CONFIG.perf.forestScale, not CONFIG.scale: pinning this to 10 m forced
+  // the entire Dynamic World + Hansen canopy fusion to recompute at 10 m across
+  // the whole focal neighbourhood, regardless of the scale the audit sampled at.
+  // Radii are in METRES so they mean the same thing whatever the working scale.
+  var fm = forestMask.reproject({ crs: PROJ, scale: CONFIG.perf.forestScale });
   var isEdge = fm.focal_max(1, 'square', 'pixels')
                  .neq(fm.focal_min(1, 'square', 'pixels'));
-  edgeDensityRaw = isEdge.focal_mean({ radius: 15, kernelType: 'circle', units: 'pixels' })
+  edgeDensityRaw = isEdge.focal_mean({ radius: 150, kernelType: 'circle', units: 'meters' })
                          .rename('edgeDensity');
   log('Edge density computed (genuine landscape metric, replaces v4 forest-proportion proxy)');
 
@@ -1366,9 +1391,11 @@ var auditOneByOne = function (batch, j, done) {
     if (err || !fc) {
       c.auditFailed = true;
       auditFailed.push(c.name);
+      warn('    ' + c.name + ' could not be evaluated on its own either - dropping it.');
     } else {
       c.sampleRows = extractRows(fc);
       nEligible = Math.max(nEligible, c.sampleRows.length);
+      print('    ' + c.name + ' OK on retry (' + c.sampleRows.length + ' pts)');
     }
     auditOneByOne(batch, j + 1, done);
   });
@@ -1388,6 +1415,8 @@ var runAuditBatch = function (i, done) {
     var rows = extractRows(fc);
     batch.forEach(function (c) { c.sampleRows = rows; });
     nEligible = Math.max(nEligible, rows.length);
+    print('  batch ' + (i + 1) + '/' + auditBatches.length + ' OK (' + rows.length + ' pts): ' +
+          batch.map(function (c) { return c.name; }).join(', '));
     runAuditBatch(i + 1, done);
   });
 };

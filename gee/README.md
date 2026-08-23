@@ -219,3 +219,16 @@ Yamazaki et al. 2019 (MERIT Hydro) · Zanaga et al. 2022 (ESA WorldCover) ·
 UNCCD Good Practice Guidance for SDG Indicator 15.3.1 (2021) ·
 FSI India State of Forest Report (canopy-density classes) ·
 IPCC 2019 Refinement to the 2006 Guidelines, Vol. 4 Ch. 4
+
+### A note on `reproject()`
+
+The single biggest cost lever in Earth Engine. It **pins** computation to the
+scale you give it, everywhere downstream, *overriding* the scale a reducer or
+`sample` asks for. Reprojecting anything to 10 m forces its entire upstream
+chain to run at 10 m however coarsely you later sample it.
+
+Every `reproject()` in this script is set at or near its source data's **native**
+resolution (see `CONFIG.perf`) — never finer, which would only invent detail
+that isn't in the data while multiplying the work. ALOS is 30 m, so the DEM is
+pinned at 30 m; the canopy fusion drives the forest mask at 30 m; patch
+connectivity runs at 60 m. If you add a `reproject()`, do the same.
