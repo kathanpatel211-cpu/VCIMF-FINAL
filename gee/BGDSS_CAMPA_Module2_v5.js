@@ -132,6 +132,22 @@
  * ----------------------------------------------------------------------------
  *  KNOWN LIMITS - STATE THESE, DO NOT LET A REVIEWER FIND THEM
  * ----------------------------------------------------------------------------
+ *  - CANOPY MAGNITUDE USES FIXED NDVI ANCHORS (NDVI_SOIL=0.12, NDVI_VEG=0.62,
+ *    Section 4), not a per-ROI stretch, so the % canopy figure is comparable
+ *    across Beats/Ranges on an FSI-style absolute scale rather than being
+ *    relative to whatever green exists in one ROI. The anchors are
+ *    literature-typical for post-monsoon semi-arid dry-deciduous forest, NOT
+ *    locally calibrated. Field-verify (or check against the latest ISFR) a
+ *    handful of Scrub/Open/Moderately-Dense plots before quoting the absolute
+ *    percentage; the FSI CLASS BOUNDARY each pixel falls in is far more robust
+ *    than the exact %, since the classes are wide (0-10 / 10-40 / 40-70 / 70+).
+ *    Hansen GFC treecover2000 was tried first and rejected as the magnitude
+ *    source: on this ROI it returned a median canopy of ~0% and a 95th
+ *    percentile of ~4% across visibly forested hills - Hansen's classifier is
+ *    trained mainly on humid/evergreen canopy and is a documented poor fit for
+ *    Indian dry-deciduous/thorn forest. It remains available for the
+ *    validation back-test's gain/loss signal, which is a different, more
+ *    robust use of the same dataset.
  *  - EFFECTIVE RESOLUTION IS NOT 10 m. Inputs range from 10 m (Sentinel-2,
  *    Dynamic World) to 250 m (SoilGrids) to 5566 m (CHIRPS) to 25 km (CMIP6).
  *    CONFIG.scale is the OUTPUT grid, not the information content. Section 21
@@ -403,7 +419,7 @@ var CONFIG = {
   contiguity: { enable: true, minClusterBlocks: 3 }
 };
 
-var SCRIPT_BUILD = 'v5.3.0  (5 priority classes with area; New Plantation only)';
+var SCRIPT_BUILD = 'v5.4.0  (post-monsoon FSI-consistent canopy fraction)';
 
 // FSI canopy-density class thresholds. Declared here because the canopy fusion
 // in Section 4 needs them, which runs before the classification in Section 5.
@@ -634,77 +650,103 @@ if (dw) {
 if (plantableMask) { plantableMask = plantableMask.clip(roi); }
 
 // ============================================================================
-// 4. CURRENT CANOPY DENSITY - the backbone. v4 used a year-2000 layer here.
-//    Fused: Dynamic World tree probability (current, 10 m)
-//         + Hansen treecover2000 rolled forward through lossyear/gain (30 m)
-//         + Meta 1 m canopy height where available (cross-check only)
+// 4. CURRENT CANOPY DENSITY - the backbone.
+//    FSI-CONSISTENT: post-monsoon (peak-greenness) Sentinel-2 fractional
+//    vegetation cover, the same season India's own State of Forest Report
+//    canopy-density interpretation is built from. See the note below for why
+//    this replaced Hansen as the primary magnitude source.
 // ============================================================================
-var hansen = safeImage('UMD/hansen/global_forest_change_2023_v1_11', 'Hansen GFC 2023 v1.11');
 var canopyDensity = null, canopySource = 'none';
 
-var hansenCurrent = null;
-if (hansen) {
-  var tc2000   = hansen.select('treecover2000');
-  var lossYear = hansen.select('lossyear');       // 1..23 => 2001..2023
-  var gain     = hansen.select('gain');
-  // Roll the 2000 baseline forward: anywhere loss was recorded, canopy goes
-  // to ~0; anywhere gain was recorded and baseline was low, lift toward the
-  // Open-forest floor. Crude but far better than pretending it is still 2000.
-  hansenCurrent = tc2000
-    .where(lossYear.gt(0), 0)
-    .where(gain.eq(1).and(tc2000.lt(CONFIG.fsiCanopyClasses.openMax)),
-           tc2000.max(CONFIG.fsiCanopyClasses.scrubMax + 5))
-    .resample('bilinear').clip(roi).rename('canopyHansen');
-  prov('UMD/hansen/global_forest_change_2023_v1_11', 'Canopy baseline + loss/gain', 30, '2000-2023', 'Hansen et al. 2013');
+// Fetched unconditionally: gain/loss/treecover2000 remain useful for the
+// satellite-only validation back-test (Section 20) even though treecover2000
+// is no longer trusted as the canopy MAGNITUDE for this forest type (see
+// below). Independent of which canopy source ends up primary.
+var hansen = safeImage('UMD/hansen/global_forest_change_2023_v1_11', 'Hansen GFC 2023 v1.11');
+
+// ---- WHY HANSEN WAS DROPPED AS THE MAGNITUDE SOURCE ------------------------
+// The first run against this ROI returned canopy at the 5/25/50/75/95th
+// percentile of 0.0 / 0.0 / 0.0 / 1.0 / 4.0 % - essentially zero, across hills
+// that are visibly under dense tree cover in the basemap imagery. That is not
+// a real forest condition. Hansen GFC's treecover2000 is calibrated primarily
+// against humid/evergreen canopy and is a well-documented poor fit for Indian
+// dry-deciduous and thorn forest (the Aravalli tract this ROI sits in): the
+// same physical canopy that reads as dense on optical imagery in the
+// post-monsoon season reads as sparse to Hansen's classifier, because its
+// training data under-represents this forest type. Using it as the magnitude
+// source is what put ~11,200 of ~11,340 eligible hectares into Scrub and drove
+// the eligibility funnel and every downstream map from a false premise.
+//
+// FSI's OWN methodology does not use Hansen at all. The India State of Forest
+// Report interprets POST-MONSOON satellite imagery (roughly October-December),
+// the one window in this deciduous landscape where canopy is fullest and most
+// separable from bare ground. This section reproduces that logic: Fractional
+// Vegetation Cover (Carlson & Ripley 1997) from post-monsoon Sentinel-2 NDVI.
+//    FVC = ((NDVI - NDVI_soil) / (NDVI_veg - NDVI_soil))^2
+// NDVI_soil / NDVI_veg are fixed anchors for this forest type and season
+// (semi-arid dry-deciduous, post-monsoon), not a per-ROI stretch: canopy
+// density is compared against an absolute FSI-style scale, not against
+// whatever range of green happens to exist inside one Beat. VERIFY against a
+// handful of field/Google Earth plots before relying on the absolute % - the
+// anchors are literature-typical, not locally calibrated.
+var s2ForCanopy = safeCollection('COPERNICUS/S2_SR_HARMONIZED', 'Sentinel-2 (canopy)');
+var csForCanopy = safeCollection('GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED', 'Cloud Score+ (canopy)');
+var postMonsoonNdvi = null;
+
+if (s2ForCanopy) {
+  var s2cRange = s2ForCanopy.filterBounds(roi)
+    .filterDate(ee.Date.fromYMD(CONFIG.year - 3, 1, 1), yEnd)
+    .filter(ee.Filter.calendarRange(10, 12, 'month'));   // Oct-Dec, FSI's window
+  if (csForCanopy) { s2cRange = s2cRange.linkCollection(csForCanopy, ['cs_cdf']); }
+
+  var maskCanopyScene = function (img) {
+    var masked = csForCanopy
+      ? img.updateMask(img.select('cs_cdf').gte(0.60))
+      : img.updateMask(img.select('SCL').neq(3).and(img.select('SCL').neq(8))
+            .and(img.select('SCL').neq(9)).and(img.select('SCL').neq(10)).and(img.select('SCL').neq(11)));
+    return masked.divide(10000);
+  };
+  var postMonsoonComposite = s2cRange.map(maskCanopyScene).median().clip(roi);
+  postMonsoonNdvi = postMonsoonComposite.normalizedDifference(['B8', 'B4']).rename('postMonsoonNdvi');
+  prov('COPERNICUS/S2_SR_HARMONIZED', 'Post-monsoon (Oct-Dec) canopy fraction, FSI-consistent window', 10,
+       (CONFIG.year - 3) + '-' + CONFIG.year + ' Oct-Dec composite', 'FSI SFR methodology; Carlson & Ripley 1997');
 }
 
-if (dw && hansenCurrent) {
-  // CATEGORY ERROR FIXED IN v5.1.0.
-  // Dynamic World's `trees` band is the PROBABILITY that a pixel is labelled
-  // trees. It is NOT canopy cover fraction. Earlier builds multiplied it by 100
-  // and fed it to the FSI thresholds, so confidently-forested hills came back at
-  // 50-80 "percent canopy" and landed in FSI class 3 (Moderately Dense), which
-  // is not eligible for treatment. With the plains excluded as cropland, that
-  // left almost nothing eligible anywhere - an empty Recommended Treatment map.
-  //
-  // Hansen treecover2000 IS a calibrated canopy fraction, so it supplies the
-  // MAGNITUDE (rolled forward through loss/gain for currency). Dynamic World
-  // supplies CURRENCY only, as a bounded correction where the two disagree
-  // strongly - it can veto canopy that is no longer there, and flag canopy that
-  // has since grown, without its probability being read as a percentage.
-  // v5.1.0 capped canopy hard wherever Dynamic World reported low tree
-  // probability. Over a DRY DECIDUOUS landscape that is exactly backwards: the
-  // annual DW composite is dominated by leaf-off months, so genuine forest
-  // reports low tree probability and got capped into Scrub. The result was
-  // 11,205 ha of Scrub and zero hectares above 40% canopy across 118 km2 of
-  // hill forest - wrong in the opposite direction from the bug it replaced.
-  //
-  // Hansen's fraction is therefore used AS IS for magnitude. Dynamic World is
-  // reduced to what it can state reliably despite phenology: a pixel it is
-  // *confident* is trees is not bare ground, whatever a 2000 baseline said.
-  // Low tree probability is NOT evidence of absent canopy in a deciduous
-  // forest, so it no longer vetoes anything. Land-use exclusion (crops, built,
-  // water) is handled separately by plantableMask, where DW is reliable.
-  var dwTrees = dw.select('trees');
-  canopyDensity = hansenCurrent
-    .where(dwTrees.gt(0.80).and(hansenCurrent.lt(C.scrubMax)), C.scrubMax + 5)
-    .clamp(0, 100).rename('canopyDensity');
-  canopySource = 'Hansen canopy fraction (loss/gain updated), regrowth lift from Dynamic World';
-} else if (dw && !hansenCurrent) {
-  // No calibrated fraction available. DW probability is the only signal, but it
-  // must not be read as a percentage - map it onto FSI bands by class instead.
-  var dwT = dw.select('trees');
-  canopyDensity = ee.Image(0)
-    .where(dwT.gte(0.20), C.scrubMax + 5)
-    .where(dwT.gte(0.40), C.openMax + 10)
-    .where(dwT.gte(0.70), C.moderatelyDenseMax + 10)
-    .rename('canopyDensity');
-  canopySource = 'Dynamic World class bands only (NO calibrated canopy fraction - indicative)';
-  warn('No Hansen canopy fraction. FSI classes are inferred from Dynamic World probability bands and are indicative only.');
-} else if (hansenCurrent) {
-  canopyDensity = hansenCurrent.rename('canopyDensity');
-  canopySource = 'Hansen 2000 baseline updated by loss/gain (NO current-year data - treat FSI classes as indicative)';
-  warn('No Dynamic World. Canopy is Hansen-derived only; treatment decisions rest on a 30 m, largely year-2000 layer.');
+var NDVI_SOIL = 0.12;   // bare/sparse ground, post-monsoon, semi-arid - literature-typical
+var NDVI_VEG  = 0.62;   // dense dry-deciduous canopy ceiling, post-monsoon - literature-typical
+
+if (postMonsoonNdvi) {
+  var fvc = postMonsoonNdvi.subtract(NDVI_SOIL).divide(NDVI_VEG - NDVI_SOIL).clamp(0, 1).pow(2);
+  canopyDensity = fvc.multiply(100).rename('canopyDensity');
+  canopySource = 'Post-monsoon (Oct-Dec) Sentinel-2 fractional vegetation cover - FSI-consistent season';
+  log('Canopy density computed from post-monsoon (Oct-Dec) NDVI, FSI-consistent window');
+} else {
+  // Fallback chain only if Sentinel-2 is unavailable for this ROI. Hansen
+  // rolled forward is the first fallback (documented as unreliable for this
+  // forest type above, but better than nothing); Dynamic World class bands are
+  // the last resort and are explicitly indicative, not a percentage.
+  if (hansen) {
+    var tc2000   = hansen.select('treecover2000');
+    var lossYear = hansen.select('lossyear');
+    var gain     = hansen.select('gain');
+    canopyDensity = tc2000
+      .where(lossYear.gt(0), 0)
+      .where(gain.eq(1).and(tc2000.lt(CONFIG.fsiCanopyClasses.openMax)),
+             tc2000.max(CONFIG.fsiCanopyClasses.scrubMax + 5))
+      .resample('bilinear').clip(roi).rename('canopyDensity');
+    canopySource = 'Hansen treecover2000 (loss/gain updated) - FALLBACK, documented poor fit for dry-deciduous forest, VERIFY';
+    warn('No Sentinel-2 for the post-monsoon window - falling back to Hansen, which under-reports canopy in dry-deciduous forest (see header). Treat FSI classes as indicative until Sentinel-2 is available.');
+    prov('UMD/hansen/global_forest_change_2023_v1_11', 'Canopy fallback (see reliability note)', 30, '2000-2023', 'Hansen et al. 2013');
+  } else if (dw) {
+    var dwT = dw.select('trees');
+    canopyDensity = ee.Image(0)
+      .where(dwT.gte(0.20), C.scrubMax + 5)
+      .where(dwT.gte(0.40), C.openMax + 10)
+      .where(dwT.gte(0.70), C.moderatelyDenseMax + 10)
+      .rename('canopyDensity');
+    canopySource = 'Dynamic World class bands only (NO calibrated canopy fraction - indicative)';
+    warn('Neither Sentinel-2 nor Hansen available. FSI classes are inferred from Dynamic World bands and are indicative only.');
+  }
 }
 
 // Meta 1 m canopy height - cross-check only, not fused (community asset, and

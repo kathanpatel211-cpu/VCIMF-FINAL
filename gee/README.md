@@ -75,6 +75,40 @@ worth, and no sampling scale rescues it.
 Every `unmask()` in this script is followed by a `.clip()` to the ROI plus
 whatever halo the operation needs to reach. If you add one, do the same.
 
+### Canopy density: post-monsoon Sentinel-2, not Hansen
+
+The primary run against Sabarkantha returned canopy at the 5/25/50/75/95th
+percentile of **0.0 / 0.0 / 0.0 / 1.0 / 4.0 %** — across hills visibly under
+dense tree cover in the basemap. That is not a real forest condition. Hansen
+GFC's `treecover2000` is calibrated primarily against humid/evergreen canopy
+and is a documented poor fit for Indian dry-deciduous/thorn forest (the
+Aravalli tract this pilot sits in): the same canopy that reads as dense on
+optical imagery in the post-monsoon season reads as sparse to Hansen's
+classifier.
+
+FSI's own methodology doesn't use Hansen at all — the India State of Forest
+Report interprets **post-monsoon** satellite imagery (roughly October–December),
+the one window in this deciduous landscape where canopy is fullest and most
+separable from bare ground. Canopy density is now built the same way: Fractional
+Vegetation Cover (Carlson & Ripley 1997) from post-monsoon Sentinel-2 NDVI,
+
+```
+FVC = ((NDVI - NDVI_soil) / (NDVI_veg - NDVI_soil))^2
+```
+
+with fixed anchors (`NDVI_SOIL = 0.12`, `NDVI_VEG = 0.62`) typical of semi-arid
+dry-deciduous forest in this season — not a per-ROI stretch, so the % is
+comparable across Beats on an FSI-style absolute scale. **Field-verify a handful
+of plots against these anchors before quoting the absolute percentage**; the FSI
+*class boundary* a pixel falls in is far more robust than the exact number,
+since the classes are wide (0–10 / 10–40 / 40–70 / 70+%).
+
+Hansen remains in use for the satellite-only validation back-test's gain/loss
+signal — a different, more robust use of the same dataset than reading its
+canopy fraction directly. If Sentinel-2 is unavailable for an ROI, the script
+falls back to Hansen (with an explicit reliability warning), then to Dynamic
+World class bands as a last resort.
+
 ### Land productivity trend window
 
 Defaults to **Landsat 8/9, 2013–present**. This is both far cheaper and
