@@ -26,7 +26,14 @@
 // "Property names" line in the Console, then set BEAT_ID_FIELD below to the
 // real beat-name/ID field on the BEAT asset (Section 2.1).
 var RUN_SCHEMA_CHECK_ONLY = false;
-var BEAT_ID_FIELD = 'BEAT_NAME'; // [VERIFY]
+// Confirmed against the live asset schema (Aug 2026 run): properties are
+// FolderPa_1, FolderPath, Shape_Le_1, Join_Count, TARGET_FID, SymbolID_1,
+// Name, OID_, Shape_Leng, PopupInfo_, Shape_Area, Name_1, system:index,
+// SymbolID. No field is literally named "beat" — 'Name' is used as the beat
+// identifier since it's the primary attribute field (Name_1 looks like a
+// second field carried over from an ArcGIS table join). If block_id/beat_id
+// values in the export don't look like beat names, try 'Name_1' instead.
+var BEAT_ID_FIELD = 'Name';
 
 var CRS = 'EPSG:32643';
 var BLOCK_SIDE = 316.2278; // metres -> 10.0 ha
