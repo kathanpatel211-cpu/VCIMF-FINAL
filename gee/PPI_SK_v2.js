@@ -779,7 +779,77 @@ print('FF-18 PPI_absolute range (min, max):',
 print('FF-22 DEM source:', DEM_SOURCE, '| AGB source:', AGB_SOURCE);
 
 // ============================================================================
-// 18. EXPORTS (Section 11.3)
+// 18. RASTER PRODUCTS — block-level attributes burned back onto the grid
+// (built once here, reused by both the Map display in Section 19 and the
+// Drive exports in Section 20)
+// ============================================================================
+
+var burnProps = ['PPI_absolute', 'category', 'A_score', 'B_score', 'C_score', 'D_score', 'E_score'];
+var blockRaster = fc.reduceToImage({ properties: ['PPI_absolute'], reducer: ee.Reducer.first() })
+  .rename('PPI_absolute');
+var catRaster = fc.reduceToImage({ properties: ['category'], reducer: ee.Reducer.first() }).rename('category');
+var themeStack = ee.Image.cat(burnProps.slice(2).map(function (p) {
+  return fc.reduceToImage({ properties: [p], reducer: ee.Reducer.first() }).rename(p);
+}));
+
+// ============================================================================
+// 19. MAP DISPLAY — layers + legends in the Code Editor's Map panel
+// ============================================================================
+
+var CATEGORY_PALETTE = ['d73027', 'fc8d59', 'fee08b', 'd9ef8b', '1a9850']; // Section 11.3
+var CATEGORY_LABELS = [
+  '1 — Highest priority (immediate plantation)',
+  '2 — High priority',
+  '3 — Moderate priority (phased implementation)',
+  '4 — Low priority (ANR / soil & moisture works first)',
+  '5 — Protection only (excluded or bottom percentile)'
+];
+var PPI_PALETTE = ['440154', '414487', '2a788e', '22a884', '7ad151', 'fde725']; // viridis, low -> high
+
+Map.setOptions('HYBRID');
+Map.centerObject(AOI);
+
+Map.addLayer(catRaster.clip(AOI), { min: 1, max: 5, palette: CATEGORY_PALETTE },
+  'PPI priority category (1-5)', true);
+Map.addLayer(blockRaster.clip(AOI), { min: 0, max: 1, palette: PPI_PALETTE },
+  'PPI score, continuous (0-1)', false);
+Map.addLayer(anyConstraint.selfMask().clip(AOI), { palette: ['e31a1c'] },
+  'Constraint mask (C1-C7 pixels)', false);
+Map.addLayer(themeStack.select('A_score').clip(AOI), { min: 0, max: 1, palette: ['f7fbff', '08306b'] },
+  'Theme A score - moisture', false);
+Map.addLayer(themeStack.select('B_score').clip(AOI), { min: 0, max: 1, palette: ['ffffe5', '662506'] },
+  'Theme B score - soil', false);
+Map.addLayer(gridWithBeat.style({ color: '969696', fillColor: '00000000', width: 1 }),
+  {}, '10 ha grid blocks', false);
+Map.addLayer(BEAT.style({ color: 'ffffff', fillColor: '00000000', width: 2 }),
+  {}, 'Beat boundaries', true);
+
+// Generic swatch-legend builder: one titled panel, one row per palette entry.
+function addLegend(position, title, palette, labels) {
+  var panel = ui.Panel({
+    style: { position: position, padding: '8px 12px', backgroundColor: 'rgba(255, 255, 255, 0.88)' }
+  });
+  panel.add(ui.Label(title, { fontWeight: 'bold', fontSize: '13px', margin: '0 0 6px 0' }));
+  for (var i = 0; i < palette.length; i++) {
+    var swatch = ui.Label('', {
+      backgroundColor: '#' + palette[i], padding: '8px', margin: '0 6px 4px 0'
+    });
+    var label = ui.Label(labels[i], { margin: '0 0 4px 0', fontSize: '12px' });
+    panel.add(ui.Panel([swatch, label], ui.Panel.Layout.flow('horizontal')));
+  }
+  Map.add(panel);
+  return panel;
+}
+
+addLegend('bottom-left', 'PPI-SK v2 — Plantation Priority Category', CATEGORY_PALETTE, CATEGORY_LABELS);
+
+var ppiLegendLabels = PPI_PALETTE.map(function (_, i) {
+  return (i / (PPI_PALETTE.length - 1)).toFixed(2);
+});
+addLegend('bottom-right', 'PPI score (continuous, low → high)', PPI_PALETTE, ppiLegendLabels);
+
+// ============================================================================
+// 20. EXPORTS (Section 11.3)
 // ============================================================================
 
 var OUTPUT_FIELDS = [
@@ -820,22 +890,16 @@ Export.table.toDrive({
   fileFormat: 'GeoJSON'
 });
 
-// 3-7. Rasterised products — burn block-level attributes back onto the grid
-var burnProps = ['PPI_absolute', 'category', 'A_score', 'B_score', 'C_score', 'D_score', 'E_score'];
-var blockRaster = fc.reduceToImage({ properties: ['PPI_absolute'], reducer: ee.Reducer.first() })
-  .rename('PPI_absolute');
-
+// 3-7. Rasterised products (built in Section 18, also used for the Map display
+// in Section 19). Category raster exported as raw values (1-5), not RGB-
+// visualized, so it stays usable for analysis (area-by-category, joins) in
+// GIS — apply CATEGORY_PALETTE from Section 19 when symbolising in QGIS/GEE.
 Export.image.toDrive({
   image: blockRaster,
   description: 'PPI_SK_v2_PPI_raster',
   folder: DRIVE_FOLDER, region: AOI_BOUNDS, scale: 30, crs: CRS, maxPixels: 1e13
 });
 
-// Exported as raw category values (1-5), not RGB-visualized, so it stays usable
-// for analysis (area-by-category, joins) in GIS. Apply this palette when
-// symbolising in QGIS/GEE: 1=#d73027 2=#fc8d59 3=#fee08b 4=#d9ef8b 5=#1a9850
-// (Section 11.3 category palette).
-var catRaster = fc.reduceToImage({ properties: ['category'], reducer: ee.Reducer.first() }).rename('category');
 Export.image.toDrive({
   image: catRaster,
   description: 'PPI_SK_v2_category_raster',
@@ -848,9 +912,6 @@ Export.image.toDrive({
   folder: DRIVE_FOLDER, region: AOI_BOUNDS, scale: 30, crs: CRS, maxPixels: 1e13
 });
 
-var themeStack = ee.Image.cat(burnProps.slice(2).map(function (p) {
-  return fc.reduceToImage({ properties: [p], reducer: ee.Reducer.first() }).rename(p);
-}));
 Export.image.toDrive({
   image: themeStack,
   description: 'PPI_SK_v2_theme_contribution_maps',

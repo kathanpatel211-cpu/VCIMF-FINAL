@@ -19,10 +19,17 @@ Implements `PPISK_v2_GEE_Specification.md` against the study-area asset
    `BEAT_NAME`, `Beat`, `NAME`).
 3. Set `BEAT_ID_FIELD` at the top of the script to that field name, set
    `RUN_SCHEMA_CHECK_ONLY = false`, and run again.
-4. Open the **Tasks** tab and run each queued export (block table CSV, block
+4. The **Map panel** in the Code Editor now shows the results directly —
+   no export required to see them. On by default: the 5-class priority
+   category layer and the beat boundaries, each with a legend (bottom-left
+   for category, bottom-right for the continuous PPI score). Toggle on from
+   the Layers list: the continuous PPI score, the constraint mask, the A/B
+   theme score layers, and the 10 ha grid outline.
+5. Open the **Tasks** tab and run each queued export (block table CSV, block
    polygons, PPI raster, category raster, constraint mask, theme contribution
-   maps). They land in a Google Drive folder named `PPI_SK_v2`.
-5. Download `PPI_SK_v2_block_table.csv` and run:
+   maps) to get the same layers as files. They land in a Google Drive folder
+   named `PPI_SK_v2`.
+6. Download `PPI_SK_v2_block_table.csv` and run:
    ```
    pip install pandas numpy scipy
    python monte_carlo_sensitivity.py --input PPI_SK_v2_block_table.csv --outdir out/
@@ -30,10 +37,10 @@ Implements `PPISK_v2_GEE_Specification.md` against the study-area asset
    This produces `stability_table.csv` (Section 11.3 product 7),
    `sensitivity_report.csv` (product 8), `collinearity_matrix.csv`
    (product 9), and `ff_checks.json` (FF-07..FF-11 pass/fail).
-6. If any FF check in `ff_checks.json` fails, apply the documented action
+7. If any FF check in `ff_checks.json` fails, apply the documented action
    (Section 10 table) to the relevant sub-weight in `PPI_SK_v2.js`
    (`SUBWEIGHTS`-equivalent literals in Sections 8.1/15) and re-run from
-   step 4 — per the spec's Build Order (Section 12), only steps 19-26 need
+   step 5 — per the spec's Build Order (Section 12), only steps 19-26 need
    re-running once weights change, not the full pipeline.
 
 ## Why the Monte Carlo/sensitivity/collinearity steps are in Python
