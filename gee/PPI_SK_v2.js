@@ -819,10 +819,14 @@ Map.addLayer(themeStack.select('A_score').clip(AOI), { min: 0, max: 1, palette: 
   'Theme A score - moisture', false);
 Map.addLayer(themeStack.select('B_score').clip(AOI), { min: 0, max: 1, palette: ['ffffe5', '662506'] },
   'Theme B score - soil', false);
-Map.addLayer(gridWithBeat.style({ color: '969696', fillColor: '00000000', width: 1 }),
-  {}, '10 ha grid blocks', false);
-Map.addLayer(BEAT.style({ color: 'ffffff', fillColor: '00000000', width: 2 }),
-  {}, 'Beat boundaries', true);
+// FeatureCollection.style() re-rasterises the vector on every tile request,
+// which is expensive at ~1,180 blocks and easy to trip a Restricted-Mode
+// concurrency limit on. ee.Image().paint() is a single lightweight raster
+// (outline only) and is far cheaper to render repeatedly while panning/zooming.
+var gridOutline = ee.Image().byte().paint(gridWithBeat, 1, 1);
+Map.addLayer(gridOutline, { palette: ['969696'] }, '10 ha grid blocks', false);
+var beatOutline = ee.Image().byte().paint(BEAT, 1, 2);
+Map.addLayer(beatOutline, { palette: ['ffffff'] }, 'Beat boundaries', true);
 
 // Generic swatch-legend builder: one titled panel, one row per palette entry.
 function addLegend(position, title, palette, labels) {
