@@ -122,17 +122,32 @@ var gridWithBeat = ee.FeatureCollection(joined).map(function (f) {
 // 3. TERRAIN BASE LAYERS — DEM, SLOPE, ASPECT, CURVATURE, TPI, ROUGHNESS
 // ============================================================================
 
+// Both FABDEM and GLO-30 are tiled ImageCollections in the catalog, not a
+// single Image — mosaic them and lock in a real projection before use so
+// downstream reduceNeighborhood (focal) calls, which have no crs/scale
+// argument of their own, run against a well-defined EPSG:32643 grid
+// (Section 0 rule 1: all analysis in EPSG:32643) [DO NOT ALTER].
+function loadTiledDEM(assetId, band) {
+  var col = ee.ImageCollection(assetId).filterBounds(AOI_BOUNDS);
+  return col.mosaic().select(band)
+    .reproject(CRS, null, 30)
+    .rename('DEM').clip(AOI_BOUNDS);
+}
+
 var DEM_SOURCE = 'FABDEM';
 var dem;
 try {
-  var fabdemCol = ee.ImageCollection('projects/sat-io/open-datasets/FABDEM').filterBounds(AOI_BOUNDS);
-  var fabdemProj = fabdemCol.first().select('b1').projection();
-  dem = fabdemCol.mosaic().select('b1').setDefaultProjection(fabdemProj).rename('DEM').clip(AOI_BOUNDS);
-  dem.getInfo(); // force server-side evaluation so a missing asset throws here, not later
+  dem = loadTiledDEM('projects/sat-io/open-datasets/FABDEM', 'b1');
+  dem.getInfo(); // force server-side evaluation so a missing/bad asset throws here, not later
 } catch (e) {
   print('FABDEM unavailable — falling back to Copernicus GLO-30 (Section 3.1 fallback rule):', e);
-  dem = ee.Image('COPERNICUS/DEM/GLO30').select('DEM').rename('DEM').clip(AOI_BOUNDS);
-  DEM_SOURCE = 'GLO30';
+  try {
+    dem = loadTiledDEM('COPERNICUS/DEM/GLO30', 'DEM');
+    dem.getInfo();
+    DEM_SOURCE = 'GLO30';
+  } catch (e2) {
+    throw new Error('Both FABDEM and GLO-30 failed to load — check asset access/quota: ' + e2);
+  }
 }
 print('DEM source in use:', DEM_SOURCE);
 
@@ -435,7 +450,7 @@ function normLinear(img, geom, scale, invert) {
   var bandName = ee.String(img.bandNames().get(0));
   var pct = img.reduceRegion({
     reducer: ee.Reducer.percentile([2, 98]),
-    geometry: geom, scale: scale, maxPixels: 1e13, bestEffort: true, tileScale: 8
+    geometry: geom, scale: scale, crs: CRS, maxPixels: 1e13, bestEffort: true, tileScale: 8
   });
   var lo = ee.Number(pct.get(bandName.cat('_p2')));
   var hi = ee.Number(pct.get(bandName.cat('_p98')));
@@ -513,7 +528,7 @@ var C3s_norm = curvNorm.rename('C3s_norm');
 // step in Section 5.3 with a computed value).
 var elevPct = dem.reduceRegion({
   reducer: ee.Reducer.percentile([2, 20, 80, 98]),
-  geometry: AOI_BOUNDS, scale: 30, maxPixels: 1e13, bestEffort: true, tileScale: 8
+  geometry: AOI_BOUNDS, scale: 30, crs: CRS, maxPixels: 1e13, bestEffort: true, tileScale: 8
 });
 // Reduce output band names follow "<band>_p<percentile>" (dem is renamed 'DEM'
 // at load) — look up explicitly rather than relying on Dictionary key order.
@@ -554,7 +569,7 @@ var fc = gridWithBeat;
 var medianStack = ee.Image.cat([
   twi.rename('A1_twi'), slopePct.rename('slope_pct_raw'), curvatureRaw, dem.rename('elev_m'), roughness
 ]);
-fc = medianStack.reduceRegions({ collection: fc, reducer: ee.Reducer.median(), scale: 30, tileScale: 8 });
+fc = medianStack.reduceRegions({ collection: fc, reducer: ee.Reducer.median(), scale: 30, crs: CRS, tileScale: 8 });
 
 // Mean group: most continuous surfaces
 var meanStack = ee.Image.cat([
@@ -564,20 +579,20 @@ var meanStack = ee.Image.cat([
   ndviTrough.rename('D5_dryndvi'), rusleLogA, fireYearsCount, popDensity2km, distSettlementM,
   aspSin, aspCos, hnd, tpi
 ]);
-fc = meanStack.reduceRegions({ collection: fc, reducer: ee.Reducer.mean(), scale: 30, tileScale: 8 });
+fc = meanStack.reduceRegions({ collection: fc, reducer: ee.Reducer.mean(), scale: 30, crs: CRS, tileScale: 8 });
 
 // Min-distance group: A5 water proximity — raw distance, decay applied after aggregation
 var gswSeasonalBinary = ee.Image(0).where(gsw.select('seasonality').gte(3), 1).rename('gsw_seasonal');
 var distWaterPx = gswSeasonalBinary.reproject(CRS, null, 30)
   .fastDistanceTransform(200, 'pixels', 'squared_euclidean').sqrt();
 var distWaterM = distWaterPx.multiply(ee.Image.pixelArea().sqrt()).rename('A5_dist_water_m');
-fc = distWaterM.reduceRegions({ collection: fc, reducer: ee.Reducer.min(), scale: 30, tileScale: 8 });
+fc = distWaterM.reduceRegions({ collection: fc, reducer: ee.Reducer.min(), scale: 30, crs: CRS, tileScale: 8 });
 
 // Fractional-area group: constraints, D1 canopy (report only), D4 loss, E1 base
 var fracStack = ee.Image.cat([
   constraintStack, anyConstraint, recentLoss.rename('D4_lossfrac'), canopyNow.rename('D1_canopy_pct')
 ]);
-fc = fracStack.reduceRegions({ collection: fc, reducer: ee.Reducer.mean(), scale: 30, tileScale: 8 });
+fc = fracStack.reduceRegions({ collection: fc, reducer: ee.Reducer.mean(), scale: 30, crs: CRS, tileScale: 8 });
 
 // Normalised-parameter group (all pre-normalised 0-1 bands, mean reducer within block)
 var normStack = ee.Image.cat([
@@ -587,7 +602,7 @@ var normStack = ee.Image.cat([
   D1_norm, D2_norm, D3_norm, D5_norm,
   E2_norm, E4_norm
 ]);
-fc = normStack.reduceRegions({ collection: fc, reducer: ee.Reducer.mean(), scale: 30, tileScale: 8 });
+fc = normStack.reduceRegions({ collection: fc, reducer: ee.Reducer.mean(), scale: 30, crs: CRS, tileScale: 8 });
 
 // ============================================================================
 // 14. PER-BLOCK POST-PROCESSING: A5 decay, C2s aspect, E1 inversion, constraints
