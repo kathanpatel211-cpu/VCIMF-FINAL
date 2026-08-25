@@ -137,15 +137,47 @@ console.log('   New Plantation: ' + perHa.toFixed(1) + ' tCO2e/ha over 10 yr');
 ok('per-ha sequestration is in a plausible dry-deciduous range (30-100)', perHa > 30 && perHa < 100, 'got ' + perHa.toFixed(1));
 ok('scales linearly with area', close(perHa * 7.5, perHa * 5 + perHa * 2.5));
 
-console.log('\n== eligible-fraction filter (area-accounting fix) ==');
+console.log('\n== area-accounting fix (eligibleAreaHa is treatable ha, not block ha) ==');
+// The v4 bug this fixes: a 9 ha block that is only 5% treatable used to be
+// credited its FULL 9 ha. That is fixed at the mask level (pixelArea masked to
+// eligibleMask before summing), independent of any block-inclusion policy -
+// v6.1.0 stopped DROPPING low-fraction blocks (see 'fragmented flag' below)
+// but the underlying area figure was already correct either way.
 var raw = [
-  { id:1, eligibleAreaHa:0.45, totalAreaHa:9 },   // 5% eligible - must be rejected
-  { id:2, eligibleAreaHa:7.2,  totalAreaHa:9 }     // 80% eligible - must be kept
+  { id:1, eligibleAreaHa:0.45, totalAreaHa:9 },   // 5% eligible
+  { id:2, eligibleAreaHa:7.2,  totalAreaHa:9 }     // 80% eligible
 ];
-raw.forEach(function (b) { b.eligibleFraction = b.eligibleAreaHa / b.totalAreaHa; });
-var kept = raw.filter(function (b) { return b.eligibleFraction >= 0.30; });
-ok('5%-eligible block is rejected', kept.length === 1 && kept[0].id === 2);
-ok('area counted is treatable ha, not block ha', kept[0].eligibleAreaHa === 7.2);
+ok('a 5%-eligible block reports 0.45 ha, not 9 ha', raw[0].eligibleAreaHa === 0.45);
+ok('an 80%-eligible block reports 7.2 ha, not 9 ha', raw[1].eligibleAreaHa === 7.2);
+
+console.log('\n== whole-ROI area accounting (Priority 1-5 + Not Applicable = total) ==');
+// Simulates the reconciliation check in processBlocks: allRows carries every
+// block's total area and eligible area; reason bands carry the rest.
+var wholeRoiRows = [
+  { totHa: 9.0, eligHa: 9.0, reasons: {} },                              // fully eligible
+  { totHa: 9.0, eligHa: 0.0, reasons: { 2: 9.0 } },                       // fully already-forest
+  { totHa: 9.0, eligHa: 3.0, reasons: { 3: 4.0, 4: 2.0 } },               // mixed
+];
+var roiTotalHa = wholeRoiRows.reduce(function (s, r) { return s + r.totHa; }, 0);
+var roiEligHa  = wholeRoiRows.reduce(function (s, r) { return s + r.eligHa; }, 0);
+var reasonSum = 0;
+[2,3,4,5,6].forEach(function (rc) {
+  reasonSum += wholeRoiRows.reduce(function (s, r) { return s + (r.reasons[rc] || 0); }, 0);
+});
+ok('total ROI area is the sum of all block totals', roiTotalHa === 27.0);
+ok('eligible + not-applicable reconciles to the ROI total',
+   close(roiEligHa + reasonSum, roiTotalHa), 'elig=' + roiEligHa + ' reason=' + reasonSum + ' total=' + roiTotalHa);
+
+console.log('\n== fragmented flag (relaxed from a hard drop) ==');
+var fragRaw = [
+  { id:1, eligibleAreaHa:0.45, totalAreaHa:9 },   // 5% eligible - previously DROPPED, now flagged + kept
+  { id:2, eligibleAreaHa:7.2,  totalAreaHa:9 }     // 80% eligible - not flagged
+];
+fragRaw.forEach(function (b) { b.fragmented = (b.eligibleAreaHa / b.totalAreaHa) < 0.30; });
+ok('low-fraction block is flagged fragmented, not dropped', fragRaw[0].fragmented === true && fragRaw.length === 2);
+ok('high-fraction block is not flagged', fragRaw[1].fragmented === false);
+ok('a fragmented block still contributes its real hectares',
+   fragRaw.reduce(function (s,b){return s+b.eligibleAreaHa;},0) === 7.65);
 
 console.log('\n' + (fails === 0 ? 'ALL TESTS PASSED' : fails + ' TEST(S) FAILED'));
 process.exit(fails === 0 ? 0 : 1);

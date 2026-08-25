@@ -60,13 +60,22 @@
  *     nothing extra: it is derived from the same block aggregation the score
  *     itself needs, not a separate pass over the data.
  *
- *  4. FIVE PRIORITY CLASSES, WHOLE-AREA COVERAGE. Every eligible block - not
- *     only the blocks that fit one year's area target - is assigned to one of
- *     five classes by its Priority Score (quantile by default: each class
- *     holds ~20% of blocks). Class 1 is "act first"; Class 5 is "defer". Each
- *     class is reported with block count, hectares, share of the treatable
- *     area, estimated cost and estimated tCO2e sequestered - the table a
+ *  4. FIVE PRIORITY CLASSES, PLUS THE REST OF THE ROI. Every block with real
+ *     treatable ground - not only the blocks that fit one year's area target -
+ *     is assigned to one of five classes by its Priority Score (quantile by
+ *     default: each class holds ~20% of scoreable blocks). Class 1 is "act
+ *     first"; Class 5 is "defer". Each class is reported with block count,
+ *     hectares, estimated cost and estimated tCO2e sequestered - the table a
  *     multi-year CAMPA programme phases directly off.
+ *
+ *     The REMAINING land - already forest, cropland/built-up/water, too
+ *     steep, waterlogged, or rock/saline ground - is NOT folded into the five
+ *     classes as if it were "low priority": a priority score answers "where
+ *     should we plant", which is meaningless on a lake or a stand of existing
+ *     dense forest. It is instead classified as NOT APPLICABLE, with its
+ *     reason, and shown on the same map (grey) and in the same area table, so
+ *     the WHOLE ROI is accounted for - Priority 1-5 hectares plus Not
+ *     Applicable hectares sum to the total ROI area. Nothing is left blank.
  *
  * ----------------------------------------------------------------------------
  *  WHAT WAS REMOVED AND WHY
@@ -259,7 +268,7 @@ var CONFIG = {
   }
 };
 
-var SCRIPT_BUILD = 'v6.0.0  (single-purpose rebuild: one score, five classes, whole-area coverage)';
+var SCRIPT_BUILD = 'v6.1.0  (whole-ROI coverage: Priority 1-5 + explicit Not Applicable, every hectare accounted for)';
 var roi = CONFIG.roi.geometry();
 var PROJ = 'EPSG:32643';
 try { Map.centerObject(CONFIG.roi, 12); Map.setOptions('SATELLITE'); } catch (e) {}
@@ -533,6 +542,43 @@ if (fsiClass && plantableMask) {
     .rename('treatment').clip(roi);
   eligibleMask = treatment.gt(0);
   log('Treatment eligibility ready (New Plantation only). Constraints: ' + (constraintNotes.join('; ') || 'none'));
+}
+
+// ---- EXCLUSION REASON - so the WHOLE ROI is accounted for, not just the
+// eligible slice. A priority score answers "where should we plant", which is
+// meaningless on land that is already forest, cropland, water, too steep, or
+// waterlogged - that land is NOT "low priority", it is NOT APPLICABLE, and it
+// needs to be shown as such rather than left blank on the map. Reasons are
+// computed in priority order so every non-eligible pixel gets exactly one:
+//   1 = eligible (has a Priority Score)
+//   2 = already forest (FSI Moderately Dense / Very Dense)
+//   3 = non-plantable land use (cropland / built-up / water / wetland)
+//   4 = too steep
+//   5 = waterlogged (HAND)
+//   6 = rock/saline ground or already well-forested by Dynamic World's screen
+// Value 1 = eligible (has a Priority Score); 2-6 = the reason it does not.
+var exclusionReason = null;
+if (fsiClass && plantableMask) {
+  var notEligible = eligibleMask.not();
+  var reasonImg = ee.Image(0)
+    .where(notEligible.and(fsiClass.gte(3)), 2)
+    .where(notEligible.and(fsiClass.lte(2)).and(plantableMask.not()), 3);
+  if (slope) {
+    reasonImg = reasonImg.where(notEligible.and(fsiClass.lte(2)).and(plantableMask)
+      .and(slope.gt(CONFIG.constraints.maxSlopeDeg)), 4);
+  }
+  if (handM) {
+    reasonImg = reasonImg.where(notEligible.and(fsiClass.lte(2)).and(plantableMask)
+      .and(slope ? slope.lte(CONFIG.constraints.maxSlopeDeg) : ee.Image(1))
+      .and(handM.lt(CONFIG.constraints.maxHandM)), 5);
+  }
+  if (dw) {
+    var stillUnexplained = notEligible.and(fsiClass.lte(2)).and(plantableMask)
+      .and(slope ? slope.lte(CONFIG.constraints.maxSlopeDeg) : ee.Image(1))
+      .and(handM ? handM.gte(CONFIG.constraints.maxHandM) : ee.Image(1));
+    reasonImg = reasonImg.where(stillUnexplained, 6);
+  }
+  exclusionReason = ee.Image(1).where(notEligible, reasonImg).clip(roi).rename('exclusionReason');
 }
 
 // ---- Eligibility funnel + canopy/slope diagnostic --------------------------
@@ -864,20 +910,36 @@ if (!eligibleMask || active.length === 0) {
 var grid = roi.coveringGrid(PROJ, CONFIG.blockSizeM).filterBounds(roi)
   .map(function (f) { return f.set({ bid: f.get('system:index') }); });
 
-var maskedExtras = [
-  ee.Image.pixelArea().divide(1e4).rename('eligibleAreaHa'),
-  ee.Image(1).rename('eligibleDenom'),
-  treatment.gt(0).rename('isEligible')
-];
+// Reason labels for the exclusionReason codes, so the whole ROI - not only
+// the eligible slice - is accounted for in the output. Reason-area bands
+// (added per-group in makeGroupStats below) are cheap: each is just a
+// pixelArea sum masked to one reason, no new heavy chains.
+var REASON_LABELS = { 2: 'Already Forest', 3: 'Non-Plantable Land Use', 4: 'Too Steep', 5: 'Waterlogged', 6: 'Rock/Saline or Forested (DW screen)' };
 
 var blockReducer = ee.Reducer.mean().combine(ee.Reducer.count(), '', true).combine(ee.Reducer.sum(), '', true);
 
 function makeGroupStats(crits, includeExtras, scale) {
-  var parts = crits.map(function (c) { return c.img.toFloat().rename(c.name); });
-  if (includeExtras) { parts = parts.concat(maskedExtras); }
-  var img = ee.Image.cat(parts).updateMask(eligibleMask);
+  // Criterion bands and the eligible-area/isEligible extras are masked to
+  // eligibleMask (they describe the plantable slice only). The reason-area
+  // bands are the opposite: each is already self-masked to ONE exclusion
+  // reason, which by definition lies OUTSIDE eligibleMask - applying
+  // eligibleMask to them again would zero every one of them out, since a
+  // pixel cannot be both eligible and excluded. They are added separately,
+  // unmasked by eligibleMask, alongside the always-unmasked totalAreaHa.
+  var eligibleParts = crits.map(function (c) { return c.img.toFloat().rename(c.name); });
+  if (includeExtras) {
+    eligibleParts.push(ee.Image.pixelArea().divide(1e4).rename('eligibleAreaHa'));
+    eligibleParts.push(ee.Image(1).rename('eligibleDenom'));
+    eligibleParts.push(treatment.gt(0).rename('isEligible'));
+  }
+  var img = ee.Image.cat(eligibleParts).updateMask(eligibleMask);
   if (includeExtras) {
     img = img.addBands(ee.Image.pixelArea().divide(1e4).clip(roi).rename('totalAreaHa'));
+    if (exclusionReason) {
+      [2, 3, 4, 5, 6].forEach(function (rc) {
+        img = img.addBands(ee.Image.pixelArea().divide(1e4).updateMask(exclusionReason.eq(rc)).rename('reason' + rc + 'Ha'));
+      });
+    }
   }
   return img.reduceRegions({ collection: grid, reducer: blockReducer, scale: scale, tileScale: 8 });
 }
@@ -976,19 +1038,47 @@ function pearson(a, b) {
 }
 
 function processBlocks(feats) {
-  var rows = [];
+  // allRows: EVERY block in the ROI (whole-area accounting). rows: only blocks
+  // with real treatable ground (the population that gets a Priority Score -
+  // scoring a block with zero eligible hectares is meaningless, there is
+  // nothing there to prioritise for planting).
+  var allRows = [], rows = [];
   feats.forEach(function (f, idx) {
     var p = f.properties || {};
     var eligHa = p.eligibleAreaHa_sum || 0, totHa = p.totalAreaHa_sum || 0;
-    if (eligHa <= 0.1 || totHa <= 0) { return; }
-    rows.push({ idx: idx, p: p, eligHa: eligHa, totHa: totHa });
+    if (totHa <= 0) { return; }   // genuinely outside the ROI - not a real block
+    allRows.push({ idx: idx, p: p, eligHa: eligHa, totHa: totHa });
+    if (eligHa > 0.1) { rows.push({ idx: idx, p: p, eligHa: eligHa, totHa: totHa }); }
   });
 
   print('================================================================');
   print('CAMPA PRIORITY SCORE - ' + CONFIG.unitName + ', ' + CONFIG.district + ', ' + CONFIG.state + ' (' + CONFIG.year + ')');
   print('================================================================');
-  print('Blocks with treatable ground: ' + rows.length);
+  print('Blocks in ROI: ' + allRows.length + '  |  with treatable ground: ' + rows.length);
   if (missing.length > 0) { print('NO DATA / DROPPED (never entered scoring): ' + missing.join(', ')); }
+
+  // ---- WHOLE-ROI AREA ACCOUNTING - every hectare, not only the eligible slice
+  var roiTotalHa = allRows.reduce(function (s, r) { return s + r.totHa; }, 0);
+  var roiEligHa  = allRows.reduce(function (s, r) { return s + r.eligHa; }, 0);
+  var reasonTotals = {};
+  [2, 3, 4, 5, 6].forEach(function (rc) {
+    reasonTotals[rc] = allRows.reduce(function (s, r) { return s + (r.p['reason' + rc + 'Ha_sum'] || 0); }, 0);
+  });
+  var reasonSum = [2, 3, 4, 5, 6].reduce(function (s, rc) { return s + reasonTotals[rc]; }, 0);
+  print('---- WHOLE-ROI AREA ACCOUNTING ----');
+  print('  Total ROI area              : ' + Math.round(roiTotalHa).toLocaleString('en-IN') + ' ha');
+  print('  Eligible for New Plantation  : ' + Math.round(roiEligHa).toLocaleString('en-IN') + ' ha  (' +
+        (roiTotalHa > 0 ? (roiEligHa / roiTotalHa * 100).toFixed(1) : '0') + '%) -> gets a Priority Score below');
+  print('  Not Applicable (see reasons) : ' + Math.round(reasonSum).toLocaleString('en-IN') + ' ha  (' +
+        (roiTotalHa > 0 ? (reasonSum / roiTotalHa * 100).toFixed(1) : '0') + '%)');
+  [2, 3, 4, 5, 6].forEach(function (rc) {
+    if (reasonTotals[rc] > 0.5) { print('    ' + REASON_LABELS[rc] + ' : ' + Math.round(reasonTotals[rc]).toLocaleString('en-IN') + ' ha'); }
+  });
+  if (Math.abs((roiEligHa + reasonSum) - roiTotalHa) > roiTotalHa * 0.02) {
+    print('  (eligible + not-applicable does not exactly sum to the ROI total - a small');
+    print('   residual is expected from reprojection/edge effects at the block boundary.)');
+  }
+
   if (rows.length === 0) { warn('No block contains treatable ground.'); return; }
 
   var totalEligPx = rows.reduce(function (s, r) { return s + (r.p.eligibleDenom_count || 0); }, 0);
@@ -1067,12 +1157,24 @@ function processBlocks(feats) {
     blocks.push({
       id: r.idx + 1, bid: p.bid,
       eligibleAreaHa: r.eligHa, totalAreaHa: r.totHa, eligibleFraction: r.eligHa / r.totHa,
+      // Flagged, not dropped: eligibleAreaHa already counts only the real
+      // treatable hectares (the v4 area-over-credit bug is fixed at the mask
+      // level, not by excluding the block), so a fragmented block's cost and
+      // carbon figures are already correct. Dropping it would leave real,
+      // scoreable hectares off the whole-area map. The flag exists because
+      // mobilising a planting crew for a scattered sliver inside an otherwise
+      // unplantable block is a genuine operational cost worth knowing about.
+      fragmented: (r.eligHa / r.totHa) < CONFIG.minEligibleFrac,
       v: vals
     });
   });
-  var preFilter = blocks.length;
-  blocks = blocks.filter(function (b) { return b.eligibleFraction >= CONFIG.minEligibleFrac; });
-  if (blocks.length === 0) { print('No blocks passed the eligibility-fraction filter.'); return; }
+  if (blocks.length === 0) { print('No block with treatable ground survived scoring.'); return; }
+  var fragmentedCount = blocks.filter(function (b) { return b.fragmented; }).length;
+  if (fragmentedCount > 0) {
+    print('  ' + fragmentedCount + ' of ' + blocks.length + ' scored blocks are FRAGMENTED (< ' +
+          (CONFIG.minEligibleFrac * 100) + '% of the block is treatable) - still scored and mapped,');
+    print('  flagged in the export, since mobilising a crew for a scattered sliver is a real cost.');
+  }
 
   var m = surviving.length;
   var cols = [];
@@ -1193,50 +1295,81 @@ function processBlocks(feats) {
   var scoreDict = ee.Dictionary.fromLists(bidList, blocks.map(function (b) { return b.score; }));
   var clsDict   = ee.Dictionary.fromLists(bidList, blocks.map(function (b) { return b.priorityClass; }));
   var selDict   = ee.Dictionary.fromLists(bidList, blocks.map(function (b) { return b.selected ? 1 : 0; }));
+  var fragDict  = ee.Dictionary.fromLists(bidList, blocks.map(function (b) { return b.fragmented ? 1 : 0; }));
   var scoredGrid = grid.filter(ee.Filter.inList('bid', bidList)).map(function (f) {
     var k = f.get('bid');
-    return f.set({ priority: ee.Number(scoreDict.get(k)), priorityClass: ee.Number(clsDict.get(k)), selected: ee.Number(selDict.get(k)) });
+    return f.set({ priority: ee.Number(scoreDict.get(k)), priorityClass: ee.Number(clsDict.get(k)),
+                   selected: ee.Number(selDict.get(k)), fragmented: ee.Number(fragDict.get(k)) });
   });
 
-  var CLASS_PALETTE = ['d7191c', 'fdae61', 'ffffbf', 'a6d96a', '1a9850'];
-  var classImg = scoredGrid.reduceToImage(['priorityClass'], ee.Reducer.first()).rename('priorityClass');
-  Map.addLayer(classImg, { min: 1, max: 5, palette: CLASS_PALETTE }, 'CAMPA PRIORITY CLASS (1 = act first)', true);
+  // Class 0 = Not Applicable (grey), 1-5 = Priority (red = act first, green =
+  // defer). ONE map layer covers the WHOLE ROI: every pixel is either a
+  // priority class or explicitly Not Applicable, never blank.
+  var CLASS_PALETTE = ['9e9e9e', 'd7191c', 'fdae61', 'ffffbf', 'a6d96a', '1a9850'];
+  var priorityFromBlocks = scoredGrid.reduceToImage(['priorityClass'], ee.Reducer.first()).rename('priorityClass');
+  var wholeAreaClassImg = exclusionReason
+    ? ee.Image(0).where(exclusionReason.eq(1), priorityFromBlocks).clip(roi).rename('wholeAreaClass')
+    : priorityFromBlocks;
+  Map.addLayer(wholeAreaClassImg, { min: 0, max: 5, palette: CLASS_PALETTE },
+    'CAMPA PRIORITY - whole ROI (grey = Not Applicable)', true);
   Map.addLayer(scoredGrid.filter(ee.Filter.eq('selected', 1)), { color: '00ffff' },
     'Selected this cycle (' + CONFIG.targetTreatmentAreaHa + ' ha target)', true);
+  if (exclusionReason) {
+    Map.addLayer(exclusionReason.updateMask(exclusionReason.gt(1)),
+      { min: 2, max: 6, palette: ['795548', 'ffeb3b', 'e91e63', '2196f3', '9e9e9e'] },
+      'Not Applicable - reason breakdown', false);
+  }
 
   try {
     var lg = ui.Panel({ style: { position: 'bottom-right', padding: '8px 15px' } });
-    lg.add(ui.Label('CAMPA Priority Class', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
-    lg.add(ui.Label(surviving.length + ' criteria, ' + Math.round(grandHa) + ' ha total', { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
+    lg.add(ui.Label('CAMPA Priority - whole ROI', { fontWeight: 'bold', fontSize: '15px', margin: '0 0 2px 0' }));
+    lg.add(ui.Label(surviving.length + ' criteria, ' + Math.round(roiTotalHa) + ' ha total ROI', { fontSize: '10px', color: '666666', margin: '0 0 6px 0' }));
     [1,2,3,4,5].forEach(function (k) {
       lg.add(ui.Panel({
-        widgets: [ui.Label('', { backgroundColor: CLASS_PALETTE[k-1], padding: '8px', margin: '0 0 4px 0' }),
+        widgets: [ui.Label('', { backgroundColor: CLASS_PALETTE[k], padding: '8px', margin: '0 0 4px 0' }),
                   ui.Label(PRIORITY_LABELS[k] + '  (' + classStats[k].ha.toFixed(0) + ' ha)', { margin: '0 0 4px 6px', fontSize: '12px' })],
         layout: ui.Panel.Layout.flow('horizontal')
       }));
     });
+    lg.add(ui.Panel({
+      widgets: [ui.Label('', { backgroundColor: CLASS_PALETTE[0], padding: '8px', margin: '0 0 4px 0' }),
+                ui.Label('Not Applicable  (' + Math.round(reasonSum) + ' ha)', { margin: '0 0 4px 6px', fontSize: '12px' })],
+      layout: ui.Panel.Layout.flow('horizontal')
+    }));
     Map.add(lg);
   } catch (eLg) {}
 
-  Export.image.toDrive({ image: classImg.toInt(), description: CONFIG.exportPrefix + '_PriorityClass',
+  Export.image.toDrive({ image: wholeAreaClassImg.toInt(), description: CONFIG.exportPrefix + '_PriorityClass',
     folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_PriorityClass',
     region: roi.bounds(), scale: CONFIG.scale, crs: PROJ, maxPixels: 1e13 });
 
   Export.table.toDrive({ collection: scoredGrid, description: CONFIG.exportPrefix + '_PriorityBlocks',
     folder: CONFIG.exportFolder, fileNamePrefix: CONFIG.exportPrefix + '_PriorityBlocks', fileFormat: 'SHP' });
 
+  // Summary rows cover the WHOLE ROI: Priority 1-5 (scored) plus Not
+  // Applicable (with its reason breakdown), so the hectares in this table sum
+  // to the ROI total - the table an APO note or DPR quotes directly.
+  var summaryRows = [1,2,3,4,5].map(function (k) {
+    var cs = classStats[k];
+    return ee.Feature(null, {
+      'Priority Class': k, 'Label': PRIORITY_LABELS[k], 'Blocks': cs.n,
+      'Treatable Area (ha)': Number(cs.ha.toFixed(2)),
+      'Share of ROI (%)': roiTotalHa > 0 ? Number((cs.ha / roiTotalHa * 100).toFixed(2)) : 0,
+      'Estimated Cost (Rs)': Math.round(cs.cost), 'Sequestration (tCO2e)': Number(cs.co2.toFixed(1)),
+      'Score Min': cs.n ? Number(cs.scoreMin.toFixed(4)) : '', 'Score Max': cs.n ? Number(cs.scoreMax.toFixed(4)) : '',
+      'Treatment': 'New Plantation only'
+    });
+  });
+  summaryRows.push(ee.Feature(null, {
+    'Priority Class': 0, 'Label': 'Not Applicable', 'Blocks': allRows.length - rows.length,
+    'Treatable Area (ha)': Number(reasonSum.toFixed(2)),
+    'Share of ROI (%)': roiTotalHa > 0 ? Number((reasonSum / roiTotalHa * 100).toFixed(2)) : 0,
+    'Estimated Cost (Rs)': '', 'Sequestration (tCO2e)': '', 'Score Min': '', 'Score Max': '',
+    'Treatment': [2,3,4,5,6].filter(function(rc){return reasonTotals[rc]>0.5;})
+      .map(function(rc){ return REASON_LABELS[rc] + ' (' + Math.round(reasonTotals[rc]) + ' ha)'; }).join('; ')
+  }));
   Export.table.toDrive({
-    collection: ee.FeatureCollection([1,2,3,4,5].map(function (k) {
-      var cs = classStats[k];
-      return ee.Feature(null, {
-        'Priority Class': k, 'Label': PRIORITY_LABELS[k], 'Blocks': cs.n,
-        'Treatable Area (ha)': Number(cs.ha.toFixed(2)),
-        'Share of Treatable Area (%)': grandHa > 0 ? Number((cs.ha / grandHa * 100).toFixed(2)) : 0,
-        'Estimated Cost (Rs)': Math.round(cs.cost), 'Sequestration (tCO2e)': Number(cs.co2.toFixed(1)),
-        'Score Min': cs.n ? Number(cs.scoreMin.toFixed(4)) : '', 'Score Max': cs.n ? Number(cs.scoreMax.toFixed(4)) : '',
-        'Treatment': 'New Plantation only'
-      });
-    })),
+    collection: ee.FeatureCollection(summaryRows),
     description: CONFIG.exportPrefix + '_PriorityClassSummary', folder: CONFIG.exportFolder,
     fileNamePrefix: CONFIG.exportPrefix + '_PriorityClassSummary', fileFormat: 'CSV'
   });
@@ -1245,6 +1378,7 @@ function processBlocks(feats) {
     var props = {
       'Block ID': b.id, 'Priority Class': b.priorityClass, 'Priority Label': b.priorityLabel,
       'Treatable Area (ha)': Number(b.eligibleAreaHa.toFixed(2)), 'Eligible Fraction': Number(b.eligibleFraction.toFixed(3)),
+      'Fragmented': b.fragmented ? 'YES' : 'no',
       'CAMPA Priority Score': Number(b.score.toFixed(4)), 'Treatment': b.treatmentLabel,
       'Rate (Rs/ha)': b.ratePerHa, 'Cost (Rs)': Math.round(b.costINR),
       'Selected This Cycle': b.selected ? 'YES' : 'no'

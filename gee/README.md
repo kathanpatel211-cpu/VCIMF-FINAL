@@ -28,7 +28,7 @@ compute budget.
    - the **CRITERION INTEGRITY AUDIT** (which criteria actually informed the score)
    - the **APPLIED WEIGHTS** table
    - the **five-class PRIORITY table** — the deliverable
-4. Four exports queue in the Tasks tab: `_PriorityClass` (raster), `_PriorityBlocks` (shapefile), `_PriorityClassSummary` (CSV — the table an APO note quotes), `_RankedBlocks` (CSV — full transparency, one row per block with every criterion score).
+4. Four exports queue in the Tasks tab: `_PriorityClass` (raster, whole ROI — 0=Not Applicable, 1–5=priority), `_PriorityBlocks` (shapefile), `_PriorityClassSummary` (CSV, six rows — Priority 1–5 plus Not Applicable with its reason breakdown — the table an APO note quotes and whose hectares sum to the full ROI), `_RankedBlocks` (CSV — full transparency, one row per scored block with every criterion score).
 
 ---
 
@@ -67,11 +67,23 @@ survivors, and the drop is printed with its reason. This is what stops a
 data-availability gap from silently defaulting to a flat neutral value while
 still consuming weight.
 
-**Five priority classes, whole-area coverage.** Every eligible block — not
-only the blocks that fit one year's area target — gets a class. Quantile by
-default (each class ≈20% of blocks, always usable); `equalInterval` available
-via `CONFIG.priorityClassMethod` when the score distribution matters more than
-equal class sizes.
+**Five priority classes, plus the rest of the ROI.** Every block with real
+treatable ground — not only the blocks that fit one year's area target — gets
+a class. Quantile by default (each class ≈20% of scoreable blocks, always
+usable); `equalInterval` available via `CONFIG.priorityClassMethod` when the
+score distribution matters more than equal class sizes.
+
+**The whole ROI is covered, not just the eligible slice.** Land that isn't
+eligible for New Plantation — already forest, cropland/built-up/water, too
+steep, waterlogged, or rock/saline ground — is *not* folded into the five
+classes as if it were "low priority": a priority score answers "where should
+we plant", which is meaningless on a lake or existing dense forest. It's
+classified instead as **Not Applicable**, with its reason, and shown on the
+same map (grey) and the same area table, so Priority 1–5 hectares plus Not
+Applicable hectares sum to the total ROI area. Nothing is left blank. A block
+below the fragmentation floor (`CONFIG.minEligibleFrac`, default 30%) is still
+scored and mapped — flagged `Fragmented` in the export rather than dropped,
+since its treatable hectares are real even if scattered.
 
 **New Plantation only.** ANR is not operational under Gujarat CAMPA
 (`CONFIG.anrOperational = false`). Every eligible block is prescribed and
