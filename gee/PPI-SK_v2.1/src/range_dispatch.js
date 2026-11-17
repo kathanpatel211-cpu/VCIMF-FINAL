@@ -17,6 +17,7 @@ function runRangeStep(n) {
   else { print("STOP: STEP must be 'AUTO', 'LAYERS', 'MAP' or 'VALIDATE'"); }
 }
 
+var HAS_QC01 = true;
 if (STEP === 'AUTO') {
   print('Looking for the saved block table of RUN 1 ...');
   var found = {}, waiting = 2;
@@ -24,7 +25,14 @@ if (STEP === 'AUTO') {
     var done = function (ok) {
       found[id] = ok;
       waiting -= 1;
-      if (waiting === 0) { runRangeStep(found[ASSETS.RAW] && found[ASSETS.QC01] ? 'MAP' : 'LAYERS'); }
+      if (waiting === 0) {
+        HAS_QC01 = found[ASSETS.QC01];
+        if (found[ASSETS.RAW] && !HAS_QC01) {
+          print('Note: the QC01 table is missing (its task failed). The final map is not affected; ' +
+                'the QC log marks those checks as NOT RECORDED.');
+        }
+        runRangeStep(found[ASSETS.RAW] ? 'MAP' : 'LAYERS');
+      }
     };
     try { ee.data.getAsset(id, function (a, err) { done(!!a && !err); }); } catch (e) { done(false); }
   });

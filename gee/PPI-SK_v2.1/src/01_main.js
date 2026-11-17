@@ -309,7 +309,7 @@ var ff18D5 = pct5(R.D5_minObs.unmask(0));
 var ff19 = ee.Dictionary(R.D2n.unmask(0).gte(8).reduceRegion({reducer: ee.Reducer.mean(),
   geometry: AOI, scale: 30, crs: CRS, maxPixels: 1e10, tileScale: 4})).values().get(0);
 
-var QC01 = ee.FeatureCollection([ee.Feature(null, {
+var QC01 = ee.FeatureCollection([ee.Feature(AOI.centroid(1), {
   FF01_asset_log: CHECK.log,
   FF01_status: CHECK.ok ? 'PASS' : 'STOP',
   FF02_crs: CRS,

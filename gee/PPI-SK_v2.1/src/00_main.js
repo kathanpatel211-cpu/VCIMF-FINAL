@@ -49,7 +49,7 @@ LIB.checkAssets(STATE_GEOM, function (CHECK) {
   var PASTE = ee.String("var ANCHORS = {id: '" + CFG0.ANCHOR_ID + "', ")
     .cat(ee.List(pasteParts).join(', ')).cat('};');
 
-  var anchorFeature = ee.Feature(null, ANCH_DICT).set({
+  var anchorFeature = ee.Feature(STATE_GEOM.centroid(100), ANCH_DICT).set({   // asset tables need a geometry
     anchor_id: CFG0.ANCHOR_ID,
     state: CFG0.STATE,
     state_crs: STATE_CRS,

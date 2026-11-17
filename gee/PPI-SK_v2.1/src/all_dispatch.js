@@ -31,6 +31,7 @@ function assetExists(id, cb) {
   } catch (e) { cb(false); }
 }
 
+var HAS_QC01 = true;
 if (STEP === 'AUTO') {
   print('Looking for results of earlier steps ...');
   var ids = [ASSETS.FINAL, ASSETS.RAW, ASSETS.QC01, ASSETS.ANCHORS];
@@ -42,7 +43,7 @@ if (STEP === 'AUTO') {
       if (waiting === 0) {
         var n;
         if (found[ASSETS.FINAL]) { n = 4; }
-        else if (found[ASSETS.RAW] && found[ASSETS.QC01]) { n = 3; }
+        else if (found[ASSETS.RAW]) { n = 3; HAS_QC01 = found[ASSETS.QC01]; }
         else if (found[ASSETS.ANCHORS] || SETTINGS.ANCHOR_MODE === 'LIVE') { n = 2; }
         else { n = 1; }
         runStep(n);

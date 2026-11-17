@@ -642,7 +642,12 @@ var COL_FC = ee.FeatureCollection(colFeatures);
 var DRAW_FC = ee.FeatureCollection(DRAWS.map(function (d) { return ee.Feature(null, d); }));
 
 /* ---------- qc_log (Section 12) ---------- */
-var qc01 = ee.Feature(ee.FeatureCollection(CFG.QC01_ASSET).first());
+var HAS_QC = (typeof HAS_QC01 === 'undefined') ? true : HAS_QC01;   // false if the QC01 export failed
+var qc01 = HAS_QC ? ee.Feature(ee.FeatureCollection(CFG.QC01_ASSET).first()) : null;
+function notRecorded(id, check) {
+  return q(id, check, 'not recorded: the QC01 table was not saved (all dataset checks passed in Run 1 console)',
+           'NOT RECORDED', 'Re-run RUN 1 (STEP = LAYERS) to regenerate the QC01 table');
+}
 function st(cond, ok, bad) { return ee.Algorithms.If(cond, ok || 'PASS', bad || 'FAIL'); }
 function q(id, check, value, status, action) {
   return ee.Feature(null, {id: id, check: check, value: value, status: status, if_fail: action});
@@ -679,13 +684,13 @@ var FIRE_GAP_TEXT = ee.Feature(raw.first()).get('fire_source_gap');
 var gapPresent = raw.filter(ee.Filter.notNull(['fire_source_gap'])).size().eq(N_ALL);
 
 var QC_FC = ee.FeatureCollection([
-  q('FF-01', 'Asset access (22 datasets)', qc01.get('FF01_asset_log'), qc01.get('FF01_status'), 'STOP: re-check ID in Section 5'),
-  q('FF-02', 'Working CRS', qc01.get('FF02_crs'), qc01.get('FF02_status'), 'STOP: fix UTM formula'),
-  q('FF-03', 'Mosaic nominal scales', qc01.get('FF03_scales'), qc01.get('FF03_status'), 'STOP: setDefaultProjection'),
-  q('FF-04', 'Interior blocks 9.99-10.01 ha (count outside)', qc01.get('FF04_interior_blocks_out_of_tolerance'),
-    st(ee.Number(qc01.get('FF04_interior_blocks_out_of_tolerance')).eq(0)), 'Grid scale wrong'),
-  q('FF-05', 'Null beat_id count', qc01.get('FF05_null_beat'),
-    st(ee.Number(qc01.get('FF05_null_beat')).eq(0)), "Re-inspect asset; fall back to 'RANGE'"),
+  HAS_QC ? q('FF-01', 'Asset access (22 datasets)', qc01.get('FF01_asset_log'), qc01.get('FF01_status'), 'STOP: re-check ID in Section 5') : notRecorded('FF-01', 'Asset access (22 datasets)'),
+  HAS_QC ? q('FF-02', 'Working CRS', qc01.get('FF02_crs'), qc01.get('FF02_status'), 'STOP: fix UTM formula') : notRecorded('FF-02', 'Working CRS'),
+  HAS_QC ? q('FF-03', 'Mosaic nominal scales', qc01.get('FF03_scales'), qc01.get('FF03_status'), 'STOP: setDefaultProjection') : notRecorded('FF-03', 'Mosaic nominal scales'),
+  HAS_QC ? q('FF-04', 'Interior blocks 9.99-10.01 ha (count outside)', qc01.get('FF04_interior_blocks_out_of_tolerance'),
+    st(ee.Number(qc01.get('FF04_interior_blocks_out_of_tolerance')).eq(0)), 'Grid scale wrong') : notRecorded('FF-04', 'Interior blocks 9.99-10.01 ha (count outside)'),
+  HAS_QC ? q('FF-05', 'Null beat_id count', qc01.get('FF05_null_beat'),
+    st(ee.Number(qc01.get('FF05_null_beat')).eq(0)), "Re-inspect asset; fall back to 'RANGE'") : notRecorded('FF-05', 'Null beat_id count'),
   q('FF-06', 'Max parameter null share (before beat-mean fill)', maxNull,
     st(ee.Number(maxNull).lt(0.02)), 'Check masks; gaps filled with beat mean (gapfilled column)'),
   q('FF-07', 'Sub-weights sum to 100 and theme totals', JSON.stringify(W), FF07, 'Arithmetic error'),
@@ -703,14 +708,14 @@ var QC_FC = ee.FeatureCollection([
   q('FF-15', 'Blocks with >=5 fire years and E1 >= 0.55', ff15bad, st(ff15bad.eq(0), 'PASS', 'STOP'), 'Inversion missing'),
   q('FF-16', 'Blocks excluded by C1 yet ranked', ff16bad, st(ff16bad.eq(0), 'PASS', 'STOP'), 'Threshold coordination'),
   q('FF-17', 'Blocks with net_plantable_ha > block_area_ha', ff17bad, st(ff17bad.eq(0)), 'Fraction error'),
-  q('FF-18', 'Min clear S2 obs per window-year (5th pct: A3, D5)',
+  HAS_QC ? q('FF-18', 'Min clear S2 obs per window-year (5th pct: A3, D5)',
     ee.String(ee.Number(qc01.get('FF18_A3_p5_min_clear_obs')).format('%.0f')).cat(', ')
       .cat(ee.Number(qc01.get('FF18_D5_p5_min_clear_obs')).format('%.0f')),
     st(ee.Number(qc01.get('FF18_A3_p5_min_clear_obs')).gte(3)
          .and(ee.Number(qc01.get('FF18_D5_p5_min_clear_obs')).gte(3))),
-    'Set CS_THRESHOLD = 0.50 in 00/01 and log it'),
-  q('FF-19', 'Share of pixels with >= 8 Landsat years', qc01.get('FF19_share_pixels_8yrs'),
-    st(ee.Number(qc01.get('FF19_share_pixels_8yrs')).gte(0.95)), 'Set D2_MONTHS = [9, 12] and log it'),
+    'Set CS_THRESHOLD = 0.50 in 00/01 and log it') : notRecorded('FF-18', 'Min clear S2 obs per window-year (5th pct: A3, D5)'),
+  HAS_QC ? q('FF-19', 'Share of pixels with >= 8 Landsat years', qc01.get('FF19_share_pixels_8yrs'),
+    st(ee.Number(qc01.get('FF19_share_pixels_8yrs')).gte(0.95)), 'Set D2_MONTHS = [9, 12] and log it') : notRecorded('FF-19', 'Share of pixels with >= 8 Landsat years'),
   q('FF-20', 'PPI_raw p95 - p5 (retained)', spread, st(spread.gte(0.20)), 'Review CV guard and anchors'),
   q('FF-21', 'Category 1-4 shares of retained', sharesL, st(shareOK), 'Percentile transform error'),
   q('FF-22', '|mean stability K=' + K + ' - K=' + KHALF + '|', dMC, st(dMC.lt(0.01)), 'Raise MC_K to 1000'),
