@@ -15,6 +15,7 @@
 
 var CFG = {
   RANGE_NAME: 'Khedbrahma',
+  CRS: 'EPSG:32643',             // working CRS of the range (same as script 01)
   AOI_ASSET: 'projects/khedbrahma-range/assets/khedbrahma',
   FINAL_ASSET: 'projects/khedbrahma-range/assets/PPI_SK_v21_final_blocks_Khedbrahma',
   DRIVE_FOLDER: 'PPI_SK_v21',
@@ -25,7 +26,7 @@ var CFG = {
 
 var AOI = ee.FeatureCollection(CFG.AOI_ASSET).geometry().dissolve({maxError: 1});
 var fin = ee.FeatureCollection(CFG.FINAL_ASSET);
-var CRS = ee.Feature(fin.first()).get('work_crs').getInfo();
+var CRS = CFG.CRS;
 
 /* ---------- datasets (same IDs as Section 5) ---------- */
 var chmCol = ee.ImageCollection('projects/sat-io/open-datasets/facebook/meta-canopy-height').filterBounds(AOI);

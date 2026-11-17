@@ -18,11 +18,12 @@ var CFG0 = {
   ANCHOR_ID: 'GJ_2026-11_v2.1',             // new ID whenever anchors are recomputed
   ANCHOR_ASSET: 'projects/khedbrahma-range/assets/PPI_SK_v21_anchors_GJ',
   DRIVE_FOLDER: 'PPI_SK_v21',
+  STATE_CRS: 'EPSG:32642',                 // UTM zone of the Gujarat centroid (42N); anchor grid only
   CS_THRESHOLD: 0.60,                       // Cloud Score+ cs_cdf; must equal script 01
   D2_MONTHS: [9, 11],                       // RESTREND NDVI window; must equal script 01
   SCALE_OVERRIDE: null,                     // null = native scale per parameter (spec).
                                             // e.g. 100 only if a task runs out of memory.
-  PRINT_INTERACTIVE: false                  // statewide print usually times out; use CSV
+  _end: true
 };
 
 /* ======================================================================
@@ -68,11 +69,12 @@ LIB.FIRE_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 20
 LIB.FIRE_SOURCE_GAP = 'VIIRS 375 m not available 2022-01-01 to 2023-09-02; ' +
                       'MODIS MCD64A1 500 m burned area only for 2022-Aug 2023';
 
-/* UTM zone from a geometry centroid (Rule 2). Returns client-side 'EPSG:326zz'. */
+/* UTM zone from a geometry centroid (Rule 2). Server-side ee.String 'EPSG:326zz'.
+   (Checked asynchronously against the configured CRS — no blocking getInfo.) */
 LIB.utmCrs = function (geom) {
   var lon = ee.Number(ee.Geometry(geom).centroid(100).coordinates().get(0));
   var zone = lon.add(180).divide(6).floor().add(1);
-  return ee.String('EPSG:326').cat(zone.format('%02d')).getInfo();
+  return ee.String('EPSG:326').cat(zone.format('%02d'));
 };
 
 /* Mosaic rule: mosaic() drops the native projection — always restore it. */
@@ -90,14 +92,14 @@ LIB.safeMax = function (col, band, fallback) {
 
 /* ---------- DEM selection (FABDEM, else GLO-30 — logged in dem_source) ---------- */
 LIB.dem = function (region) {
+  // Decided on the server (no blocking request): FABDEM if it covers the region, else GLO-30.
   var fab = ee.ImageCollection(LIB.A.FABDEM).filterBounds(region);
-  var n = fab.size().getInfo();
-  if (n > 0) {
-    return {img: LIB.mosaicNative(fab).select([0]).rename('elev'), source: 'FABDEM_v1-2'};
-  }
-  print('WARNING: FABDEM has no tiles here — using Copernicus GLO-30 fallback (logged).');
   var glo = ee.ImageCollection(LIB.A.GLO30).filterBounds(region);
-  return {img: LIB.mosaicNative(glo).select('DEM').rename('elev'), source: 'GLO30_fallback'};
+  var hasFab = fab.size().gt(0);
+  var img = ee.Image(ee.Algorithms.If(hasFab,
+    LIB.mosaicNative(fab).select([0]).rename('elev'),
+    LIB.mosaicNative(glo).select('DEM').rename('elev')));
+  return {img: img, source: ee.String(ee.Algorithms.If(hasFab, 'FABDEM_v1-2', 'GLO30_fallback'))};
 };
 
 /* ---------- Sentinel-2 + Cloud Score+ ---------- */
@@ -475,175 +477,169 @@ LIB.score = function (R, ANCH) {
 };
 
 /* ======================================================================
- *  FF-01 / FF-03: load and print every dataset; stop on failure.
+ *  FF-01 / FF-03: load and print every dataset — ASYNCHRONOUS.
+ *  All requests run in parallel in the background (the page never
+ *  freezes). done({ok, log, scales}) is called once all have answered.
  * ====================================================================== */
-LIB.checkAssets = function (region) {
-  var A = LIB.A, ok = true, log = [];
+LIB.checkAssets = function (region, done) {
+  var A = LIB.A;
   region = ee.Geometry(region);
   var pt = region.centroid(100);
-  function test(id, fn, critical) {
-    try {
-      var info = fn().getInfo();
-      print('OK   ' + id, info);
-      log.push(id + ':OK');
-      return true;
-    } catch (err) {
-      print('FAIL ' + id + ' -> ' + err);
-      log.push(id + ':FAIL');
-      if (critical !== false) { ok = false; }
-      return false;
-    }
-  }
+  var tests = [];   // [id, eeObject, critical, validator]
   function ic(path, s, e, bounds) {
-    return function () {
-      var c = ee.ImageCollection(path);
-      if (s) { c = c.filterDate(s, e); }
-      if (bounds) { c = c.filterBounds(bounds); }
-      return ee.Dictionary({images: c.limit(500).size(),
-                            bands: ee.Image(c.first()).bandNames()});
-    };
+    var c = ee.ImageCollection(path);
+    if (s) { c = c.filterDate(s, e); }
+    if (bounds) { c = c.filterBounds(bounds); }
+    return ee.Dictionary({images: c.limit(500).size(), bands: ee.Image(c.first()).bandNames()});
   }
-  function im(path) { return function () { return ee.Image(path).bandNames(); }; }
+  function im(path) { return ee.Image(path).bandNames(); }
   function fc(path, bounds) {
-    return function () {
-      var c = ee.FeatureCollection(path);
-      if (bounds) { c = c.filterBounds(bounds); }
-      return ee.Dictionary({features: c.limit(5000).size()});
-    };
+    var c = ee.FeatureCollection(path);
+    if (bounds) { c = c.filterBounds(bounds); }
+    return ee.Dictionary({features: c.limit(5000).size()});
   }
-  print('===== FF-01 dataset register check =====');
-  var fabOK = test('D01 FABDEM', ic(A.FABDEM, null, null, pt), false);
-  var gloOK = test('D02 GLO-30', ic(A.GLO30, null, null, pt), false);
-  if (!fabOK && !gloOK) { ok = false; }
-  test('D03 MERIT Hydro', im(A.MERIT));
-  test('D04 Hydrography90m CTI', ic(A.CTI, null, null, pt));
-  test('D05 CHIRPS daily', ic(A.CHIRPS, '2024-07-01', '2024-07-05'));
-  test('D06 MOD16A2GF', ic(A.MOD16, '2024-01-01', '2024-02-01'));
-  test('D07 Sentinel-2 SR', ic(A.S2, '2025-10-01', '2025-11-01', pt));
-  test('D08 Cloud Score+', ic(A.CSP, '2025-10-01', '2025-11-01', pt));
-  test('D09 Landsat 8', ic(A.L8, '2024-10-01', '2024-12-01', pt));
-  test('D09 Landsat 9', ic(A.L9, '2024-10-01', '2024-12-01', pt));
-  test('D10 JRC GSW 1.4', im(A.GSW));
+  function scale(col) {
+    return LIB.mosaicNative(ee.ImageCollection(col).filterBounds(pt)).projection().nominalScale();
+  }
+  function add(id, obj, critical, validator) { tests.push([id, obj, critical !== false, validator]); }
+  add('D01 FABDEM', ic(A.FABDEM, null, null, pt), false);
+  add('D02 GLO-30', ic(A.GLO30, null, null, pt), false);
+  add('D03 MERIT Hydro', im(A.MERIT));
+  add('D04 Hydrography90m CTI', ic(A.CTI, null, null, pt));
+  add('D05 CHIRPS daily', ic(A.CHIRPS, '2024-07-01', '2024-07-05'));
+  add('D06 MOD16A2GF', ic(A.MOD16, '2024-01-01', '2024-02-01'));
+  add('D07 Sentinel-2 SR', ic(A.S2, '2025-10-01', '2025-11-01', pt));
+  add('D08 Cloud Score+', ic(A.CSP, '2025-10-01', '2025-11-01', pt));
+  add('D09 Landsat 8', ic(A.L8, '2024-10-01', '2024-12-01', pt));
+  add('D09 Landsat 9', ic(A.L9, '2024-10-01', '2024-12-01', pt));
+  add('D10 JRC GSW 1.4', im(A.GSW));
   ['sand', 'silt', 'clay', 'soc', 'phh2o', 'cec', 'cfvo'].forEach(function (p) {
-    test('D11 SoilGrids ' + p, im(A.SOIL + p + '_mean'));
+    add('D11 SoilGrids ' + p, im(A.SOIL + p + '_mean'));
   });
-  test('D12 Meta canopy height', ic(A.CHM, null, null, pt));
-  test('D13 Hansen GFC v1.13', im(A.HANSEN));
-  test('D14 Dynamic World', ic(A.DW, '2025-01-01', '2025-02-01', pt));
-  test('D15 WorldCover v200', ic(A.WC));
-  test('D16 ESA CCI AGB 2022', ic(A.AGB, '2022-01-01', '2023-01-01'));
-  test('D17 MCD64A1', ic(A.MCD64, '2024-01-01', '2025-01-01'));
+  add('D12 Meta canopy height', ic(A.CHM, null, null, pt));
+  add('D13 Hansen GFC v1.13', im(A.HANSEN));
+  add('D14 Dynamic World', ic(A.DW, '2025-01-01', '2025-02-01', pt));
+  add('D15 WorldCover v200', ic(A.WC));
+  add('D16 ESA CCI AGB 2022', ic(A.AGB, '2022-01-01', '2023-01-01'));
+  add('D17 MCD64A1', ic(A.MCD64, '2024-01-01', '2025-01-01'));
   for (var y = 2015; y <= 2021; y++) {
-    test('D18a VIIRS archive ' + y, fc(A.VIIRS_ARCH + y, pt.buffer(50000)));
+    add('D18a VIIRS archive ' + y, fc(A.VIIRS_ARCH + y, pt.buffer(50000)));
   }
-  test('D18b VIIRS LANCE', ic(A.VIIRS_LANCE, '2024-03-01', '2024-03-10'));
-  test('D19 GHSL POP 2020', ic(A.GHSL, '2020-01-01', '2021-01-01'));
-  test('D20 WDPA', fc(A.WDPA, pt.buffer(100000)));
-  test('D21 GRIP4 SE Asia', fc(A.GRIP_SEA, pt.buffer(20000)));
-  test('D21 GRIP4 ME-C Asia', fc(A.GRIP_MECA));
-  test('D22 FAO GAUL L1', fc(A.GAUL1));
+  add('D18b VIIRS LANCE', ic(A.VIIRS_LANCE, '2024-03-01', '2024-03-10'));
+  add('D19 GHSL POP 2020', ic(A.GHSL, '2020-01-01', '2021-01-01'));
+  add('D20 WDPA', fc(A.WDPA, pt.buffer(100000)));
+  add('D21 GRIP4 SE Asia', fc(A.GRIP_SEA, pt.buffer(20000)));
+  add('D21 GRIP4 ME-C Asia', fc(A.GRIP_MECA));
+  add('D22 FAO GAUL L1', fc(A.GAUL1));
+  var inRange = function (lo, hi) { return function (v) { return v >= lo && v <= hi; }; };
+  add('FF-03 DEM mosaic scale (m)',
+      ee.Number(ee.Algorithms.If(ee.ImageCollection(A.FABDEM).filterBounds(pt).size().gt(0),
+                                 scale(A.FABDEM), scale(A.GLO30))), true, inRange(20, 40));
+  add('FF-03 CTI mosaic scale (m)', scale(A.CTI), true, inRange(60, 120));
+  add('FF-03 CHM mosaic scale (m)', scale(A.CHM), true, inRange(0.3, 3));
 
-  print('===== FF-03 mosaic projection check =====');
-  var scales = {};
-  function nominal(id, col, lo, hi) {
-    try {
-      var s = LIB.mosaicNative(ee.ImageCollection(col).filterBounds(pt)).projection().nominalScale().getInfo();
-      var pass = (s >= lo && s <= hi);
-      print((pass ? 'OK   ' : 'FAIL ') + id + ' nominal scale = ' + s.toFixed(2) + ' m');
-      scales[id] = s;
-      if (!pass) { ok = false; }
-    } catch (err) { print('FAIL ' + id + ' -> ' + err); scales[id] = -1; }
-  }
-  if (fabOK) { nominal('FABDEM', A.FABDEM, 20, 40); } else { nominal('GLO30', A.GLO30, 20, 40); }
-  nominal('CTI', A.CTI, 60, 120);
-  nominal('CHM', A.CHM, 0.3, 3);
-
-  return {ok: ok, log: log.join(';'), scales: scales};
+  print('Checking ' + tests.length + ' datasets in the background (FF-01, FF-03) ...');
+  var res = {}, pending = tests.length;
+  tests.forEach(function (t) {
+    t[1].evaluate(function (val, err) {
+      var pass = !err && (!t[3] || t[3](val));
+      res[t[0]] = {pass: pass, critical: t[2], val: val, err: err};
+      print((pass ? 'OK   ' : 'FAIL ') + t[0], err ? String(err) : val);
+      pending -= 1;
+      if (pending === 0) {
+        var ok = true, log = [], scales = {};
+        tests.forEach(function (u) {
+          var r = res[u[0]];
+          log.push(u[0] + ':' + (r.pass ? 'OK' : 'FAIL'));
+          if (u[0].indexOf('FF-03') === 0) { scales[u[0]] = r.val; }
+          if (!r.pass && r.critical) { ok = false; }
+        });
+        if (!res['D01 FABDEM'].pass && !res['D02 GLO-30'].pass) { ok = false; }
+        done({ok: ok, log: log.join(';'), scales: scales});
+      }
+    });
+  });
 };
 /* ======================================================================
  *  MODULE 0 — STATE ANCHOR TABLE (build steps 1-2, Section 8.1)
+ *  Fully asynchronous: the page never freezes. Export tasks appear in
+ *  the Tasks tab only after the background dataset check has passed.
  * ====================================================================== */
 
 /* ---------- 1. State boundary and working grid ---------- */
 var state = ee.FeatureCollection(LIB.A.GAUL1)
   .filter(ee.Filter.eq('ADM0_NAME', CFG0.COUNTRY))
   .filter(ee.Filter.eq('ADM1_NAME', CFG0.STATE));
-print('State features (GAUL L1):', state.size());
 var STATE_GEOM = state.geometry().simplify(250);
-var STATE_CRS = LIB.utmCrs(STATE_GEOM);
-print('State centroid UTM (used for anchor grid):', STATE_CRS);
-
-/* ---------- 2. Load and print all 22 datasets (FF-01, FF-03) ---------- */
-var CHECK = LIB.checkAssets(STATE_GEOM);
-if (!CHECK.ok) {
-  throw new Error('FF-01/FF-03 STOP: at least one dataset failed to load. ' +
-                  'Check the IDs in Section 5. Nothing has been substituted.');
-}
-
-/* ---------- 3. Parameter images over the state ---------- */
-var R_STATE = LIB.layers(STATE_GEOM, STATE_CRS, {
-  csThr: CFG0.CS_THRESHOLD,
-  d2Months: CFG0.D2_MONTHS,
-  a3MaskTrees: false
-});
-var LAND = LIB.anchorLandMask();
-
-/* ---------- 4. Percentiles (2nd, 98th) on the anchor landscape ---------- */
-var ANCH_DICT = LIB.anchors(R_STATE, STATE_GEOM, STATE_CRS, LAND, CFG0.SCALE_OVERRIDE);
-
-/* A ready-to-paste JavaScript constant for FROZEN mode in script 01. */
-var pasteParts = LIB.ANCHOR_SPEC.map(function (s) {
-  var k = s[0];
-  return ee.String(k + ': [')
-    .cat(ee.Number(ANCH_DICT.get(k + '_p2')).format('%.6g')).cat(', ')
-    .cat(ee.Number(ANCH_DICT.get(k + '_p98')).format('%.6g')).cat(']');
-});
-var PASTE = ee.String("var ANCHORS = {id: '" + CFG0.ANCHOR_ID + "', ")
-  .cat(ee.List(pasteParts).join(', ')).cat('};');
-
-var anchorFeature = ee.Feature(null, ANCH_DICT).set({
-  anchor_id: CFG0.ANCHOR_ID,
-  state: CFG0.STATE,
-  state_crs: STATE_CRS,
-  model_version: 'PPI-SK_v2.1',
-  dem_source: R_STATE.demSource,
-  cs_threshold: CFG0.CS_THRESHOLD,
-  d2_window: CFG0.D2_MONTHS.join('-'),
-  anchor_scales: LIB.ANCHOR_SPEC.map(function (s) {
-    return s[0] + '@' + (CFG0.SCALE_OVERRIDE || s[1]) + 'm';
-  }).join(';'),
-  asset_check: CHECK.log,
-  created: ee.Date(Date.now()).format('YYYY-MM-dd'),
-  paste_js: PASTE
-});
-var ANCHOR_FC = ee.FeatureCollection([anchorFeature]);
-
-/* ---------- 5. Freeze: export CSV (Drive) + table asset ---------- */
-Export.table.toDrive({
-  collection: ANCHOR_FC,
-  description: 'PPI00_anchors_' + CFG0.ANCHOR_ID.replace(/[^A-Za-z0-9_]/g, '_'),
-  folder: CFG0.DRIVE_FOLDER,
-  fileNamePrefix: 'PPI00_state_anchors_' + CFG0.ANCHOR_ID.replace(/[^A-Za-z0-9_]/g, '_'),
-  fileFormat: 'CSV'
-});
-Export.table.toAsset({
-  collection: ANCHOR_FC,
-  description: 'PPI00_anchors_to_asset',
-  assetId: CFG0.ANCHOR_ASSET
-});
-
-print('====================================================================');
-print('NEXT: open the Tasks tab and RUN both tasks.');
-print('When they finish, script 01 reads the anchors from:', CFG0.ANCHOR_ASSET);
-print('(Strict "frozen constant" mode: copy the paste_js column of the CSV');
-print(' into the ANCHORS line of script 01 and set ANCHOR_MODE = "FROZEN".)');
-print('====================================================================');
-
-if (CFG0.PRINT_INTERACTIVE) {
-  // Interactive statewide percentiles normally exceed the 5-minute console limit.
-  PASTE.evaluate(function (s, err) { print(err ? ('Interactive print timed out: use the CSV. ' + err) : s); });
-}
+var STATE_CRS = CFG0.STATE_CRS;
+print('State features (GAUL L1):', state.size());
+print('Anchor grid CRS:', STATE_CRS, '| state centroid UTM zone:', LIB.utmCrs(STATE_GEOM));
 
 Map.centerObject(state, 7);
 Map.addLayer(ee.Image().byte().paint(state, 1, 2), {palette: ['black']}, CFG0.STATE + ' boundary');
-Map.addLayer(LAND.selfMask(), {palette: ['#4daf4a']}, 'Anchor landscape (WC 10/20/30/60)', false);
+
+/* ---------- 2. Load and print all 22 datasets (FF-01, FF-03), then build ---------- */
+LIB.checkAssets(STATE_GEOM, function (CHECK) {
+  if (!CHECK.ok) {
+    print('FF-01/FF-03 STOP: at least one dataset failed to load (see FAIL lines above). ' +
+          'Nothing has been substituted and no task was created.');
+    return;
+  }
+  print('All datasets OK — creating the anchor export tasks.');
+
+  /* ---------- 3. Parameter images over the state ---------- */
+  var R_STATE = LIB.layers(STATE_GEOM, STATE_CRS, {
+    csThr: CFG0.CS_THRESHOLD, d2Months: CFG0.D2_MONTHS, a3MaskTrees: false
+  });
+  var LAND = LIB.anchorLandMask();
+
+  /* ---------- 4. Percentiles (2nd, 98th) on the anchor landscape ---------- */
+  var ANCH_DICT = LIB.anchors(R_STATE, STATE_GEOM, STATE_CRS, LAND, CFG0.SCALE_OVERRIDE);
+
+  var pasteParts = LIB.ANCHOR_SPEC.map(function (s) {
+    var k = s[0];
+    return ee.String(k + ': [')
+      .cat(ee.Number(ANCH_DICT.get(k + '_p2')).format('%.6g')).cat(', ')
+      .cat(ee.Number(ANCH_DICT.get(k + '_p98')).format('%.6g')).cat(']');
+  });
+  var PASTE = ee.String("var ANCHORS = {id: '" + CFG0.ANCHOR_ID + "', ")
+    .cat(ee.List(pasteParts).join(', ')).cat('};');
+
+  var anchorFeature = ee.Feature(null, ANCH_DICT).set({
+    anchor_id: CFG0.ANCHOR_ID,
+    state: CFG0.STATE,
+    state_crs: STATE_CRS,
+    model_version: 'PPI-SK_v2.1',
+    dem_source: R_STATE.demSource,
+    cs_threshold: CFG0.CS_THRESHOLD,
+    d2_window: CFG0.D2_MONTHS.join('-'),
+    anchor_scales: LIB.ANCHOR_SPEC.map(function (s) {
+      return s[0] + '@' + (CFG0.SCALE_OVERRIDE || s[1]) + 'm';
+    }).join(';'),
+    asset_check: CHECK.log,
+    created: ee.Date(Date.now()).format('YYYY-MM-dd'),
+    paste_js: PASTE
+  });
+  var ANCHOR_FC = ee.FeatureCollection([anchorFeature]);
+
+  /* ---------- 5. Freeze: export CSV (Drive) + table asset ---------- */
+  var safeId = CFG0.ANCHOR_ID.replace(/[^A-Za-z0-9_]/g, '_');
+  Export.table.toDrive({
+    collection: ANCHOR_FC,
+    description: 'PPI00_anchors_' + safeId,
+    folder: CFG0.DRIVE_FOLDER,
+    fileNamePrefix: 'PPI00_state_anchors_' + safeId,
+    fileFormat: 'CSV'
+  });
+  Export.table.toAsset({
+    collection: ANCHOR_FC,
+    description: 'PPI00_anchors_to_asset',
+    assetId: CFG0.ANCHOR_ASSET
+  });
+
+  print('====================================================================');
+  print('NEXT: open the Tasks tab and RUN both tasks (PPI00_...).');
+  print('When they finish, script 01 reads the anchors from:', CFG0.ANCHOR_ASSET);
+  print('====================================================================');
+  Map.addLayer(LAND.selfMask(), {palette: ['#4daf4a']}, 'Anchor landscape (WC 10/20/30/60)', false);
+});

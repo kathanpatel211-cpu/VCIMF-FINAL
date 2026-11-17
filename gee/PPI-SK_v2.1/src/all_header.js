@@ -27,7 +27,8 @@ var SETTINGS = {
   AOI_ASSET: 'projects/khedbrahma-range/assets/khedbrahma',
   RANGE_NAME: 'Khedbrahma',
   ID_PREFIX: 'KB_',
-  EXPECTED_CRS: 'EPSG:32643',      // UTM 43N; set null for a range in another zone
+  CRS: 'EPSG:32643',               // UTM 43N for Khedbrahma (FF-02 checks it and tells you if wrong)
+  STATE_CRS: 'EPSG:32642',         // anchor grid: UTM zone of the Gujarat centroid
   BEAT_FIELD: 'AUTO',              // 'AUTO', an exact field name, or null (-> 'RANGE')
 
   // ---- where results are saved ----

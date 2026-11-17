@@ -1,39 +1,70 @@
 /* ======================================================================
  *  SCRIPT 01 — MAIN (build steps 3-17)
+ *  Fully asynchronous: all server questions run in the background, so
+ *  the page never freezes. Export tasks appear only after every check
+ *  (FF-01, FF-02, FF-03, anchors) has passed.
  * ====================================================================== */
 
 /* ---------- Step 3: range asset, UTM zone, beat field (FF-02, FF-05) ---------- */
 var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);
-var N_AOI_FEATURES = AOI_FC.size().getInfo();
-var AOI_PROPS = ee.Feature(AOI_FC.first()).propertyNames().getInfo();
-print('AOI features:', N_AOI_FEATURES);
-print('AOI property names:', AOI_PROPS);
 var AOI = AOI_FC.geometry().dissolve({maxError: 1});
+var CRS = CFG.CRS;
 
-var CRS = LIB.utmCrs(AOI);
-print('Working CRS:', CRS);
-var FF02 = (CFG.EXPECTED_CRS === null || CRS === CFG.EXPECTED_CRS) ? 'PASS' : 'FAIL';
-if (FF02 === 'FAIL') {
-  throw new Error('FF-02 STOP: working CRS ' + CRS + ' != expected ' + CFG.EXPECTED_CRS);
+var PRE = {
+  n: AOI_FC.size(),
+  props: ee.Feature(AOI_FC.first()).propertyNames(),
+  utm: LIB.utmCrs(AOI)
+};
+if (CFG.ANCHOR_MODE === 'ASSET') {
+  var af0 = ee.Feature(ee.FeatureCollection(CFG.ANCHOR_ASSET).first());
+  PRE.anchor = ee.Dictionary({id: af0.get('anchor_id'), cs: af0.get('cs_threshold'), d2: af0.get('d2_window')});
 }
-
-var BEAT_FIELD = null;
-if (CFG.BEAT_FIELD === 'AUTO') {
-  for (var i = 0; i < AOI_PROPS.length; i++) {
-    if (/beat|compart|compt/i.test(AOI_PROPS[i])) { BEAT_FIELD = AOI_PROPS[i]; break; }
+print('Reading the range asset and checking datasets in the background ...');
+ee.Dictionary(PRE).evaluate(function (info, err) {
+  if (err) {
+    print('STOP: could not read the range asset' +
+          (CFG.ANCHOR_MODE === 'ASSET' ? ' or the anchor table (run STEP 1 first, or set ANCHOR_MODE = LIVE)' : '') +
+          ': ' + err);
+    return;
   }
-} else if (CFG.BEAT_FIELD) {
-  BEAT_FIELD = CFG.BEAT_FIELD;
-}
-print('Beat field used:', BEAT_FIELD === null ? "none -> beat_id = 'RANGE'" : BEAT_FIELD);
+  print('AOI features:', info.n);
+  print('AOI property names:', info.props);
+  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);
+  if (info.utm !== CRS) {
+    print('FF-02 STOP: the AOI centroid is in ' + info.utm + ' but CRS is set to ' + CRS +
+          '. Set CRS to ' + info.utm + ' at the top of the script.');
+    return;
+  }
+  if (info.anchor) {
+    if (info.anchor.cs !== CFG.CS_THRESHOLD || info.anchor.d2 !== CFG.D2_MONTHS.join('-')) {
+      print('WARNING: CS_THRESHOLD / D2_MONTHS differ from the anchor run (' + info.anchor.cs + ', ' +
+            info.anchor.d2 + '). Anchors stay valid but log this in the DPR.');
+    }
+  }
+  var BEAT_FIELD = null;
+  if (CFG.BEAT_FIELD === 'AUTO') {
+    for (var i = 0; i < info.props.length; i++) {
+      if (/beat|compart|compt/i.test(info.props[i])) { BEAT_FIELD = info.props[i]; break; }
+    }
+  } else if (CFG.BEAT_FIELD) {
+    BEAT_FIELD = CFG.BEAT_FIELD;
+  }
+  print('Beat field used:', BEAT_FIELD === null ? "none -> beat_id = 'RANGE'" : BEAT_FIELD);
 
-/* ---------- FF-01 / FF-03: load and print every dataset ---------- */
-var CHECK = LIB.checkAssets(AOI);
-if (!CHECK.ok) {
-  throw new Error('FF-01/FF-03 STOP: a dataset failed to load or a mosaic lost its projection. ' +
-                  'See the console list above. Nothing has been substituted.');
-}
+  /* ---------- FF-01 / FF-03: load and print every dataset ---------- */
+  LIB.checkAssets(AOI, function (CHECK) {
+    if (!CHECK.ok) {
+      print('FF-01/FF-03 STOP: a dataset failed to load or a mosaic lost its projection ' +
+            '(see FAIL lines above). Nothing has been substituted and no task was created.');
+      return;
+    }
+    print('All datasets OK — building the range layers and export tasks.');
+    runRange(BEAT_FIELD, CHECK);
+  });
+});
 
+function runRange(BEAT_FIELD, CHECK) {
+var FF02 = 'PASS';
 /* ---------- Step 4: 10 ha grid, stable block ID, beat join (FF-04) ---------- */
 var proj = ee.Projection(CRS).atScale(CFG.BLOCK_SIDE);
 var grid = AOI.coveringGrid(proj).map(function (f) {
@@ -81,23 +112,18 @@ if (CFG.ANCHOR_MODE === 'ASSET') {
   var af = ee.Feature(ee.FeatureCollection(CFG.ANCHOR_ASSET).first());
   ANCH = af.toDictionary();
   ANCHOR_ID = ee.String(af.get('anchor_id'));
-  var aInfo = ee.Dictionary({id: af.get('anchor_id'), cs: af.get('cs_threshold'),
-                             d2: af.get('d2_window')}).getInfo();
-  print('Anchor table loaded:', aInfo.id);
-  if (aInfo.cs !== CFG.CS_THRESHOLD || aInfo.d2 !== CFG.D2_MONTHS.join('-')) {
-    print('WARNING: CS_THRESHOLD / D2_MONTHS differ from the anchor run (' + aInfo.cs + ', ' +
-          aInfo.d2 + '). Anchors stay valid but log this in the DPR.');
-  }
+  print('Anchor table loaded:', ANCHOR_ID);
 } else if (CFG.ANCHOR_MODE === 'FROZEN') {
   if (!ANCHORS || ANCHORS.id === 'NOT_SET') {
-    throw new Error('FF-09 STOP: ANCHOR_MODE = FROZEN but the ANCHORS constant is not pasted.');
+    print('FF-09 STOP: ANCHOR_MODE = FROZEN but the ANCHORS constant is not pasted.'); return;
   }
   var ad = {};
   LIB.ANCHOR_SPEC.forEach(function (s) {
-    if (!ANCHORS[s[0]]) { throw new Error('FF-09 STOP: ANCHORS has no entry for ' + s[0]); }
+    if (!ANCHORS[s[0]]) { ad.__missing = s[0]; return; }
     ad[s[0] + '_p2'] = ANCHORS[s[0]][0];
     ad[s[0] + '_p98'] = ANCHORS[s[0]][1];
   });
+  if (ad.__missing) { print('FF-09 STOP: ANCHORS has no entry for ' + ad.__missing); return; }
   ANCH = ee.Dictionary(ad);
   ANCHOR_ID = ee.String(ANCHORS.id);
 } else if (CFG.ANCHOR_MODE === 'LIVE') {
@@ -105,13 +131,13 @@ if (CFG.ANCHOR_MODE === 'ASSET') {
   var stateFC = ee.FeatureCollection(LIB.A.GAUL1)
     .filter(ee.Filter.eq('ADM0_NAME', 'India')).filter(ee.Filter.eq('ADM1_NAME', CFG.STATE_NAME));
   var stateGeom = stateFC.geometry().simplify(250);
-  var stateCrs = LIB.utmCrs(stateGeom);
+  var stateCrs = CFG.STATE_CRS;
   var R_STATE = LIB.layers(stateGeom, stateCrs,
     {csThr: CFG.CS_THRESHOLD, d2Months: CFG.D2_MONTHS, a3MaskTrees: false});
   ANCH = LIB.anchors(R_STATE, stateGeom, stateCrs, LIB.anchorLandMask(), CFG.LIVE_ANCHOR_SCALE);
   ANCHOR_ID = ee.String('LIVE_' + CFG.LIVE_ANCHOR_SCALE + 'm_').cat(ee.Date(Date.now()).format('YYYY-MM-dd'));
 } else {
-  throw new Error('ANCHOR_MODE must be ASSET, FROZEN or LIVE');
+  print('STOP: ANCHOR_MODE must be ASSET, FROZEN or LIVE'); return;
 }
 
 /* ---------- Steps 5-12: all layers on the range grid ---------- */
@@ -325,4 +351,5 @@ if (CFG.SHOW_MAP) {
                'Constraint code (C1-C7)', false);
   Map.addLayer(S.A1.clip(AOI), {min: 0, max: 1, palette: ['#fff5eb', '#08519c']}, 'A1 CTI score', false);
   Map.addLayer(S.B1.clip(AOI), {min: 0, max: 1, palette: ['#fff5eb', '#7f2704']}, 'B1 soil-depth proxy', false);
+}
 }

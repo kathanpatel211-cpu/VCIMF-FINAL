@@ -20,7 +20,9 @@ var CFG = {
   BLOCK_SIDE: 316.2278,          // m -> 10.00 ha
   MIN_BLOCK_HA: 2.0,             // drop slivers
   BEAT_FIELD: 'AUTO',            // 'AUTO' = detect a beat/compartment field; or exact name; or null -> 'RANGE'
-  EXPECTED_CRS: 'EPSG:32643',    // FF-02 (Khedbrahma = UTM 43N). Set null for other ranges.
+  CRS: 'EPSG:32643',             // working CRS (Rule 2): UTM 43N for Khedbrahma. FF-02 checks it
+                                 // against the AOI centroid and tells you the right zone if different.
+  STATE_CRS: 'EPSG:32642',       // LIVE anchors only: UTM zone of the Gujarat centroid
 
   // ---- anchors (Section 8) ----
   //  'ASSET'  : read the anchor table exported by script 00 (recommended)

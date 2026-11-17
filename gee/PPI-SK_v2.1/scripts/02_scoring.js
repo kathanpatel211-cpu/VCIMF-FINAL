@@ -17,6 +17,7 @@
 
 var CFG = {
   STAGE: 'SCORE',                // 'SCORE' or 'PUBLISH'
+  CRS: 'EPSG:32643',             // working CRS of the range (same as script 01)
   RANGE_NAME: 'Khedbrahma',
   AOI_ASSET: 'projects/khedbrahma-range/assets/khedbrahma',
   RAW_ASSET: 'projects/khedbrahma-range/assets/PPI_SK_v21_raw_blocks_Khedbrahma',
@@ -109,12 +110,14 @@ PARAMS.forEach(function (k) {
   statD[k + '_mean'] = retained0.aggregate_mean(k);
   statD[k + '_sd'] = retained0.aggregate_sample_sd(k);
 });
-var STATS = ee.Dictionary({
+print('Computing block statistics in the background ...');
+ee.Dictionary({
   N_all: N_ALL, N_ret: retained0.size(), nullShare: nullShare, stats: ee.Dictionary(statD)
-}).getInfo();
+}).evaluate(function (STATS, errS) {
+if (errS) { print('STOP: could not read the raw block table (has STEP 2 finished?): ' + errS); return; }
 print('Blocks: all =', STATS.N_all, ' retained =', STATS.N_ret);
 var NR = STATS.N_ret;
-if (NR < 10) { throw new Error('Fewer than 10 retained blocks — check the raw table.'); }
+if (NR < 10) { print('STOP: fewer than 10 retained blocks — check the raw table.'); return; }
 
 function sdOf(k) { var v = STATS.stats[k + '_sd']; return (typeof v === 'number') ? v : 0; }
 function meanOf(k) { var v = STATS.stats[k + '_mean']; return (typeof v === 'number') ? v : 0; }
@@ -147,7 +150,9 @@ var X = ee.Array(zTable.reduceColumns(ee.Reducer.toList(zKeys.length), zKeys).ge
 var RMAT = X.matrixTranspose().matrixMultiply(X);
 var vifList = RMAT.matrixPseudoInverse().matrixDiagonal().project([0]).toList();
 
-var COL = ee.Dictionary({rho: rhoList, vif: vifList}).getInfo();
+print('Computing Spearman correlations and VIF in the background ...');
+ee.Dictionary({rho: rhoList, vif: vifList}).evaluate(function (COL, errC) {
+if (errC) { print('STOP: collinearity screen failed: ' + errC); return; }
 var RHO = {};
 PAIRS.forEach(function (p, idx) {
   var v = COL.rho[idx];
@@ -250,7 +255,7 @@ THEME_KEYS.forEach(function (t) {
   var s = THEMES[t].reduce(function (a, k) { return a + W[k]; }, 0);
   if (Math.abs(s - THEME_PTS[t]) > 1e-6) { FF07 = 'FAIL'; }
 });
-if (FF07 === 'FAIL') { throw new Error('FF-07 STOP: weights do not sum to 100 / theme totals.'); }
+if (FF07 === 'FAIL') { print('FF-07 STOP: weights do not sum to 100 / theme totals.'); return; }
 
 var CV_REWEIGHT_LOG = CV_LOG.length ? CV_LOG.join(' | ') : 'none';
 print('Final sub-weights (after CV guard / collinearity):', W);
@@ -625,13 +630,16 @@ Map.addLayer(scored.reduceToImage(['PPI_raw'], ee.Reducer.first()).updateMask(
   {min: 0.2, max: 0.8, palette: ['#1a9850', '#fee08b', '#d73027']}, 'PPI_raw (retained, preview)');
 Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
 
+});   // end collinearity callback
+});   // end statistics callback
+
 /* ====================================================================== */
 } else if (CFG.STAGE === 'PUBLISH') {
 /* ====================================================================== */
 
 var fin = ee.FeatureCollection(CFG.FINAL_ASSET);
-var CRS = ee.Feature(fin.first()).get('work_crs').getInfo();
-print('Working CRS:', CRS);
+var CRS = CFG.CRS;
+print('Working CRS:', CRS, '| recorded in table:', ee.Feature(fin.first()).get('work_crs'));
 var tag2 = CFG.RANGE_NAME;
 
 function blockRaster(prop) { return fin.reduceToImage([prop], ee.Reducer.first()).rename(prop); }
@@ -726,5 +734,5 @@ print('Field-check blocks:', fieldList.size());
 
 /* ====================================================================== */
 } else {
-  throw new Error("CFG.STAGE must be 'SCORE' or 'PUBLISH'");
+  print("STOP: CFG.STAGE must be 'SCORE' or 'PUBLISH'");
 }

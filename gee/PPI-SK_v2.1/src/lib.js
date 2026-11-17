@@ -41,11 +41,12 @@ LIB.FIRE_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 20
 LIB.FIRE_SOURCE_GAP = 'VIIRS 375 m not available 2022-01-01 to 2023-09-02; ' +
                       'MODIS MCD64A1 500 m burned area only for 2022-Aug 2023';
 
-/* UTM zone from a geometry centroid (Rule 2). Returns client-side 'EPSG:326zz'. */
+/* UTM zone from a geometry centroid (Rule 2). Server-side ee.String 'EPSG:326zz'.
+   (Checked asynchronously against the configured CRS — no blocking getInfo.) */
 LIB.utmCrs = function (geom) {
   var lon = ee.Number(ee.Geometry(geom).centroid(100).coordinates().get(0));
   var zone = lon.add(180).divide(6).floor().add(1);
-  return ee.String('EPSG:326').cat(zone.format('%02d')).getInfo();
+  return ee.String('EPSG:326').cat(zone.format('%02d'));
 };
 
 /* Mosaic rule: mosaic() drops the native projection — always restore it. */
@@ -63,14 +64,14 @@ LIB.safeMax = function (col, band, fallback) {
 
 /* ---------- DEM selection (FABDEM, else GLO-30 — logged in dem_source) ---------- */
 LIB.dem = function (region) {
+  // Decided on the server (no blocking request): FABDEM if it covers the region, else GLO-30.
   var fab = ee.ImageCollection(LIB.A.FABDEM).filterBounds(region);
-  var n = fab.size().getInfo();
-  if (n > 0) {
-    return {img: LIB.mosaicNative(fab).select([0]).rename('elev'), source: 'FABDEM_v1-2'};
-  }
-  print('WARNING: FABDEM has no tiles here — using Copernicus GLO-30 fallback (logged).');
   var glo = ee.ImageCollection(LIB.A.GLO30).filterBounds(region);
-  return {img: LIB.mosaicNative(glo).select('DEM').rename('elev'), source: 'GLO30_fallback'};
+  var hasFab = fab.size().gt(0);
+  var img = ee.Image(ee.Algorithms.If(hasFab,
+    LIB.mosaicNative(fab).select([0]).rename('elev'),
+    LIB.mosaicNative(glo).select('DEM').rename('elev')));
+  return {img: img, source: ee.String(ee.Algorithms.If(hasFab, 'FABDEM_v1-2', 'GLO30_fallback'))};
 };
 
 /* ---------- Sentinel-2 + Cloud Score+ ---------- */
@@ -448,88 +449,86 @@ LIB.score = function (R, ANCH) {
 };
 
 /* ======================================================================
- *  FF-01 / FF-03: load and print every dataset; stop on failure.
+ *  FF-01 / FF-03: load and print every dataset — ASYNCHRONOUS.
+ *  All requests run in parallel in the background (the page never
+ *  freezes). done({ok, log, scales}) is called once all have answered.
  * ====================================================================== */
-LIB.checkAssets = function (region) {
-  var A = LIB.A, ok = true, log = [];
+LIB.checkAssets = function (region, done) {
+  var A = LIB.A;
   region = ee.Geometry(region);
   var pt = region.centroid(100);
-  function test(id, fn, critical) {
-    try {
-      var info = fn().getInfo();
-      print('OK   ' + id, info);
-      log.push(id + ':OK');
-      return true;
-    } catch (err) {
-      print('FAIL ' + id + ' -> ' + err);
-      log.push(id + ':FAIL');
-      if (critical !== false) { ok = false; }
-      return false;
-    }
-  }
+  var tests = [];   // [id, eeObject, critical, validator]
   function ic(path, s, e, bounds) {
-    return function () {
-      var c = ee.ImageCollection(path);
-      if (s) { c = c.filterDate(s, e); }
-      if (bounds) { c = c.filterBounds(bounds); }
-      return ee.Dictionary({images: c.limit(500).size(),
-                            bands: ee.Image(c.first()).bandNames()});
-    };
+    var c = ee.ImageCollection(path);
+    if (s) { c = c.filterDate(s, e); }
+    if (bounds) { c = c.filterBounds(bounds); }
+    return ee.Dictionary({images: c.limit(500).size(), bands: ee.Image(c.first()).bandNames()});
   }
-  function im(path) { return function () { return ee.Image(path).bandNames(); }; }
+  function im(path) { return ee.Image(path).bandNames(); }
   function fc(path, bounds) {
-    return function () {
-      var c = ee.FeatureCollection(path);
-      if (bounds) { c = c.filterBounds(bounds); }
-      return ee.Dictionary({features: c.limit(5000).size()});
-    };
+    var c = ee.FeatureCollection(path);
+    if (bounds) { c = c.filterBounds(bounds); }
+    return ee.Dictionary({features: c.limit(5000).size()});
   }
-  print('===== FF-01 dataset register check =====');
-  var fabOK = test('D01 FABDEM', ic(A.FABDEM, null, null, pt), false);
-  var gloOK = test('D02 GLO-30', ic(A.GLO30, null, null, pt), false);
-  if (!fabOK && !gloOK) { ok = false; }
-  test('D03 MERIT Hydro', im(A.MERIT));
-  test('D04 Hydrography90m CTI', ic(A.CTI, null, null, pt));
-  test('D05 CHIRPS daily', ic(A.CHIRPS, '2024-07-01', '2024-07-05'));
-  test('D06 MOD16A2GF', ic(A.MOD16, '2024-01-01', '2024-02-01'));
-  test('D07 Sentinel-2 SR', ic(A.S2, '2025-10-01', '2025-11-01', pt));
-  test('D08 Cloud Score+', ic(A.CSP, '2025-10-01', '2025-11-01', pt));
-  test('D09 Landsat 8', ic(A.L8, '2024-10-01', '2024-12-01', pt));
-  test('D09 Landsat 9', ic(A.L9, '2024-10-01', '2024-12-01', pt));
-  test('D10 JRC GSW 1.4', im(A.GSW));
+  function scale(col) {
+    return LIB.mosaicNative(ee.ImageCollection(col).filterBounds(pt)).projection().nominalScale();
+  }
+  function add(id, obj, critical, validator) { tests.push([id, obj, critical !== false, validator]); }
+  add('D01 FABDEM', ic(A.FABDEM, null, null, pt), false);
+  add('D02 GLO-30', ic(A.GLO30, null, null, pt), false);
+  add('D03 MERIT Hydro', im(A.MERIT));
+  add('D04 Hydrography90m CTI', ic(A.CTI, null, null, pt));
+  add('D05 CHIRPS daily', ic(A.CHIRPS, '2024-07-01', '2024-07-05'));
+  add('D06 MOD16A2GF', ic(A.MOD16, '2024-01-01', '2024-02-01'));
+  add('D07 Sentinel-2 SR', ic(A.S2, '2025-10-01', '2025-11-01', pt));
+  add('D08 Cloud Score+', ic(A.CSP, '2025-10-01', '2025-11-01', pt));
+  add('D09 Landsat 8', ic(A.L8, '2024-10-01', '2024-12-01', pt));
+  add('D09 Landsat 9', ic(A.L9, '2024-10-01', '2024-12-01', pt));
+  add('D10 JRC GSW 1.4', im(A.GSW));
   ['sand', 'silt', 'clay', 'soc', 'phh2o', 'cec', 'cfvo'].forEach(function (p) {
-    test('D11 SoilGrids ' + p, im(A.SOIL + p + '_mean'));
+    add('D11 SoilGrids ' + p, im(A.SOIL + p + '_mean'));
   });
-  test('D12 Meta canopy height', ic(A.CHM, null, null, pt));
-  test('D13 Hansen GFC v1.13', im(A.HANSEN));
-  test('D14 Dynamic World', ic(A.DW, '2025-01-01', '2025-02-01', pt));
-  test('D15 WorldCover v200', ic(A.WC));
-  test('D16 ESA CCI AGB 2022', ic(A.AGB, '2022-01-01', '2023-01-01'));
-  test('D17 MCD64A1', ic(A.MCD64, '2024-01-01', '2025-01-01'));
+  add('D12 Meta canopy height', ic(A.CHM, null, null, pt));
+  add('D13 Hansen GFC v1.13', im(A.HANSEN));
+  add('D14 Dynamic World', ic(A.DW, '2025-01-01', '2025-02-01', pt));
+  add('D15 WorldCover v200', ic(A.WC));
+  add('D16 ESA CCI AGB 2022', ic(A.AGB, '2022-01-01', '2023-01-01'));
+  add('D17 MCD64A1', ic(A.MCD64, '2024-01-01', '2025-01-01'));
   for (var y = 2015; y <= 2021; y++) {
-    test('D18a VIIRS archive ' + y, fc(A.VIIRS_ARCH + y, pt.buffer(50000)));
+    add('D18a VIIRS archive ' + y, fc(A.VIIRS_ARCH + y, pt.buffer(50000)));
   }
-  test('D18b VIIRS LANCE', ic(A.VIIRS_LANCE, '2024-03-01', '2024-03-10'));
-  test('D19 GHSL POP 2020', ic(A.GHSL, '2020-01-01', '2021-01-01'));
-  test('D20 WDPA', fc(A.WDPA, pt.buffer(100000)));
-  test('D21 GRIP4 SE Asia', fc(A.GRIP_SEA, pt.buffer(20000)));
-  test('D21 GRIP4 ME-C Asia', fc(A.GRIP_MECA));
-  test('D22 FAO GAUL L1', fc(A.GAUL1));
+  add('D18b VIIRS LANCE', ic(A.VIIRS_LANCE, '2024-03-01', '2024-03-10'));
+  add('D19 GHSL POP 2020', ic(A.GHSL, '2020-01-01', '2021-01-01'));
+  add('D20 WDPA', fc(A.WDPA, pt.buffer(100000)));
+  add('D21 GRIP4 SE Asia', fc(A.GRIP_SEA, pt.buffer(20000)));
+  add('D21 GRIP4 ME-C Asia', fc(A.GRIP_MECA));
+  add('D22 FAO GAUL L1', fc(A.GAUL1));
+  var inRange = function (lo, hi) { return function (v) { return v >= lo && v <= hi; }; };
+  add('FF-03 DEM mosaic scale (m)',
+      ee.Number(ee.Algorithms.If(ee.ImageCollection(A.FABDEM).filterBounds(pt).size().gt(0),
+                                 scale(A.FABDEM), scale(A.GLO30))), true, inRange(20, 40));
+  add('FF-03 CTI mosaic scale (m)', scale(A.CTI), true, inRange(60, 120));
+  add('FF-03 CHM mosaic scale (m)', scale(A.CHM), true, inRange(0.3, 3));
 
-  print('===== FF-03 mosaic projection check =====');
-  var scales = {};
-  function nominal(id, col, lo, hi) {
-    try {
-      var s = LIB.mosaicNative(ee.ImageCollection(col).filterBounds(pt)).projection().nominalScale().getInfo();
-      var pass = (s >= lo && s <= hi);
-      print((pass ? 'OK   ' : 'FAIL ') + id + ' nominal scale = ' + s.toFixed(2) + ' m');
-      scales[id] = s;
-      if (!pass) { ok = false; }
-    } catch (err) { print('FAIL ' + id + ' -> ' + err); scales[id] = -1; }
-  }
-  if (fabOK) { nominal('FABDEM', A.FABDEM, 20, 40); } else { nominal('GLO30', A.GLO30, 20, 40); }
-  nominal('CTI', A.CTI, 60, 120);
-  nominal('CHM', A.CHM, 0.3, 3);
-
-  return {ok: ok, log: log.join(';'), scales: scales};
+  print('Checking ' + tests.length + ' datasets in the background (FF-01, FF-03) ...');
+  var res = {}, pending = tests.length;
+  tests.forEach(function (t) {
+    t[1].evaluate(function (val, err) {
+      var pass = !err && (!t[3] || t[3](val));
+      res[t[0]] = {pass: pass, critical: t[2], val: val, err: err};
+      print((pass ? 'OK   ' : 'FAIL ') + t[0], err ? String(err) : val);
+      pending -= 1;
+      if (pending === 0) {
+        var ok = true, log = [], scales = {};
+        tests.forEach(function (u) {
+          var r = res[u[0]];
+          log.push(u[0] + ':' + (r.pass ? 'OK' : 'FAIL'));
+          if (u[0].indexOf('FF-03') === 0) { scales[u[0]] = r.val; }
+          if (!r.pass && r.critical) { ok = false; }
+        });
+        if (!res['D01 FABDEM'].pass && !res['D02 GLO-30'].pass) { ok = false; }
+        done({ok: ok, log: log.join(';'), scales: scales});
+      }
+    });
+  });
 };
