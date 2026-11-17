@@ -4,6 +4,13 @@ Four scripts that implement the *PPI-SK v2.1 Plantation Priority Index* specific
 They run entirely in the Earth Engine Code Editor. The only division input is the range asset
 `projects/khedbrahma-range/assets/khedbrahma`.
 
+**Easiest:** paste the single file `scripts/PPI_SK_v21_ALL_IN_ONE.js` into one Code Editor script and
+press *Run* repeatedly. Each press detects which results already exist and runs the next step
+(1 anchors → 2 range layers → 3 scoring → 4 maps/exports; 5 validation by setting `STEP = 5`).
+After each press: *Tasks* tab → *RUN* every task → wait until they finish → press *Run* again.
+
+The same model is also available as four separate scripts:
+
 | Copy-paste this file | Spec steps | Runs | Produces |
 | --- | --- | --- | --- |
 | `scripts/00_state_anchors.js` | 1–2 (Module 0) | Once per state | Frozen Gujarat anchor table (asset + CSV) |
