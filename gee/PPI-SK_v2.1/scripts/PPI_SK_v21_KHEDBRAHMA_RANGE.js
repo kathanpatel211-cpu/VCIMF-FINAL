@@ -1010,6 +1010,9 @@ function stepLayers() {
   /* ---------- Map preview (tiles are computed on demand) ---------- */
   if (CFG.SHOW_MAP) {
     Map.centerObject(AOI, 11);
+    // Layers are computed on fixed 10-30 m grids; zooming out further than level 10 would ask
+    // the preview for > 16,000 px per tile ("Reprojection output too large"). Exports are unaffected.
+    Map.setLocked(false, 10, 22);
     Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
     Map.addLayer(ee.Image().byte().paint(grid, 1, 1), {palette: ['#555555']}, '10 ha blocks', true);
     Map.addLayer(R.canopyPct.clip(AOI), {min: 0, max: 80, palette: ['#ffffcc', '#78c679', '#006837']},
@@ -1026,7 +1029,7 @@ function stepLayers() {
       Map.addLayer(S[p[0]].clip(AOI), sc, 'Score ' + p[1], false);
     });
     print('Map: tick any "Score ..." layer in the Layers menu (top right) to view a parameter. ' +
-          'Red = low score, green = high. Final categories appear in STEP 4.');
+          'Red = low score, green = high. Final categories appear in the next run, after the tasks finish.');
   }
   }
 }
