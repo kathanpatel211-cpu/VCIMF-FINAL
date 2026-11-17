@@ -615,7 +615,8 @@ function step1_stateAnchors() {
     COUNTRY: SETTINGS.COUNTRY, STATE: SETTINGS.STATE, ANCHOR_ID: SETTINGS.ANCHOR_ID,
     ANCHOR_ASSET: ASSETS.ANCHORS, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER,
     CS_THRESHOLD: SETTINGS.CS_THRESHOLD, D2_MONTHS: SETTINGS.D2_MONTHS,
-    STATE_CRS: SETTINGS.STATE_CRS, SCALE_OVERRIDE: null
+    STATE_CRS: SETTINGS.STATE_CRS, SCALE_OVERRIDE: null,
+    AOI_ASSET: SETTINGS.AOI_ASSET, RANGE_NAME: SETTINGS.RANGE_NAME
   };
   /* ======================================================================
    *  MODULE 0 — STATE ANCHOR TABLE (build steps 1-2, Section 8.1)
@@ -634,6 +635,12 @@ function step1_stateAnchors() {
 
   Map.centerObject(state, 7);
   Map.addLayer(ee.Image().byte().paint(state, 1, 2), {palette: ['black']}, CFG0.STATE + ' boundary');
+  if (CFG0.AOI_ASSET) {
+    Map.addLayer(ee.Image().byte().paint(ee.FeatureCollection(CFG0.AOI_ASSET), 1, 3), {palette: ['#d7191c']},
+                 'Your range (' + CFG0.RANGE_NAME + ')');
+  }
+  print('STEP 1 works on the whole state: it measures every parameter across ' + CFG0.STATE +
+        ' to fix the scoring scale (anchors). Your range, blocks and parameter maps appear from STEP 2.');
 
   /* ---------- 2. Load and print all 22 datasets (FF-01, FF-03), then build ---------- */
   LIB.checkAssets(STATE_GEOM, function (CHECK) {
@@ -698,7 +705,8 @@ function step1_stateAnchors() {
     print('NEXT: open the Tasks tab and RUN both tasks (PPI00_...).');
     print('When they finish, press Run again (STEP 2). Anchors saved to:', CFG0.ANCHOR_ASSET);
     print('====================================================================');
-    Map.addLayer(LAND.selfMask(), {palette: ['#4daf4a']}, 'Anchor landscape (WC 10/20/30/60)', false);
+    Map.addLayer(LAND.selfMask().clip(STATE_GEOM), {palette: ['#4daf4a']},
+                 'Anchor landscape: tree/shrub/grass/bare land in ' + CFG0.STATE, false);
   });
 }
 
@@ -1061,14 +1069,22 @@ function step2_rangeLayers() {
   if (CFG.SHOW_MAP) {
     Map.centerObject(AOI, 11);
     Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
-    Map.addLayer(ee.Image().byte().paint(grid, 1, 1), {palette: ['#555555']}, '10 ha blocks', false);
+    Map.addLayer(ee.Image().byte().paint(grid, 1, 1), {palette: ['#555555']}, '10 ha blocks', true);
     Map.addLayer(R.canopyPct.clip(AOI), {min: 0, max: 80, palette: ['#ffffcc', '#78c679', '#006837']},
                  'Canopy % (CHM >= 5 m, minus loss 2019+)', false);
     Map.addLayer(R.constraintCode.selfMask().clip(AOI), {min: 1, max: 127,
                  palette: ['#08519c', '#3182bd', '#9e9ac8', '#e6550d', '#fdae6b', '#636363']},
                  'Constraint code (C1-C7)', false);
-    Map.addLayer(S.A1.clip(AOI), {min: 0, max: 1, palette: ['#fff5eb', '#08519c']}, 'A1 CTI score', false);
-    Map.addLayer(S.B1.clip(AOI), {min: 0, max: 1, palette: ['#fff5eb', '#7f2704']}, 'B1 soil-depth proxy', false);
+    var sc = {min: 0, max: 1, palette: ['#d73027', '#fee08b', '#1a9850']};   // red = low score, green = high
+    [['A1', 'A1 Topographic wetness (CTI)'], ['A3', 'A3 Post-monsoon moisture'], ['A5', 'A5 Near seasonal water'],
+     ['B1', 'B1 Soil depth proxy'], ['B2', 'B2 Soil texture'], ['B4', 'B4 Soil pH'], ['B7', 'B7 Rockiness (inverse)'],
+     ['C1s', 'C1s Slope'], ['C2s', 'C2s Heat load (inverse)'], ['D2', 'D2 Degradation trend'],
+     ['D3', 'D3 Biomass deficit'], ['D6', 'D6 Near dense forest'], ['E2', 'E2 Low biotic pressure'],
+     ['E4', 'E4 Erosion risk']].forEach(function (p) {
+      Map.addLayer(S[p[0]].clip(AOI), sc, 'Score ' + p[1], false);
+    });
+    print('Map: tick any "Score ..." layer in the Layers menu (top right) to view a parameter. ' +
+          'Red = low score, green = high. Final categories appear in STEP 4.');
   }
   }
 }

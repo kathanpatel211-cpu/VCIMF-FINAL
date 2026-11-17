@@ -15,6 +15,12 @@ print('Anchor grid CRS:', STATE_CRS, '| state centroid UTM zone:', LIB.utmCrs(ST
 
 Map.centerObject(state, 7);
 Map.addLayer(ee.Image().byte().paint(state, 1, 2), {palette: ['black']}, CFG0.STATE + ' boundary');
+if (CFG0.AOI_ASSET) {
+  Map.addLayer(ee.Image().byte().paint(ee.FeatureCollection(CFG0.AOI_ASSET), 1, 3), {palette: ['#d7191c']},
+               'Your range (' + CFG0.RANGE_NAME + ')');
+}
+print('STEP 1 works on the whole state: it measures every parameter across ' + CFG0.STATE +
+      ' to fix the scoring scale (anchors). Your range, blocks and parameter maps appear from STEP 2.');
 
 /* ---------- 2. Load and print all 22 datasets (FF-01, FF-03), then build ---------- */
 LIB.checkAssets(STATE_GEOM, function (CHECK) {
@@ -79,5 +85,6 @@ LIB.checkAssets(STATE_GEOM, function (CHECK) {
   print('NEXT: open the Tasks tab and RUN both tasks (PPI00_...).');
   print('When they finish, script 01 reads the anchors from:', CFG0.ANCHOR_ASSET);
   print('====================================================================');
-  Map.addLayer(LAND.selfMask(), {palette: ['#4daf4a']}, 'Anchor landscape (WC 10/20/30/60)', false);
+  Map.addLayer(LAND.selfMask().clip(STATE_GEOM), {palette: ['#4daf4a']},
+               'Anchor landscape: tree/shrub/grass/bare land in ' + CFG0.STATE, false);
 });

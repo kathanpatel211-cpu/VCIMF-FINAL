@@ -18,6 +18,8 @@ var CFG0 = {
   ANCHOR_ID: 'GJ_2026-11_v2.1',             // new ID whenever anchors are recomputed
   ANCHOR_ASSET: 'projects/khedbrahma-range/assets/PPI_SK_v21_anchors_GJ',
   DRIVE_FOLDER: 'PPI_SK_v21',
+  AOI_ASSET: 'projects/khedbrahma-range/assets/khedbrahma',   // shown on the map only
+  RANGE_NAME: 'Khedbrahma',
   STATE_CRS: 'EPSG:32642',                 // UTM zone of the Gujarat centroid (42N); anchor grid only
   CS_THRESHOLD: 0.60,                       // Cloud Score+ cs_cdf; must equal script 01
   D2_MONTHS: [9, 11],                       // RESTREND NDVI window; must equal script 01

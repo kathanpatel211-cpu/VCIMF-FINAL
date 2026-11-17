@@ -930,13 +930,21 @@ print('====================================================================');
 if (CFG.SHOW_MAP) {
   Map.centerObject(AOI, 11);
   Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
-  Map.addLayer(ee.Image().byte().paint(grid, 1, 1), {palette: ['#555555']}, '10 ha blocks', false);
+  Map.addLayer(ee.Image().byte().paint(grid, 1, 1), {palette: ['#555555']}, '10 ha blocks', true);
   Map.addLayer(R.canopyPct.clip(AOI), {min: 0, max: 80, palette: ['#ffffcc', '#78c679', '#006837']},
                'Canopy % (CHM >= 5 m, minus loss 2019+)', false);
   Map.addLayer(R.constraintCode.selfMask().clip(AOI), {min: 1, max: 127,
                palette: ['#08519c', '#3182bd', '#9e9ac8', '#e6550d', '#fdae6b', '#636363']},
                'Constraint code (C1-C7)', false);
-  Map.addLayer(S.A1.clip(AOI), {min: 0, max: 1, palette: ['#fff5eb', '#08519c']}, 'A1 CTI score', false);
-  Map.addLayer(S.B1.clip(AOI), {min: 0, max: 1, palette: ['#fff5eb', '#7f2704']}, 'B1 soil-depth proxy', false);
+  var sc = {min: 0, max: 1, palette: ['#d73027', '#fee08b', '#1a9850']};   // red = low score, green = high
+  [['A1', 'A1 Topographic wetness (CTI)'], ['A3', 'A3 Post-monsoon moisture'], ['A5', 'A5 Near seasonal water'],
+   ['B1', 'B1 Soil depth proxy'], ['B2', 'B2 Soil texture'], ['B4', 'B4 Soil pH'], ['B7', 'B7 Rockiness (inverse)'],
+   ['C1s', 'C1s Slope'], ['C2s', 'C2s Heat load (inverse)'], ['D2', 'D2 Degradation trend'],
+   ['D3', 'D3 Biomass deficit'], ['D6', 'D6 Near dense forest'], ['E2', 'E2 Low biotic pressure'],
+   ['E4', 'E4 Erosion risk']].forEach(function (p) {
+    Map.addLayer(S[p[0]].clip(AOI), sc, 'Score ' + p[1], false);
+  });
+  print('Map: tick any "Score ..." layer in the Layers menu (top right) to view a parameter. ' +
+        'Red = low score, green = high. Final categories appear in STEP 4.');
 }
 }
