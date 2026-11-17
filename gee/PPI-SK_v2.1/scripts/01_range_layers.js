@@ -995,16 +995,20 @@ if (CFG.SHOW_MAP) {
   Map.setLocked(false, 10, 22);
   Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
   Map.addLayer(ee.Image().byte().paint(grid, 1, 1), {palette: ['#555555']}, '10 ha blocks', true);
-  Map.addLayer(R.canopyPct.clip(AOI), {min: 0, max: 80, palette: ['#ffffcc', '#78c679', '#006837']},
-               'Canopy % (CHM >= 5 m, minus loss 2019+)', false);
-  Map.addLayer(R.constraintCode.selfMask().clip(AOI), {min: 1, max: 127,
-               palette: ['#08519c', '#3182bd', '#9e9ac8', '#e6550d', '#fdae6b', '#636363']},
-               'Constraint code (C1-C7)', false);
+  // Preview layers avoid the 1.2 m canopy-height aggregation (too many pixels for a map tile);
+  // the exports and block table use the full-resolution canopy.
+  Map.addLayer(R.chm.gte(5).selfMask().clip(AOI), {palette: ['#1a9850']},
+               'Trees >= 5 m tall (Meta canopy height)', false);
+  var consPreview = R.C2.multiply(2).add(R.C3.multiply(4)).add(R.C4.multiply(8))
+    .add(R.C5.multiply(16)).add(R.C6.multiply(32)).add(R.C7.multiply(64)).selfMask();
+  Map.addLayer(consPreview.clip(AOI), {min: 2, max: 64,
+               palette: ['#08519c', '#9e9ac8', '#e6550d', '#636363', '#fdae6b', '#8c510a']},
+               'Constraints C2-C7 (water, drain, steep, built, crop, rock)', false);
   var sc = {min: 0, max: 1, palette: ['#d73027', '#fee08b', '#1a9850']};   // red = low score, green = high
   [['A1', 'A1 Topographic wetness (CTI)'], ['A3', 'A3 Post-monsoon moisture'], ['A5', 'A5 Near seasonal water'],
    ['B1', 'B1 Soil depth proxy'], ['B2', 'B2 Soil texture'], ['B4', 'B4 Soil pH'], ['B7', 'B7 Rockiness (inverse)'],
    ['C1s', 'C1s Slope'], ['C2s', 'C2s Heat load (inverse)'], ['D2', 'D2 Degradation trend'],
-   ['D3', 'D3 Biomass deficit'], ['D6', 'D6 Near dense forest'], ['E2', 'E2 Low biotic pressure'],
+   ['D3', 'D3 Biomass deficit'], ['E2', 'E2 Low biotic pressure'],
    ['E4', 'E4 Erosion risk']].forEach(function (p) {
     Map.addLayer(S[p[0]].clip(AOI), sc, 'Score ' + p[1], false);
   });
