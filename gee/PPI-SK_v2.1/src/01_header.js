@@ -33,6 +33,8 @@ var CFG = {
   ANCHOR_ASSET: 'projects/khedbrahma-range/assets/PPI_SK_v21_anchors_GJ',
   STATE_NAME: 'Gujarat',
   LIVE_ANCHOR_SCALE: 500,
+  LOCAL_BUFFER_KM: 20,           // 'LOCAL' mode: anchors from the range + this buffer
+  LOCAL_ANCHOR_SCALE: 100,       // 'LOCAL' mode: minimum anchor scale (m)
 
   // ---- processing switches (must match script 00) ----
   CS_THRESHOLD: 0.60,            // FF-18 remedy: 0.50 (logged)

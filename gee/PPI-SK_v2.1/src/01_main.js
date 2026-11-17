@@ -58,12 +58,32 @@ ee.Dictionary(PRE).evaluate(function (info, err) {
             '(see FAIL lines above). Nothing has been substituted and no task was created.');
       return;
     }
+    if (CFG.ANCHOR_MODE === 'LOCAL') {
+      var refGeom = AOI.buffer(CFG.LOCAL_BUFFER_KM * 1000, 200);
+      print('All datasets OK. Computing the scoring scale (anchors) for ' + CFG.RANGE_NAME +
+            ' + ' + CFG.LOCAL_BUFFER_KM + ' km landscape in the background (1-3 minutes) ...');
+      Map.addLayer(ee.Image().byte().paint(ee.FeatureCollection([ee.Feature(refGeom)]), 1, 1),
+                   {palette: ['#2b83ba']}, 'Anchor landscape (range + ' + CFG.LOCAL_BUFFER_KM + ' km)', false);
+      var R_REF = LIB.layers(refGeom, CRS,
+        {csThr: CFG.CS_THRESHOLD, d2Months: CFG.D2_MONTHS, a3MaskTrees: false});
+      LIB.anchorsAsync(R_REF, refGeom, CRS, LIB.anchorLandMask(), CFG.LOCAL_ANCHOR_SCALE,
+        function (dict, ok, alog) {
+          if (!ok) {
+            print('STOP: some anchors could not be computed (see FAIL lines). Press Run again; ' +
+                  'if it repeats, set LOCAL_ANCHOR_SCALE to 250.');
+            return;
+          }
+          print('Anchors ready — building the range layers and export tasks.');
+          runRange(BEAT_FIELD, CHECK, dict, alog);
+        });
+      return;
+    }
     print('All datasets OK — building the range layers and export tasks.');
     runRange(BEAT_FIELD, CHECK);
   });
 });
 
-function runRange(BEAT_FIELD, CHECK) {
+function runRange(BEAT_FIELD, CHECK, LOCAL_ANCH, LOCAL_LOG) {
 var FF02 = 'PASS';
 /* ---------- Step 4: 10 ha grid, stable block ID, beat join (FF-04) ---------- */
 var proj = ee.Projection(CRS).atScale(CFG.BLOCK_SIDE);
@@ -126,6 +146,15 @@ if (CFG.ANCHOR_MODE === 'ASSET') {
   if (ad.__missing) { print('FF-09 STOP: ANCHORS has no entry for ' + ad.__missing); return; }
   ANCH = ee.Dictionary(ad);
   ANCHOR_ID = ee.String(ANCHORS.id);
+} else if (CFG.ANCHOR_MODE === 'LOCAL') {
+  ANCH = ee.Dictionary(LOCAL_ANCH);
+  var today = new Date().toISOString().slice(0, 10);
+  ANCHOR_ID = ee.String('LOCAL_' + CFG.RANGE_NAME + '+' + CFG.LOCAL_BUFFER_KM + 'km_' + today);
+  var anchFC = ee.FeatureCollection([ee.Feature(null, LOCAL_ANCH).set({
+    anchor_id: ANCHOR_ID, anchor_landscape: CFG.RANGE_NAME + ' + ' + CFG.LOCAL_BUFFER_KM + ' km buffer',
+    anchor_scales: LOCAL_LOG, land_mask: 'WorldCover 10/20/30/60', created: today})]);
+  Export.table.toDrive({collection: anchFC, description: 'PPI01_local_anchor_table',
+    folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI01_local_anchors_' + CFG.RANGE_NAME, fileFormat: 'CSV'});
 } else if (CFG.ANCHOR_MODE === 'LIVE') {
   print('WARNING: LIVE anchors at ' + CFG.LIVE_ANCHOR_SCALE + ' m — provisional (FF-09 = WARN).');
   var stateFC = ee.FeatureCollection(LIB.A.GAUL1)
@@ -137,7 +166,7 @@ if (CFG.ANCHOR_MODE === 'ASSET') {
   ANCH = LIB.anchors(R_STATE, stateGeom, stateCrs, LIB.anchorLandMask(), CFG.LIVE_ANCHOR_SCALE);
   ANCHOR_ID = ee.String('LIVE_' + CFG.LIVE_ANCHOR_SCALE + 'm_').cat(ee.Date(Date.now()).format('YYYY-MM-dd'));
 } else {
-  print('STOP: ANCHOR_MODE must be ASSET, FROZEN or LIVE'); return;
+  print('STOP: ANCHOR_MODE must be LOCAL, ASSET, FROZEN or LIVE'); return;
 }
 
 /* ---------- Steps 5-12: all layers on the range grid ---------- */
@@ -334,7 +363,7 @@ Export.image.toDrive({
 });
 
 print('====================================================================');
-print('NEXT: Tasks tab -> RUN all 4 tasks. When PPI01_raw_blocks_to_asset');
+print('NEXT: Tasks tab -> RUN ALL. When PPI01_raw_blocks_to_asset');
 print('and PPI01_qc01_to_asset have completed, run script 02_scoring.');
 print('Raw block asset:', CFG.RAW_ASSET);
 print('====================================================================');

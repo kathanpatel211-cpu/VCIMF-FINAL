@@ -17,6 +17,7 @@
 
 var CFG = {
   STAGE: 'SCORE',                // 'SCORE' or 'PUBLISH'
+  PUBLISH_NOW: false,            // true = show the final map and create all exports in the SCORE run
   CRS: 'EPSG:32643',             // working CRS of the range (same as script 01)
   RANGE_NAME: 'Khedbrahma',
   AOI_ASSET: 'projects/khedbrahma-range/assets/khedbrahma',
@@ -65,6 +66,104 @@ var RX_CODES = {
 var RX_PALETTE = ['#1a9850', '#969696', '#e31a1c', '#8c510a', '#984ea3', '#80cdc1', '#2166ac'];
 var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);
 var AOI = AOI_FC.geometry().dissolve({maxError: 1});
+
+/* ---------- Publishing: maps, legend, GeoTIFF/SHP/GeoJSON, field list ---------- */
+function publishAll(fin, mapFC) {
+  mapFC = mapFC || fin;
+var CRS = CFG.CRS;
+print('Working CRS:', CRS, '| recorded in table:', ee.Feature(fin.first()).get('work_crs'));
+var tag2 = CFG.RANGE_NAME;
+
+function blockRaster(prop, src) { return (src || mapFC).reduceToImage([prop], ee.Reducer.first()).rename(prop); }
+var catImg = blockRaster('category').toByte();
+var rxImg = blockRaster('rx_code').toByte();
+var stabImg = blockRaster('stability_cat12', fin).toFloat();
+
+/* ---- GeoTIFFs (products 4-7) ---- */
+function exportImg(img, name, scale) {
+  Export.image.toDrive({image: img.clip(AOI), description: 'PPI02_' + name, folder: CFG.DRIVE_FOLDER,
+    fileNamePrefix: 'PPI02_' + name + '_' + tag2, region: AOI, crs: CRS, scale: scale, maxPixels: 1e11});
+}
+exportImg(catImg, 'category_map', 30);
+exportImg(rxImg, 'prescription_map', 30);
+exportImg(stabImg, 'stability_map', 30);
+THEME_KEYS.forEach(function (t) { exportImg(blockRaster(t).toFloat(), 'theme_' + t + '_map', 30); });
+
+/* ---- Block polygons: GeoJSON (all fields) + SHP (short field names) ---- */
+Export.table.toDrive({collection: fin, description: 'PPI02_blocks_geojson', folder: CFG.DRIVE_FOLDER,
+  fileNamePrefix: 'PPI02_blocks_' + tag2, fileFormat: 'GeoJSON'});
+var SHP_FROM = ['block_id', 'beat_id', 'block_area_ha', 'net_plantable_ha', 'canopy_pct', 'canopy_track',
+  'constraint_flag', 'constraint_reason', 'A', 'B', 'C', 'D', 'E', 'PPI_absolute', 'PPI_percentile',
+  'category', 'prescription', 'site_class', 'stability_cat12', 'category_modal', 'category_range',
+  'b1_sensitive', 'recent_plantation_flag', 'protected_area_flag', 'fire_years', 'advisory_access_km',
+  'field_check', 'anchor_id'];
+var SHP_TO = ['block_id', 'beat_id', 'area_ha', 'net_ha', 'canopy', 'can_track',
+  'cons_flag', 'cons_rsn', 'A', 'B', 'C', 'D', 'E', 'ppi_abs', 'ppi_pct',
+  'category', 'rx', 'site_cls', 'stab12', 'cat_modal', 'cat_range',
+  'b1_sens', 'f1_plant', 'f2_pa', 'fire_yrs', 'access_km',
+  'field_chk', 'anchor_id'];
+Export.table.toDrive({collection: fin.select(SHP_FROM, SHP_TO), description: 'PPI02_blocks_shp',
+  folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI02_blocks_' + tag2, fileFormat: 'SHP'});
+
+/* ---- Product 10: field-check list, sorted by beat ---- */
+var FIELD_COLS = ['beat_id', 'block_id', 'category', 'PPI_absolute', 'stability_cat12', 'stability_reading',
+  'prescription', 'site_class', 'net_plantable_ha', 'canopy_pct', 'constraint_reason',
+  'recent_plantation_flag', 'protected_area_flag', 'b1_sensitive', 'field_check_reason',
+  'fra_rights_check_required', 'staff_rights_FRA_checked', 'staff_encroachment_checked', 'staff_decision', 'staff_remarks'];
+var fieldList = fin.filter(ee.Filter.eq('field_check', 'yes'))
+  .map(function (f) {
+    var c = f.centroid(1).geometry().coordinates();
+    return f.set({staff_rights_FRA_checked: '', staff_encroachment_checked: '',
+                  staff_decision: '', staff_remarks: '',
+                  lon: c.get(0), lat: c.get(1)});
+  })
+  .sort('category').sort('beat_id');
+Export.table.toDrive({collection: fieldList, description: 'PPI02_field_check_list',
+  folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI02_field_check_list_' + tag2, fileFormat: 'CSV',
+  selectors: FIELD_COLS.concat(['lon', 'lat'])});
+
+/* ---- On-screen maps and legend (for presentation) ---- */
+Map.centerObject(AOI, 11);
+Map.setOptions('HYBRID');
+THEME_KEYS.forEach(function (t) {
+  Map.addLayer(blockRaster(t), {min: 0, max: 1, palette: ['#f7fbff', '#08306b']}, 'Theme ' + t, false);
+});
+Map.addLayer(stabImg, {min: 0, max: 1, palette: ['#d73027', '#ffffbf', '#1a9850']},
+             'Stability (share of MC runs in Cat 1-2)', false);
+Map.addLayer(rxImg, {min: 1, max: 7, palette: RX_PALETTE}, 'Prescription', false);
+Map.addLayer(catImg, {min: 1, max: 5, palette: PALETTE}, 'PPI category 1-5');
+Map.addLayer(ee.Image().byte().paint(fin, 1, 0.5), {palette: ['#333333']}, 'Block outlines', false);
+Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
+
+function legendRow(color, label) {
+  return ui.Panel([
+    ui.Label('', {backgroundColor: color, padding: '8px', margin: '2px 6px 2px 0'}),
+    ui.Label(label, {margin: '2px 0', fontSize: '12px'})
+  ], ui.Panel.Layout.flow('horizontal'));
+}
+var legend = ui.Panel({style: {position: 'bottom-left', padding: '8px 12px'}});
+legend.add(ui.Label('PPI-SK v2.1 — ' + CFG.RANGE_NAME + ' Range',
+                    {fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0'}));
+legend.add(ui.Label('Plantation priority category', {fontWeight: 'bold', fontSize: '12px'}));
+['1  Highest priority', '2  High', '3  Moderate, phased', '4  Low', '5  No plantation / excluded']
+  .forEach(function (l, ii) { legend.add(legendRow(PALETTE[ii], l)); });
+legend.add(ui.Label('Prescription layer', {fontWeight: 'bold', fontSize: '12px', margin: '6px 0 0 0'}));
+Object.keys(RX_CODES).forEach(function (k) { legend.add(legendRow(RX_PALETTE[RX_CODES[k] - 1], k)); });
+Map.add(legend);
+
+/* ---- Summary chart and table ---- */
+var catChart = ui.Chart.feature.histogram({features: mapFC, property: 'category', minBucketWidth: 1})
+  .setOptions({title: 'Blocks per PPI category', hAxis: {title: 'Category'}, vAxis: {title: 'Blocks'},
+               colors: ['#d73027'], legend: {position: 'none'}});
+print(catChart);
+var rxArea = mapFC.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'prescription'}),
+                               ['net_plantable_ha', 'prescription']);
+print('Net plantable area (ha) by prescription:', rxArea.get('groups'));
+var catArea = mapFC.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'category'}),
+                                ['net_plantable_ha', 'category']);
+print('Net plantable area (ha) by category:', catArea.get('groups'));
+print('Field-check blocks:', fieldList.size());
+}
 
 /* ====================================================================== */
 if (CFG.STAGE === 'SCORE') {
@@ -441,10 +540,10 @@ function cls(x) {
          ee.Algorithms.If(x.lt(CFG.SITE_SPLITS[1]), 'Med', 'High'));
 }
 var RXD = ee.Dictionary(RX_CODES);
-var finalFC = retOut.merge(exclOut).map(function (f) {
+function rxOf(f) {
   var A = ee.Number(f.get('A')), B = ee.Number(f.get('B'));
   var E1 = ee.Number(f.get('E1')), D5 = ee.Number(f.get('D5'));
-  var rx = ee.String(
+  return ee.String(
     ee.Algorithms.If(ee.Number(f.get('excluded_c1')).eq(1), 'PROTECT_DENSE',
     ee.Algorithms.If(ee.Number(f.get('excluded')).eq(1), 'NOT_PLANTABLE',
     ee.Algorithms.If(E1.lt(CFG.RX.FIRE_E1), 'FIRE_PROTECTION_FIRST',
@@ -452,6 +551,23 @@ var finalFC = retOut.merge(exclOut).map(function (f) {
     ee.Algorithms.If(D5.gte(CFG.RX.INVASIVE_D5), 'INVASIVE_CLEAR_THEN_PLANT',
     ee.Algorithms.If(ee.String(f.get('canopy_track')).equals('GAP_ANR'), 'GAP_PLANTING_ANR',
                      'FULL_PLANTATION')))))));
+}
+// Light copy for the on-screen map: base categories only (no Monte Carlo needed).
+var L0 = {ppi: basePPI.toList(), pct: PCT.toList(), cat: baseCat.toList()};
+var MAPFC = ee.FeatureCollection(ee.List.sequence(0, N.subtract(1)).map(function (ii) {
+  ii = ee.Number(ii).int();
+  return ee.Feature(RET_LIST.get(ii)).set({PPI_absolute: L0.ppi.get(ii), PPI_percentile: L0.pct.get(ii),
+                                           category: ee.Number(L0.cat.get(ii)).int()});
+})).merge(scored.filter(ee.Filter.eq('excluded', 1)).map(function (f) {
+  return f.set({PPI_absolute: 0, PPI_percentile: 0, category: 5});
+})).map(function (f) {
+  var rx = rxOf(f);
+  return f.set({prescription: rx, rx_code: RXD.get(rx)});
+});
+
+var finalFC = retOut.merge(exclOut).map(function (f) {
+  var A = ee.Number(f.get('A')), B = ee.Number(f.get('B'));
+  var rx = rxOf(f);
   var cat = ee.Number(f.get('category'));
   var stab = ee.Number(f.get('stability_cat12'));
   var c6 = ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('C6_frac'), null), 0, f.get('C6_frac')));
@@ -537,7 +653,9 @@ var minScore = ee.List(SCORE_KEYS.map(function (k) { return scored.aggregate_min
 var maxScore = ee.List(SCORE_KEYS.map(function (k) { return scored.aggregate_max(k); })).reduce(ee.Reducer.max());
 var anchorIds = raw.aggregate_array('anchor_id').distinct();
 var anchor0 = ee.String(anchorIds.get(0));
-var ff09live = ee.Algorithms.If(anchor0.slice(0, 4).equals('LIVE'), 'WARN (provisional LIVE anchors)', 'PASS');
+var ff09live = ee.Algorithms.If(anchor0.slice(0, 4).equals('LIVE'), 'WARN (provisional LIVE anchors)',
+               ee.Algorithms.If(anchor0.slice(0, 5).equals('LOCAL'),
+                 'PASS (local anchors: range + buffer; PPI_absolute comparable within this landscape only)', 'PASS'));
 var ff09 = ee.Algorithms.If(anchorIds.size().neq(1), 'FAIL (more than one anchor ID)',
            CFG.EXPECTED_ANCHOR_ID ?
              ee.Algorithms.If(anchor0.equals(CFG.EXPECTED_ANCHOR_ID), ff09live, 'FAIL (anchor ID mismatch)') :
@@ -621,6 +739,14 @@ Export.table.toDrive({collection: QC_FC, description: 'PPI02_qc_log_csv',
   folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI02_qc_log_' + tag, fileFormat: 'CSV'});
 
 print('Collinearity, CV guard and weights are above. Monte Carlo runs inside the export tasks.');
+if (CFG.PUBLISH_NOW) {
+  publishAll(finalFC, MAPFC);
+  print('====================================================================');
+  print('FINAL MAP is on screen. To save every result to Google Drive:');
+  print('Tasks tab -> RUN ALL (tables, Monte Carlo, QC log, GeoTIFFs, SHP, GeoJSON, field list).');
+  print('====================================================================');
+  return;
+}
 print('NEXT: Tasks tab -> RUN all 7 tasks. When PPI02_final_to_asset is done, set');
 print("STAGE = 'PUBLISH' and run again for maps, GeoTIFFs, SHP, GeoJSON and the field-check list.");
 
@@ -637,100 +763,7 @@ Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range
 } else if (CFG.STAGE === 'PUBLISH') {
 /* ====================================================================== */
 
-var fin = ee.FeatureCollection(CFG.FINAL_ASSET);
-var CRS = CFG.CRS;
-print('Working CRS:', CRS, '| recorded in table:', ee.Feature(fin.first()).get('work_crs'));
-var tag2 = CFG.RANGE_NAME;
-
-function blockRaster(prop) { return fin.reduceToImage([prop], ee.Reducer.first()).rename(prop); }
-var catImg = blockRaster('category').toByte();
-var rxImg = blockRaster('rx_code').toByte();
-var stabImg = blockRaster('stability_cat12').toFloat();
-
-/* ---- GeoTIFFs (products 4-7) ---- */
-function exportImg(img, name, scale) {
-  Export.image.toDrive({image: img.clip(AOI), description: 'PPI02_' + name, folder: CFG.DRIVE_FOLDER,
-    fileNamePrefix: 'PPI02_' + name + '_' + tag2, region: AOI, crs: CRS, scale: scale, maxPixels: 1e11});
-}
-exportImg(catImg, 'category_map', 30);
-exportImg(rxImg, 'prescription_map', 30);
-exportImg(stabImg, 'stability_map', 30);
-THEME_KEYS.forEach(function (t) { exportImg(blockRaster(t).toFloat(), 'theme_' + t + '_map', 30); });
-
-/* ---- Block polygons: GeoJSON (all fields) + SHP (short field names) ---- */
-Export.table.toDrive({collection: fin, description: 'PPI02_blocks_geojson', folder: CFG.DRIVE_FOLDER,
-  fileNamePrefix: 'PPI02_blocks_' + tag2, fileFormat: 'GeoJSON'});
-var SHP_FROM = ['block_id', 'beat_id', 'block_area_ha', 'net_plantable_ha', 'canopy_pct', 'canopy_track',
-  'constraint_flag', 'constraint_reason', 'A', 'B', 'C', 'D', 'E', 'PPI_absolute', 'PPI_percentile',
-  'category', 'prescription', 'site_class', 'stability_cat12', 'category_modal', 'category_range',
-  'b1_sensitive', 'recent_plantation_flag', 'protected_area_flag', 'fire_years', 'advisory_access_km',
-  'field_check', 'anchor_id'];
-var SHP_TO = ['block_id', 'beat_id', 'area_ha', 'net_ha', 'canopy', 'can_track',
-  'cons_flag', 'cons_rsn', 'A', 'B', 'C', 'D', 'E', 'ppi_abs', 'ppi_pct',
-  'category', 'rx', 'site_cls', 'stab12', 'cat_modal', 'cat_range',
-  'b1_sens', 'f1_plant', 'f2_pa', 'fire_yrs', 'access_km',
-  'field_chk', 'anchor_id'];
-Export.table.toDrive({collection: fin.select(SHP_FROM, SHP_TO), description: 'PPI02_blocks_shp',
-  folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI02_blocks_' + tag2, fileFormat: 'SHP'});
-
-/* ---- Product 10: field-check list, sorted by beat ---- */
-var FIELD_COLS = ['beat_id', 'block_id', 'category', 'PPI_absolute', 'stability_cat12', 'stability_reading',
-  'prescription', 'site_class', 'net_plantable_ha', 'canopy_pct', 'constraint_reason',
-  'recent_plantation_flag', 'protected_area_flag', 'b1_sensitive', 'field_check_reason',
-  'fra_rights_check_required', 'staff_rights_FRA_checked', 'staff_encroachment_checked', 'staff_decision', 'staff_remarks'];
-var fieldList = fin.filter(ee.Filter.eq('field_check', 'yes'))
-  .map(function (f) {
-    var c = f.centroid(1).geometry().coordinates();
-    return f.set({staff_rights_FRA_checked: '', staff_encroachment_checked: '',
-                  staff_decision: '', staff_remarks: '',
-                  lon: c.get(0), lat: c.get(1)});
-  })
-  .sort('category').sort('beat_id');
-Export.table.toDrive({collection: fieldList, description: 'PPI02_field_check_list',
-  folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI02_field_check_list_' + tag2, fileFormat: 'CSV',
-  selectors: FIELD_COLS.concat(['lon', 'lat'])});
-
-/* ---- On-screen maps and legend (for presentation) ---- */
-Map.centerObject(AOI, 11);
-Map.setOptions('HYBRID');
-THEME_KEYS.forEach(function (t) {
-  Map.addLayer(blockRaster(t), {min: 0, max: 1, palette: ['#f7fbff', '#08306b']}, 'Theme ' + t, false);
-});
-Map.addLayer(stabImg, {min: 0, max: 1, palette: ['#d73027', '#ffffbf', '#1a9850']},
-             'Stability (share of MC runs in Cat 1-2)', false);
-Map.addLayer(rxImg, {min: 1, max: 7, palette: RX_PALETTE}, 'Prescription', false);
-Map.addLayer(catImg, {min: 1, max: 5, palette: PALETTE}, 'PPI category 1-5');
-Map.addLayer(ee.Image().byte().paint(fin, 1, 0.5), {palette: ['#333333']}, 'Block outlines', false);
-Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
-
-function legendRow(color, label) {
-  return ui.Panel([
-    ui.Label('', {backgroundColor: color, padding: '8px', margin: '2px 6px 2px 0'}),
-    ui.Label(label, {margin: '2px 0', fontSize: '12px'})
-  ], ui.Panel.Layout.flow('horizontal'));
-}
-var legend = ui.Panel({style: {position: 'bottom-left', padding: '8px 12px'}});
-legend.add(ui.Label('PPI-SK v2.1 — ' + CFG.RANGE_NAME + ' Range',
-                    {fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0'}));
-legend.add(ui.Label('Plantation priority category', {fontWeight: 'bold', fontSize: '12px'}));
-['1  Highest priority', '2  High', '3  Moderate, phased', '4  Low', '5  No plantation / excluded']
-  .forEach(function (l, ii) { legend.add(legendRow(PALETTE[ii], l)); });
-legend.add(ui.Label('Prescription layer', {fontWeight: 'bold', fontSize: '12px', margin: '6px 0 0 0'}));
-Object.keys(RX_CODES).forEach(function (k) { legend.add(legendRow(RX_PALETTE[RX_CODES[k] - 1], k)); });
-Map.add(legend);
-
-/* ---- Summary chart and table ---- */
-var catChart = ui.Chart.feature.histogram({features: fin, property: 'category', minBucketWidth: 1})
-  .setOptions({title: 'Blocks per PPI category', hAxis: {title: 'Category'}, vAxis: {title: 'Blocks'},
-               colors: ['#d73027'], legend: {position: 'none'}});
-print(catChart);
-var rxArea = fin.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'prescription'}),
-                               ['net_plantable_ha', 'prescription']);
-print('Net plantable area (ha) by prescription:', rxArea.get('groups'));
-var catArea = fin.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'category'}),
-                                ['net_plantable_ha', 'category']);
-print('Net plantable area (ha) by category:', catArea.get('groups'));
-print('Field-check blocks:', fieldList.size());
+publishAll(ee.FeatureCollection(CFG.FINAL_ASSET));
 
 /* ====================================================================== */
 } else {

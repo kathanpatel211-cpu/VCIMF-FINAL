@@ -48,17 +48,21 @@ def fn(name, args, cfg, body, title):
             ' *  ' + title + '\n'
             ' * ###################################################################### */\n'
             'function ' + name + '(' + args + ') {\n' + cfg + indent(body) + '}\n')
-out = (src/'all_header.js').read_text() + (src/'lib.js').read_text()
-out += fn('step1_stateAnchors', '', cfg00, (src/'00_main.js').read_text(),
-          'STEP 1 — STATE ANCHOR TABLE (spec build steps 1-2)')
-out += fn('step2_rangeLayers', '', cfg01, (src/'01_main.js').read_text(),
-          'STEP 2 — RANGE LAYERS -> RAW BLOCK TABLE (spec build steps 3-17)')
-out += fn('step3_scoring', 'stage', cfg02, body_after_cfg((src/'02_scoring.js').read_text()),
-          'STEP 3 / 4 — SCORING, MONTE CARLO, QC, PUBLISH (spec build steps 18-25)')
-out += fn('step5_validation', '', cfg03, body_after_cfg((src/'03_validation.js').read_text()),
-          'STEP 5 — VALIDATION (spec build steps 26-27, optional)')
-out += (src/'all_dispatch.js').read_text()
-# the separate-script hints ("run script 02" etc.) -> step wording
-out = out.replace("run script 02_scoring.", "press Run again (STEP 3).")
-out = out.replace("When they finish, script 01 reads the anchors from:", "When they finish, press Run again (STEP 2). Anchors saved to:")
-pathlib.Path('scripts/PPI_SK_v21_ALL_IN_ONE.js').write_text(out)
+def main():
+    out = (src/'all_header.js').read_text() + (src/'lib.js').read_text()
+    out += fn('step1_stateAnchors', '', cfg00, (src/'00_main.js').read_text(),
+              'STEP 1 — STATE ANCHOR TABLE (spec build steps 1-2)')
+    out += fn('step2_rangeLayers', '', cfg01, (src/'01_main.js').read_text(),
+              'STEP 2 — RANGE LAYERS -> RAW BLOCK TABLE (spec build steps 3-17)')
+    out += fn('step3_scoring', 'stage', cfg02, body_after_cfg((src/'02_scoring.js').read_text()),
+              'STEP 3 / 4 — SCORING, MONTE CARLO, QC, PUBLISH (spec build steps 18-25)')
+    out += fn('step5_validation', '', cfg03, body_after_cfg((src/'03_validation.js').read_text()),
+              'STEP 5 — VALIDATION (spec build steps 26-27, optional)')
+    out += (src/'all_dispatch.js').read_text()
+    # the separate-script hints ("run script 02" etc.) -> step wording
+    out = out.replace("run script 02_scoring.", "press Run again (STEP 3).")
+    out = out.replace("When they finish, script 01 reads the anchors from:", "When they finish, press Run again (STEP 2). Anchors saved to:")
+    pathlib.Path('scripts/PPI_SK_v21_ALL_IN_ONE.js').write_text(out)
+
+if __name__ == '__main__':
+    main()

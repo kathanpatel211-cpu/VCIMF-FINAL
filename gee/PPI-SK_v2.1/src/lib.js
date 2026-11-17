@@ -532,3 +532,33 @@ LIB.checkAssets = function (region, done) {
     });
   });
 };
+
+/* ======================================================================
+ *  Local anchors, computed in the background (range-only mode).
+ *  One request per parameter, in parallel; a parameter that times out
+ *  is retried once at a coarser scale. done(dict, ok, log).
+ * ====================================================================== */
+LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done) {
+  var res = {}, log = [], pending = LIB.ANCHOR_SPEC.length, ok = true;
+  function one(key, sc, retry) {
+    var img = LIB.anchorImage(R, key).rename(key).updateMask(landMask);
+    img.reduceRegion({reducer: ee.Reducer.percentile([2, 98]), geometry: geom, scale: sc, crs: crs,
+                      maxPixels: 1e13, tileScale: 16, bestEffort: true})
+      .evaluate(function (d, err) {
+        var lo = d ? d[key + '_p2'] : null, hi = d ? d[key + '_p98'] : null;
+        if (err || typeof lo !== 'number' || typeof hi !== 'number') {
+          if (retry) { one(key, Math.min(sc * 2.5, 1000), false); return; }
+          ok = false;
+          log.push(key + ':FAIL');
+          print('FAIL anchor ' + key + ' -> ' + (err || 'no valid pixels'));
+        } else {
+          res[key + '_p2'] = lo; res[key + '_p98'] = hi;
+          log.push(key + '@' + sc + 'm');
+          print('OK   anchor ' + key + '  [2nd, 98th pct] = [' + lo.toPrecision(5) + ', ' + hi.toPrecision(5) + ']  @' + sc + ' m');
+        }
+        pending -= 1;
+        if (pending === 0) { done(res, ok, log.join(';')); }
+      });
+  }
+  LIB.ANCHOR_SPEC.forEach(function (s) { one(s[0], Math.max(s[1], minScale), true); });
+};
