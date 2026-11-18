@@ -84,7 +84,10 @@ LIB.evalRetry = function (obj, cb, attempt) {
   // Retries are scheduled 2 s later, outside Earth Engine's reply handler (retrying inside it
   // crashes the Code Editor with "Cannot read properties of null (reading 'headerMap')").
   attempt = attempt || 1;
+  var answered = false;          // the Code Editor can call a callback twice after an error
   obj.evaluate(function (val, err) {
+    if (answered) { return; }
+    answered = true;
     if (err && attempt < 3) {
       print('Request failed (' + err + ') - retrying (' + (attempt + 1) + '/3) ...');
       ui.util.setTimeout(function () { LIB.evalRetry(obj, cb, attempt + 1); }, 2000);

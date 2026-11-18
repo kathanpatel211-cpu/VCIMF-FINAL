@@ -114,7 +114,10 @@ LIB.evalRetry = function (obj, cb, attempt) {
   // Retries are scheduled 2 s later, outside Earth Engine's reply handler (retrying inside it
   // crashes the Code Editor with "Cannot read properties of null (reading 'headerMap')").
   attempt = attempt || 1;
+  var answered = false;          // the Code Editor can call a callback twice after an error
   obj.evaluate(function (val, err) {
+    if (answered) { return; }
+    answered = true;
     if (err && attempt < 3) {
       print('Request failed (' + err + ') - retrying (' + (attempt + 1) + '/3) ...');
       ui.util.setTimeout(function () { LIB.evalRetry(obj, cb, attempt + 1); }, 2000);
@@ -1108,7 +1111,10 @@ function stepMap() {
   // Code Editor with "Cannot read properties of null (reading 'headerMap')").
   function evalRetry(make, cb, attempt) {
     attempt = attempt || 1;
+    var answered = false;          // the Code Editor can call a callback twice after an error
     make().evaluate(function (val, err) {
+      if (answered) { return; }
+      answered = true;
       if (err && attempt < 3) {
         print('Request failed (' + err + ') - retrying (' + (attempt + 1) + '/3) ...');
         ui.util.setTimeout(function () { evalRetry(make, cb, attempt + 1); }, 2000);
@@ -1521,11 +1527,15 @@ function stepMap() {
   var PCT = RANK.multiply(full(100)).divide(full(N.subtract(1).max(1)));
 
   // --- Monte Carlo draws, generated client-side with a seeded generator (Section 11.2) ---
+  function imul32(a, b) {        // 32-bit integer multiply (Math.imul is missing in the Code Editor)
+    var ah = (a >>> 16) & 0xffff, al = a & 0xffff, bh = (b >>> 16) & 0xffff, bl = b & 0xffff;
+    return ((al * bl) + (((ah * bl + al * bh) << 16) >>> 0)) | 0;
+  }
   function mulberry32(a) {
     return function () {
       a = a | 0; a = (a + 0x6D2B79F5) | 0;
-      var t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      var t = imul32(a ^ (a >>> 15), 1 | a);
+      t = (t + imul32(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
