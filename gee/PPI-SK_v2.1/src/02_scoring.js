@@ -51,6 +51,13 @@ var THEMES = {
   E: ['E1', 'E2', 'E4']
 };
 var THEME_KEYS = ['A', 'B', 'C', 'D', 'E'];
+function evalRetry(obj, cb, attempt) {          // evaluate() with up to 2 retries
+  attempt = attempt || 1;
+  obj.evaluate(function (val, err) {
+    if (err && attempt < 3) { evalRetry(obj, cb, attempt + 1); return; }
+    cb(val, err);
+  });
+}
 var PARAMS = [].concat(THEMES.A, THEMES.B, THEMES.C, THEMES.D, THEMES.E);   // 23
 var THEME_OF = {};
 THEME_KEYS.forEach(function (t) { THEMES[t].forEach(function (k) { THEME_OF[k] = t; }); });
@@ -210,9 +217,9 @@ PARAMS.forEach(function (k) {
   statD[k + '_sd'] = retained0.aggregate_sample_sd(k);
 });
 print('Computing block statistics in the background ...');
-ee.Dictionary({
+evalRetry(ee.Dictionary({
   N_all: N_ALL, N_ret: retained0.size(), nullShare: nullShare, stats: ee.Dictionary(statD)
-}).evaluate(function (STATS, errS) {
+}), function (STATS, errS) {
 if (errS) { print('STOP: could not read the raw block table (has STEP 2 finished?): ' + errS); return; }
 print('Blocks: all =', STATS.N_all, ' retained =', STATS.N_ret);
 var NR = STATS.N_ret;
@@ -250,7 +257,7 @@ var RMAT = X.matrixTranspose().matrixMultiply(X);
 var vifList = RMAT.matrixPseudoInverse().matrixDiagonal().project([0]).toList();
 
 print('Computing Spearman correlations and VIF in the background ...');
-ee.Dictionary({rho: rhoList, vif: vifList}).evaluate(function (COL, errC) {
+evalRetry(ee.Dictionary({rho: rhoList, vif: vifList}), function (COL, errC) {
 if (errC) { print('STOP: collinearity screen failed: ' + errC); return; }
 var RHO = {};
 PAIRS.forEach(function (p, idx) {

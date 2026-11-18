@@ -20,7 +20,7 @@ if (CFG.ANCHOR_MODE === 'ASSET') {
   PRE.anchor = ee.Dictionary({id: af0.get('anchor_id'), cs: af0.get('cs_threshold'), d2: af0.get('d2_window')});
 }
 print('Reading the range asset and checking datasets in the background ...');
-ee.Dictionary(PRE).evaluate(function (info, err) {
+LIB.evalRetry(ee.Dictionary(PRE), function (info, err) {
   if (err) {
     print('STOP: could not read the range asset' +
           (CFG.ANCHOR_MODE === 'ASSET' ? ' or the anchor table (run STEP 1 first, or set ANCHOR_MODE = LIVE)' : '') +

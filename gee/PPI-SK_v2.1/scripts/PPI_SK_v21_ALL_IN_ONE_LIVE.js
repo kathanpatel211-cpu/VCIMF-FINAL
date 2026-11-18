@@ -123,6 +123,15 @@ LIB.utmCrs = function (geom) {
   return ee.String('EPSG:326').cat(zone.format('%02d'));
 };
 
+/* evaluate() with up to 2 retries (Earth Engine sometimes refuses a request transiently). */
+LIB.evalRetry = function (obj, cb, attempt) {
+  attempt = attempt || 1;
+  obj.evaluate(function (val, err) {
+    if (err && attempt < 3) { LIB.evalRetry(obj, cb, attempt + 1); return; }
+    cb(val, err);
+  });
+};
+
 /* Mosaic rule: mosaic() drops the native projection — always restore it. */
 LIB.mosaicNative = function (col) {
   col = ee.ImageCollection(col);
@@ -591,26 +600,38 @@ LIB.checkAssets = function (region, done) {
   add('FF-03 CHM mosaic scale (m)', scale(A.CHM), true, inRange(0.3, 3));
 
   print('Checking ' + tests.length + ' datasets in the background (FF-01, FF-03) ...');
-  var res = {}, pending = tests.length;
-  tests.forEach(function (t) {
+  // At most 6 requests at a time; a request that errors is retried up to 2 times
+  // (Earth Engine sometimes refuses bursts with "Too many concurrent aggregations").
+  var res = {}, pending = tests.length, next = 0, MAX_PAR = 6;
+  function finish() {
+    var ok = true, log = [], scales = {};
+    tests.forEach(function (u) {
+      var r = res[u[0]];
+      log.push(u[0] + ':' + (r.pass ? 'OK' : 'FAIL'));
+      if (u[0].indexOf('FF-03') === 0) { scales[u[0]] = r.val; }
+      if (!r.pass && r.critical) { ok = false; }
+    });
+    if (!res['D01 FABDEM'].pass && !res['D02 GLO-30'].pass) { ok = false; }
+    if (!ok) {
+      var failed = tests.filter(function (u) { return !res[u[0]].pass && res[u[0]].critical; })
+                        .map(function (u) { return u[0] + ' (' + (res[u[0]].err || 'value ' + res[u[0]].val) + ')'; });
+      print('FAILED CHECKS: ' + failed.join(' | '));
+    }
+    done({ok: ok, log: log.join(';'), scales: scales});
+  }
+  function runOne(t, attempt) {
     t[1].evaluate(function (val, err) {
+      if (err && attempt < 3) { runOne(t, attempt + 1); return; }   // transient error: retry
       var pass = !err && (!t[3] || t[3](val));
       res[t[0]] = {pass: pass, critical: t[2], val: val, err: err};
-      print((pass ? 'OK   ' : 'FAIL ') + t[0], err ? String(err) : val);
+      print((pass ? 'OK   ' : 'FAIL ') + t[0] + (attempt > 1 ? ' (attempt ' + attempt + ')' : ''),
+            err ? String(err) : val);
       pending -= 1;
-      if (pending === 0) {
-        var ok = true, log = [], scales = {};
-        tests.forEach(function (u) {
-          var r = res[u[0]];
-          log.push(u[0] + ':' + (r.pass ? 'OK' : 'FAIL'));
-          if (u[0].indexOf('FF-03') === 0) { scales[u[0]] = r.val; }
-          if (!r.pass && r.critical) { ok = false; }
-        });
-        if (!res['D01 FABDEM'].pass && !res['D02 GLO-30'].pass) { ok = false; }
-        done({ok: ok, log: log.join(';'), scales: scales});
-      }
+      if (pending === 0) { finish(); return; }
+      if (next < tests.length) { runOne(tests[next++], 1); }
     });
-  });
+  }
+  while (next < Math.min(MAX_PAR, tests.length)) { runOne(tests[next++], 1); }
 };
 
 /* ======================================================================
@@ -619,15 +640,18 @@ LIB.checkAssets = function (region, done) {
  *  is retried once at a coarser scale. done(dict, ok, log).
  * ====================================================================== */
 LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done) {
-  var res = {}, log = [], pending = LIB.ANCHOR_SPEC.length, ok = true;
-  function one(key, sc, retry) {
+  // At most 6 requests at a time. An error is retried twice at the same scale, then once
+  // more at a coarser scale (max 1000 m).
+  var res = {}, log = [], pending = LIB.ANCHOR_SPEC.length, ok = true, next = 0, MAX_PAR = 6;
+  function one(key, sc, attempt) {
     var img = LIB.anchorImage(R, key).rename(key).updateMask(landMask);
     img.reduceRegion({reducer: ee.Reducer.percentile([2, 98]), geometry: geom, scale: sc, crs: crs,
                       maxPixels: 1e13, tileScale: 16, bestEffort: true})
       .evaluate(function (d, err) {
         var lo = d ? d[key + '_p2'] : null, hi = d ? d[key + '_p98'] : null;
         if (err || typeof lo !== 'number' || typeof hi !== 'number') {
-          if (retry) { one(key, Math.min(sc * 2.5, 1000), false); return; }
+          if (attempt < 3) { one(key, sc, attempt + 1); return; }
+          if (attempt === 3 && sc < 1000) { one(key, Math.min(sc * 2.5, 1000), 4); return; }
           ok = false;
           log.push(key + ':FAIL');
           print('FAIL anchor ' + key + ' -> ' + (err || 'no valid pixels'));
@@ -637,10 +661,12 @@ LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done) {
           print('OK   anchor ' + key + '  [2nd, 98th pct] = [' + lo.toPrecision(5) + ', ' + hi.toPrecision(5) + ']  @' + sc + ' m');
         }
         pending -= 1;
-        if (pending === 0) { done(res, ok, log.join(';')); }
+        if (pending === 0) { done(res, ok, log.join(';')); return; }
+        if (next < LIB.ANCHOR_SPEC.length) { start(LIB.ANCHOR_SPEC[next++]); }
       });
   }
-  LIB.ANCHOR_SPEC.forEach(function (s) { one(s[0], Math.max(s[1], minScale), true); });
+  function start(s) { one(s[0], Math.max(s[1], minScale), 1); }
+  while (next < Math.min(MAX_PAR, LIB.ANCHOR_SPEC.length)) { start(LIB.ANCHOR_SPEC[next++]); }
 };
 
 /* ######################################################################
@@ -782,7 +808,7 @@ function step2_rangeLayers() {
     PRE.anchor = ee.Dictionary({id: af0.get('anchor_id'), cs: af0.get('cs_threshold'), d2: af0.get('d2_window')});
   }
   print('Reading the range asset and checking datasets in the background ...');
-  ee.Dictionary(PRE).evaluate(function (info, err) {
+  LIB.evalRetry(ee.Dictionary(PRE), function (info, err) {
     if (err) {
       print('STOP: could not read the range asset' +
             (CFG.ANCHOR_MODE === 'ASSET' ? ' or the anchor table (run STEP 1 first, or set ANCHOR_MODE = LIVE)' : '') +
@@ -1183,6 +1209,13 @@ function step3_scoring(stage) {
     E: ['E1', 'E2', 'E4']
   };
   var THEME_KEYS = ['A', 'B', 'C', 'D', 'E'];
+  function evalRetry(obj, cb, attempt) {          // evaluate() with up to 2 retries
+    attempt = attempt || 1;
+    obj.evaluate(function (val, err) {
+      if (err && attempt < 3) { evalRetry(obj, cb, attempt + 1); return; }
+      cb(val, err);
+    });
+  }
   var PARAMS = [].concat(THEMES.A, THEMES.B, THEMES.C, THEMES.D, THEMES.E);   // 23
   var THEME_OF = {};
   THEME_KEYS.forEach(function (t) { THEMES[t].forEach(function (k) { THEME_OF[k] = t; }); });
@@ -1342,9 +1375,9 @@ function step3_scoring(stage) {
     statD[k + '_sd'] = retained0.aggregate_sample_sd(k);
   });
   print('Computing block statistics in the background ...');
-  ee.Dictionary({
+  evalRetry(ee.Dictionary({
     N_all: N_ALL, N_ret: retained0.size(), nullShare: nullShare, stats: ee.Dictionary(statD)
-  }).evaluate(function (STATS, errS) {
+  }), function (STATS, errS) {
   if (errS) { print('STOP: could not read the raw block table (has STEP 2 finished?): ' + errS); return; }
   print('Blocks: all =', STATS.N_all, ' retained =', STATS.N_ret);
   var NR = STATS.N_ret;
@@ -1382,7 +1415,7 @@ function step3_scoring(stage) {
   var vifList = RMAT.matrixPseudoInverse().matrixDiagonal().project([0]).toList();
 
   print('Computing Spearman correlations and VIF in the background ...');
-  ee.Dictionary({rho: rhoList, vif: vifList}).evaluate(function (COL, errC) {
+  evalRetry(ee.Dictionary({rho: rhoList, vif: vifList}), function (COL, errC) {
   if (errC) { print('STOP: collinearity screen failed: ' + errC); return; }
   var RHO = {};
   PAIRS.forEach(function (p, idx) {
