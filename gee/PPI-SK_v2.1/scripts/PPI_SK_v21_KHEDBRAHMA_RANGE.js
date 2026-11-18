@@ -349,12 +349,18 @@ LIB.layers = function (region, crs, opt) {
   var canopy10 = tree1m.reduceResolution({reducer: ee.Reducer.mean(), maxPixels: 128}).reproject(g10);
   R.canopy10 = canopy10.where(loss19.reproject(g10), 0).rename('canopy_frac');
   R.canopyPct = R.canopy10.multiply(100).rename('canopy_pct');
-  var canopy30 = tree1m.reduceResolution({reducer: ee.Reducer.mean(), maxPixels: 1024}).reproject(g30)
+  // D6 dense-forest mask (30 m cells with canopy >= 40 %). The distance transform reads a wide
+  // window around every tile, so at 1.2 m this would exceed Earth Engine's reprojection limit
+  // ("Reprojection output too large"). The tree mask for D6 is therefore read from the CHM's
+  // 4.8 m pyramid level (16x fewer pixels); block canopy %, C1 and D5 keep the full 1.2 m data.
+  var chmD6 = chm.setDefaultProjection(chm.projection().atScale(4.8));
+  var canopy30 = chmD6.gte(5).reduceResolution({reducer: ee.Reducer.mean(), maxPixels: 256}).reproject(g30)
                        .where(loss19.reproject(g30), 0);
   var near = ee.Image(1).clip(regionBuf).unmask(0);
   var dense = canopy30.gte(0.40).unmask(0).multiply(near).reproject(g30);
-  R.D6_dist = dense.fastDistanceTransform(256, 'pixels', 'squared_euclidean')
-    .unmask(256 * 256).sqrt().multiply(30).reproject(g30).rename('D6_dist');
+  var D6N = 167;                                   // 167 px x 30 m = 5 km search (score exp(-5) ~ 0 beyond)
+  R.D6_dist = dense.fastDistanceTransform(D6N, 'pixels', 'squared_euclidean')
+    .unmask(D6N * D6N).sqrt().multiply(30).min(D6N * 30).reproject(g30).rename('D6_dist');
   if (opt.a3MaskTrees) { R.A3 = R.A3.updateMask(R.canopy10.lt(0.5)); }     // FF-11 remedy
 
   /* ---- D5 evergreen shrub proxy ---- */
