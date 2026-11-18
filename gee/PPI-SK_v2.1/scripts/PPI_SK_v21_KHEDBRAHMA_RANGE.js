@@ -111,9 +111,15 @@ LIB.utmCrs = function (geom) {
 
 /* evaluate() with up to 2 retries (Earth Engine sometimes refuses a request transiently). */
 LIB.evalRetry = function (obj, cb, attempt) {
+  // Retries are scheduled 2 s later, outside Earth Engine's reply handler (retrying inside it
+  // crashes the Code Editor with "Cannot read properties of null (reading 'headerMap')").
   attempt = attempt || 1;
   obj.evaluate(function (val, err) {
-    if (err && attempt < 3) { LIB.evalRetry(obj, cb, attempt + 1); return; }
+    if (err && attempt < 3) {
+      print('Request failed (' + err + ') - retrying (' + (attempt + 1) + '/3) ...');
+      ui.util.setTimeout(function () { LIB.evalRetry(obj, cb, attempt + 1); }, 2000);
+      return;
+    }
     cb(val, err);
   });
 };
@@ -607,7 +613,10 @@ LIB.checkAssets = function (region, done) {
   }
   function runOne(t, attempt) {
     t[1].evaluate(function (val, err) {
-      if (err && attempt < 3) { runOne(t, attempt + 1); return; }   // transient error: retry
+      if (err && attempt < 3) {                                    // transient error: retry later
+        ui.util.setTimeout(function () { runOne(t, attempt + 1); }, 2000);
+        return;
+      }
       var pass = !err && (!t[3] || t[3](val));
       res[t[0]] = {pass: pass, critical: t[2], val: val, err: err};
       print((pass ? 'OK   ' : 'FAIL ') + t[0] + (attempt > 1 ? ' (attempt ' + attempt + ')' : ''),
@@ -636,8 +645,11 @@ LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done) {
       .evaluate(function (d, err) {
         var lo = d ? d[key + '_p2'] : null, hi = d ? d[key + '_p98'] : null;
         if (err || typeof lo !== 'number' || typeof hi !== 'number') {
-          if (attempt < 3) { one(key, sc, attempt + 1); return; }
-          if (attempt === 3 && sc < 1000) { one(key, Math.min(sc * 2.5, 1000), 4); return; }
+          if (attempt < 3) { ui.util.setTimeout(function () { one(key, sc, attempt + 1); }, 2000); return; }
+          if (attempt === 3 && sc < 1000) {
+            ui.util.setTimeout(function () { one(key, Math.min(sc * 2.5, 1000), 4); }, 2000);
+            return;
+          }
           ok = false;
           log.push(key + ':FAIL');
           print('FAIL anchor ' + key + ' -> ' + (err || 'no valid pixels'));
@@ -1091,10 +1103,17 @@ function stepMap() {
     E: ['E1', 'E2', 'E4']
   };
   var THEME_KEYS = ['A', 'B', 'C', 'D', 'E'];
-  function evalRetry(obj, cb, attempt) {          // evaluate() with up to 2 retries
+  // evaluate() with up to 2 retries. make() builds a fresh request each time; the retry is
+  // scheduled 2 s later, outside Earth Engine's reply handler (retrying inside it crashes the
+  // Code Editor with "Cannot read properties of null (reading 'headerMap')").
+  function evalRetry(make, cb, attempt) {
     attempt = attempt || 1;
-    obj.evaluate(function (val, err) {
-      if (err && attempt < 3) { evalRetry(obj, cb, attempt + 1); return; }
+    make().evaluate(function (val, err) {
+      if (err && attempt < 3) {
+        print('Request failed (' + err + ') - retrying (' + (attempt + 1) + '/3) ...');
+        ui.util.setTimeout(function () { evalRetry(make, cb, attempt + 1); }, 2000);
+        return;
+      }
       cb(val, err);
     });
   }
@@ -1257,9 +1276,10 @@ function stepMap() {
     statD[k + '_sd'] = retained0.aggregate_sample_sd(k);
   });
   print('Computing block statistics in the background ...');
-  evalRetry(ee.Dictionary({
-    N_all: N_ALL, N_ret: retained0.size(), nullShare: nullShare, stats: ee.Dictionary(statD)
-  }), function (STATS, errS) {
+  evalRetry(function () {
+    return ee.Dictionary({N_all: N_ALL, N_ret: retained0.size(), nullShare: nullShare,
+                          stats: ee.Dictionary(statD)});
+  }, function (STATS, errS) {
   if (errS) { print('STOP: could not read the raw block table (has STEP 2 finished?): ' + errS); return; }
   print('Blocks: all =', STATS.N_all, ' retained =', STATS.N_ret);
   var NR = STATS.N_ret;
@@ -1276,33 +1296,41 @@ function stepMap() {
   }
   PAIRS.push(['A3', 'canopy_pct']);
   PAIRS.push(['A3', 'D5_raw']);
-  var rhoList = ee.List(PAIRS.map(function (p) {
-    return ee.Dictionary(retained0.filter(ee.Filter.notNull(p))
-                           .reduceColumns(ee.Reducer.spearmansCorrelation(), p))
-             .values().get(0);                              // 'correlation' sorts first
-  }));
-
-  // VIF_i = diag(inverse correlation matrix)_i — identical to 1/(1-R2_i) of the regression of
-  // parameter i on the other 22; pseudo-inverse keeps it defined when columns are collinear.
-  var zKeys = VARYING.map(function (k) { return 'z_' + k; });
-  var zTable = retained0.map(function (f) {
-    var o = {};
-    VARYING.forEach(function (k) {
-      o['z_' + k] = ee.Number(f.get(k)).subtract(meanOf(k)).divide(sdOf(k) * Math.sqrt(NR - 1));
-    });
-    return f.set(o);
-  });
-  var X = ee.Array(zTable.reduceColumns(ee.Reducer.toList(zKeys.length), zKeys).get('list'));
-  var RMAT = X.matrixTranspose().matrixMultiply(X);
-  var vifList = RMAT.matrixPseudoInverse().matrixDiagonal().project([0]).toList();
-
-  print('Computing Spearman correlations and VIF in the background ...');
-  evalRetry(ee.Dictionary({rho: rhoList, vif: vifList}), function (COL, errC) {
-  if (errC) { print('STOP: collinearity screen failed: ' + errC); return; }
+  // One small download of the block table (retained blocks x 25 values); Spearman rho (average
+  // ranks for ties) and VIF are then computed here in the Code Editor. 255 server-side
+  // reductions in one request were too heavy and timed out.
+  var COLKEYS = PARAMS.concat(['canopy_pct', 'D5_raw']);
+  print('Computing Spearman correlations and VIF ...');
+  evalRetry(function () {
+    return retained0.filter(ee.Filter.notNull(COLKEYS))
+      .reduceColumns(ee.Reducer.toList(COLKEYS.length), COLKEYS).get('list');
+  }, function (ROWS, errC) {
+  if (errC) { print('STOP: could not read the block table for the collinearity screen: ' + errC); return; }
+  function column(k) { var c = COLKEYS.indexOf(k); return ROWS.map(function (r) { return Number(r[c]); }); }
+  function avgRanks(x) {                  // ranks 1..n, ties get their average rank
+    var idx = x.map(function (v, i) { return i; }).sort(function (a, b) { return x[a] - x[b]; });
+    var r = new Array(x.length), i = 0;
+    while (i < idx.length) {
+      var j = i;
+      while (j + 1 < idx.length && x[idx[j + 1]] === x[idx[i]]) { j++; }
+      for (var t = i; t <= j; t++) { r[idx[t]] = (i + j) / 2 + 1; }
+      i = j + 1;
+    }
+    return r;
+  }
+  function pearson(a, b) {
+    var n = a.length, ma = 0, mb = 0, sab = 0, saa = 0, sbb = 0, i;
+    for (i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+    ma /= n; mb /= n;
+    for (i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) * (a[i] - ma); sbb += (b[i] - mb) * (b[i] - mb); }
+    return (saa > 0 && sbb > 0) ? sab / Math.sqrt(saa * sbb) : null;
+  }
+  var RANKS = {};
+  COLKEYS.forEach(function (k) { RANKS[k] = avgRanks(column(k)); });
   var RHO = {};
-  PAIRS.forEach(function (p, idx) {
-    var v = COL.rho[idx];
-    if (sdOf(p[0]) <= 1e-9 || (PARAMS.indexOf(p[1]) >= 0 && sdOf(p[1]) <= 1e-9)) { v = null; }
+  PAIRS.forEach(function (p) {
+    var v = (sdOf(p[0]) <= 1e-9 || (PARAMS.indexOf(p[1]) >= 0 && sdOf(p[1]) <= 1e-9)) ? null
+            : pearson(RANKS[p[0]], RANKS[p[1]]);
     RHO[p[0] + '|' + p[1]] = (typeof v === 'number' && isFinite(v)) ? v : null;
   });
   function rho(a, b) {
@@ -1310,8 +1338,30 @@ function stepMap() {
     if (v === undefined) { v = RHO[b + '|' + a]; }
     return (v === undefined) ? null : v;
   }
+  // VIF_i = diag(inverse correlation matrix)_i = 1/(1-R2_i) of parameter i regressed on the others.
   var VIF = {};
-  VARYING.forEach(function (k, idx) { VIF[k] = COL.vif[idx]; });
+  (function () {
+    var cols = VARYING.map(column), m = cols.length, a, i, j, k;
+    var Rm = [];
+    for (i = 0; i < m; i++) { Rm.push([]); for (j = 0; j < m; j++) { Rm[i].push(i === j ? 1 : (pearson(cols[i], cols[j]) || 0)); } }
+    a = Rm.map(function (row, r) { return row.concat(Rm.map(function (x, c) { return c === r ? 1 : 0; })); });
+    var singular = false;
+    for (i = 0; i < m; i++) {                               // Gauss-Jordan with partial pivoting
+      var piv = i;
+      for (k = i + 1; k < m; k++) { if (Math.abs(a[k][i]) > Math.abs(a[piv][i])) { piv = k; } }
+      if (Math.abs(a[piv][i]) < 1e-10) { singular = true; break; }
+      var tmp = a[i]; a[i] = a[piv]; a[piv] = tmp;
+      var d = a[i][i];
+      for (j = 0; j < 2 * m; j++) { a[i][j] /= d; }
+      for (k = 0; k < m; k++) {
+        if (k === i) { continue; }
+        var f = a[k][i];
+        for (j = 0; j < 2 * m; j++) { a[k][j] -= f * a[i][j]; }
+      }
+    }
+    VARYING.forEach(function (key, ii) { VIF[key] = singular ? Infinity : a[ii][m + ii]; });
+  })();
+  print('Collinearity screen done on ' + ROWS.length + ' blocks.');
 
   /* ---------- Step 19: apply CV / collinearity weight changes (FF-07) ---------- */
   var W = {};
@@ -1681,7 +1731,8 @@ function stepMap() {
     return ee.Feature(null, {type: 'spearman', a: p[0], b: p[1], value: r === null ? -999 : r,
                              flag: (r !== null && Math.abs(r) > CFG.RHO_MAX) ? 'yes' : 'no'});
   }).concat(VARYING.map(function (k) {
-    return ee.Feature(null, {type: 'VIF', a: k, b: '', value: VIF[k],
+    return ee.Feature(null, {type: 'VIF', a: k, b: '', value: isFinite(VIF[k]) ? VIF[k] : -1,
+                             note: isFinite(VIF[k]) ? '' : 'singular (exactly collinear)',
                              flag: VIF[k] > CFG.VIF_MAX ? 'yes' : 'no'});
   }));
   var COL_FC = ee.FeatureCollection(colFeatures);

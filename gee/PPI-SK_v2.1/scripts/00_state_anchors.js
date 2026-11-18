@@ -81,9 +81,15 @@ LIB.utmCrs = function (geom) {
 
 /* evaluate() with up to 2 retries (Earth Engine sometimes refuses a request transiently). */
 LIB.evalRetry = function (obj, cb, attempt) {
+  // Retries are scheduled 2 s later, outside Earth Engine's reply handler (retrying inside it
+  // crashes the Code Editor with "Cannot read properties of null (reading 'headerMap')").
   attempt = attempt || 1;
   obj.evaluate(function (val, err) {
-    if (err && attempt < 3) { LIB.evalRetry(obj, cb, attempt + 1); return; }
+    if (err && attempt < 3) {
+      print('Request failed (' + err + ') - retrying (' + (attempt + 1) + '/3) ...');
+      ui.util.setTimeout(function () { LIB.evalRetry(obj, cb, attempt + 1); }, 2000);
+      return;
+    }
     cb(val, err);
   });
 };
@@ -577,7 +583,10 @@ LIB.checkAssets = function (region, done) {
   }
   function runOne(t, attempt) {
     t[1].evaluate(function (val, err) {
-      if (err && attempt < 3) { runOne(t, attempt + 1); return; }   // transient error: retry
+      if (err && attempt < 3) {                                    // transient error: retry later
+        ui.util.setTimeout(function () { runOne(t, attempt + 1); }, 2000);
+        return;
+      }
       var pass = !err && (!t[3] || t[3](val));
       res[t[0]] = {pass: pass, critical: t[2], val: val, err: err};
       print((pass ? 'OK   ' : 'FAIL ') + t[0] + (attempt > 1 ? ' (attempt ' + attempt + ')' : ''),
@@ -606,8 +615,11 @@ LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done) {
       .evaluate(function (d, err) {
         var lo = d ? d[key + '_p2'] : null, hi = d ? d[key + '_p98'] : null;
         if (err || typeof lo !== 'number' || typeof hi !== 'number') {
-          if (attempt < 3) { one(key, sc, attempt + 1); return; }
-          if (attempt === 3 && sc < 1000) { one(key, Math.min(sc * 2.5, 1000), 4); return; }
+          if (attempt < 3) { ui.util.setTimeout(function () { one(key, sc, attempt + 1); }, 2000); return; }
+          if (attempt === 3 && sc < 1000) {
+            ui.util.setTimeout(function () { one(key, Math.min(sc * 2.5, 1000), 4); }, 2000);
+            return;
+          }
           ok = false;
           log.push(key + ':FAIL');
           print('FAIL anchor ' + key + ' -> ' + (err || 'no valid pixels'));
