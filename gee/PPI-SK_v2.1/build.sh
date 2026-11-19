@@ -14,3 +14,4 @@ for f in "$out"/*.js; do node --check "$f"; echo "syntax OK: $f ($(wc -l < "$f")
 python3 build_all_in_one.py && node --check scripts/PPI_SK_v21_ALL_IN_ONE.js && echo "syntax OK: all-in-one"
 python3 build_range.py && node --check scripts/PPI_SK_v21_KHEDBRAHMA_RANGE.js && echo "syntax OK: range-only"
 sed "s/^  ANCHOR_MODE: 'ASSET',/  ANCHOR_MODE: 'LIVE',             \/\/ QUICK DEMO MODE. For the final DPR set 'ASSET'./" scripts/PPI_SK_v21_ALL_IN_ONE.js > scripts/PPI_SK_v21_ALL_IN_ONE_LIVE.js && node --check scripts/PPI_SK_v21_ALL_IN_ONE_LIVE.js
+python3 build_frpim.py && node --check scripts/FRPIM_v22_KHEDBRAHMA_RANGE.js && echo "syntax OK: FRPIM range"

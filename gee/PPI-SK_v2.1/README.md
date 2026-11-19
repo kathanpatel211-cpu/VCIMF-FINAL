@@ -78,3 +78,28 @@ All outputs go to the Drive folder `PPI_SK_v21`. All assets go to `projects/khed
    VIF > 5 are logged as REVIEW, because merging across themes would change the theme totals.
 8. **Field-check list (product 10)** follows Section 13.2. Separately, every Category 1–2 block carries
    `fra_rights_check_required = yes` (Section 2 rule).
+
+## FRPIM v2.2 (Forest Restoration Priority and Intervention Model)
+
+`scripts/FRPIM_v22_KHEDBRAHMA_RANGE.js` is the single-file, range-only implementation of the FRPIM v2.2
+specification. Paste it into one Code Editor script and press *Run* twice:
+
+1. **RUN 1** checks all 24 datasets (including D23 SoilGrids water content and D24 Landsat 5/7), computes
+   local anchors (range + 20 km), builds the 10 ha blocks and every v2.2 layer, and creates the raw-table
+   tasks. *Tasks* → *RUN ALL*.
+2. **RUN 2** (after the tasks finish) scores Restoration Need (RNI, N1–N8) and Feasibility (RFI, F1–F14),
+   applies the 3 × 3 matrix, phase, RPS, the 11 intervention rules, `smc_required`, the site class and the
+   species group. It then runs the Monte Carlo (weights and thresholds), the one-at-a-time sensitivity, the
+   collinearity screen per index, the RNI–RFI independence check, the v2.1 comparison and the decision
+   summary, and shows the final map with a layer switcher and a click card.
+
+Implementation notes for the DPR:
+- Anchors are local (range + 20 km), not Gujarat-wide, so RNI and RFI are comparable within that
+  landscape. FF-09 records this.
+- Spearman ρ and VIF are computed in the Code Editor from one download of the block table (average
+  ranks for ties; VIF = diagonal of the inverse correlation matrix). This is mathematically identical
+  to the spec's `linearRegression` VIF.
+- D6 / N8 reads the canopy-height data at its 4.8 m pyramid level and searches 5 km, to stay under Earth
+  Engine's reprojection limit.
+- FF-28: the ESA CCI biomass v7.0 asset path is checked on every run. Meta CHMv2 has no public GEE path
+  yet, and the script says so.

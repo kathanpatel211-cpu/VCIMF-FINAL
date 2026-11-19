@@ -94,7 +94,10 @@ LIB.A = {
   WDPA:        'WCMC/WDPA/current/polygons',                                   // D20
   GRIP_SEA:    'projects/sat-io/open-datasets/GRIP4/South-East-Asia',          // D21
   GRIP_MECA:   'projects/sat-io/open-datasets/GRIP4/Middle-East-Central-Asia', // D21
-  GAUL1:       'FAO/GAUL/2015/level1'                                          // D22
+  GAUL1:       'FAO/GAUL/2015/level1',                                         // D22
+  SOILWV:      'ISRIC/SoilGrids250m/v2_0/',                                    // D23 (v2.2) wv0033, wv1500
+  L5:          'LANDSAT/LT05/C02/T1_L2',                                       // D24 (v2.2)
+  L7:          'LANDSAT/LE07/C02/T1_L2'                                        // D24 (v2.2)
 };
 
 LIB.FIRE_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
@@ -374,6 +377,7 @@ LIB.layers = function (region, crs, opt) {
   var chmD6 = chm.setDefaultProjection(chm.projection().atScale(4.8));
   var canopy30 = chmD6.gte(5).reduceResolution({reducer: ee.Reducer.mean(), maxPixels: 256}).reproject(g30)
                        .where(loss19.reproject(g30), 0);
+  R.canopy30 = canopy30;
   var near = ee.Image(1).clip(regionBuf).unmask(0);
   var dense = canopy30.gte(0.40).unmask(0).multiply(near).reproject(g30);
   var D6N = 167;                                   // 167 px x 30 m = 5 km search (score exp(-5) ~ 0 beyond)
@@ -466,7 +470,8 @@ LIB.anchorImage = function (R, key) {
     B3: R.soc, B5: R.cec, B6: R.cfvo, B7: R.rough,
     C2s: R.hli, C3s: R.curv,
     D2: R.D2trend.multiply(-1),               // score is normalised (-trend)
-    D3: R.agb, E2_dist: R.E2_dist, E2_pop: R.E2_pop, E4: R.E4
+    D3: R.agb, E2_dist: R.E2_dist, E2_pop: R.E2_pop, E4: R.E4,
+    N2_ndvi: R.peakNDVI, F2: R.AWC                // FRPIM v2.2
   };
   return ee.Image(m[key]);
 };
@@ -537,7 +542,7 @@ LIB.score = function (R, ANCH) {
  *  All requests run in parallel in the background (the page never
  *  freezes). done({ok, log, scales}) is called once all have answered.
  * ====================================================================== */
-LIB.checkAssets = function (region, done) {
+LIB.checkAssets = function (region, done, v22) {
   var A = LIB.A;
   region = ee.Geometry(region);
   var pt = region.centroid(100);
@@ -587,6 +592,12 @@ LIB.checkAssets = function (region, done) {
   add('D21 GRIP4 SE Asia', fc(A.GRIP_SEA, pt.buffer(20000)));
   add('D21 GRIP4 ME-C Asia', fc(A.GRIP_MECA));
   add('D22 FAO GAUL L1', fc(A.GAUL1));
+  if (v22) {
+    add('D23 SoilGrids wv0033 (field capacity)', im(A.SOILWV + 'wv0033'));
+    add('D23 SoilGrids wv1500 (wilting point)', im(A.SOILWV + 'wv1500'));
+    add('D24 Landsat 5 TM', ic(A.L5, '2003-09-01', '2003-12-01', pt));
+    add('D24 Landsat 7 ETM+', ic(A.L7, '2003-09-01', '2003-12-01', pt));
+  }
   var inRange = function (lo, hi) { return function (v) { return v >= lo && v <= hi; }; };
   add('FF-03 DEM mosaic scale (m)',
       ee.Number(ee.Algorithms.If(ee.ImageCollection(A.FABDEM).filterBounds(pt).size().gt(0),
@@ -637,37 +648,129 @@ LIB.checkAssets = function (region, done) {
  *  One request per parameter, in parallel; a parameter that times out
  *  is retried once at a coarser scale. done(dict, ok, log).
  * ====================================================================== */
-LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done) {
-  // At most 6 requests at a time. An error is retried twice at the same scale, then once
-  // more at a coarser scale (max 1000 m).
-  var res = {}, log = [], pending = LIB.ANCHOR_SPEC.length, ok = true, next = 0, MAX_PAR = 6;
-  function one(key, sc, attempt) {
+LIB.anchorsAsync = function (R, geom, crs, landMask, minScale, done, spec) {
+  // spec rows: [key, nativeScale, percentiles (default [2, 98])]. At most 6 requests at a time.
+  // An error is retried twice at the same scale, then once more at a coarser scale (max 1000 m).
+  spec = spec || LIB.ANCHOR_SPEC;
+  var res = {}, log = [], pending = spec.length, ok = true, next = 0, MAX_PAR = 6;
+  function one(row, sc, attempt) {
+    var key = row[0], pcts = row[2] || [2, 98];
     var img = LIB.anchorImage(R, key).rename(key).updateMask(landMask);
-    img.reduceRegion({reducer: ee.Reducer.percentile([2, 98]), geometry: geom, scale: sc, crs: crs,
+    img.reduceRegion({reducer: ee.Reducer.percentile(pcts), geometry: geom, scale: sc, crs: crs,
                       maxPixels: 1e13, tileScale: 16, bestEffort: true})
       .evaluate(function (d, err) {
-        var lo = d ? d[key + '_p2'] : null, hi = d ? d[key + '_p98'] : null;
-        if (err || typeof lo !== 'number' || typeof hi !== 'number') {
-          if (attempt < 3) { ui.util.setTimeout(function () { one(key, sc, attempt + 1); }, 2000); return; }
+        var vals = pcts.map(function (p) { return d ? d[key + '_p' + p] : null; });
+        var bad = err || vals.some(function (v) { return typeof v !== 'number'; });
+        if (bad) {
+          if (attempt < 3) { ui.util.setTimeout(function () { one(row, sc, attempt + 1); }, 2000); return; }
           if (attempt === 3 && sc < 1000) {
-            ui.util.setTimeout(function () { one(key, Math.min(sc * 2.5, 1000), 4); }, 2000);
+            ui.util.setTimeout(function () { one(row, Math.min(sc * 2.5, 1000), 4); }, 2000);
             return;
           }
           ok = false;
           log.push(key + ':FAIL');
           print('FAIL anchor ' + key + ' -> ' + (err || 'no valid pixels'));
         } else {
-          res[key + '_p2'] = lo; res[key + '_p98'] = hi;
+          pcts.forEach(function (p, ii) { res[key + '_p' + p] = vals[ii]; });
           log.push(key + '@' + sc + 'm');
-          print('OK   anchor ' + key + '  [2nd, 98th pct] = [' + lo.toPrecision(5) + ', ' + hi.toPrecision(5) + ']  @' + sc + ' m');
+          print('OK   anchor ' + key + '  [' + pcts.map(function (p) { return p + 'th'; }).join(', ') + ' pct] = [' +
+                vals.map(function (v) { return v.toPrecision(5); }).join(', ') + ']  @' + sc + ' m');
         }
         pending -= 1;
         if (pending === 0) { done(res, ok, log.join(';')); return; }
-        if (next < LIB.ANCHOR_SPEC.length) { start(LIB.ANCHOR_SPEC[next++]); }
+        if (next < spec.length) { start(spec[next++]); }
       });
   }
-  function start(s) { one(s[0], Math.max(s[1], minScale), 1); }
-  while (next < Math.min(MAX_PAR, LIB.ANCHOR_SPEC.length)) { start(LIB.ANCHOR_SPEC[next++]); }
+  function start(row) { one(row, Math.max(row[1], minScale), 1); }
+  while (next < Math.min(MAX_PAR, spec.length)) { start(spec[next++]); }
+};
+
+/* ======================================================================
+ *  FRPIM v2.2 additions
+ * ====================================================================== */
+// Anchor keys keep their v2.1 names where the parameter carried over (traceability):
+// A1=F1 (CTI; + 95th pct for G4), A2=F3, A3=X1 (quartiles), B1_*=F5, B6=F8, B7=F6, C2s=F11,
+// C3s=F12, D2=N3, D3=N5, E2_*=F14, E4=N4; new: N2_ndvi (NDVIs/NDVIv for FVC), F2 (AWC).
+LIB.ANCHOR_SPEC_V22 = [
+  ['A1', 90, [2, 95, 98]], ['A2', 500], ['A3', 20, [2, 25, 50, 98]],
+  ['B1_slope', 30], ['B1_tpi', 30], ['B1_hand', 90], ['B6', 250], ['B7', 30],
+  ['C2s', 30], ['C3s', 30], ['D2', 30], ['D3', 100], ['E2_dist', 30], ['E2_pop', 100], ['E4', 90],
+  ['N2_ndvi', 20], ['F2', 250]
+];
+
+/* Sentinel-2 reflectance (B2, B4, B8, B11) with Cloud Score+ mask. */
+LIB.s2refl = function (region, start, end, csThr) {
+  var csp = ee.ImageCollection(LIB.A.CSP);
+  return ee.ImageCollection(LIB.A.S2).filterBounds(region).filterDate(start, end)
+    .linkCollection(csp, ['cs_cdf'])
+    .map(function (img) {
+      return ee.Image(img.select(['B2', 'B4', 'B8', 'B11']).multiply(0.0001)
+        .updateMask(img.select('cs_cdf').gte(csThr)).copyProperties(img, ['system:time_start']));
+    });
+};
+
+/* Landsat 5 TM + 7 ETM+ C2 L2 NDVI (red = SR_B3, NIR = SR_B4), clear pixels only. */
+LIB.landsat57NDVI = function (region, start, end) {
+  return ee.ImageCollection(LIB.A.L5).merge(ee.ImageCollection(LIB.A.L7))
+    .filterBounds(region).filterDate(start, end)
+    .map(function (img) {
+      var clear = img.select('QA_PIXEL').bitwiseAnd(63).eq(0);
+      var sr = img.select(['SR_B3', 'SR_B4']).multiply(0.0000275).add(-0.2);
+      return ee.Image(sr.normalizedDifference(['SR_B4', 'SR_B3']).rename('NDVI')
+        .updateMask(clear).copyProperties(img, ['system:time_start']));
+    });
+};
+
+/* Adds the v2.2 layers to an existing LIB.layers() result R. */
+LIB.layersV22 = function (R, region, crs, opt) {
+  region = ee.Geometry(region);
+  var thr = opt.csThr;
+  // N2: peak-greenness (15 Oct - 30 Nov) reflectance median 2021-2025 -> BSI and NDVI
+  var peakCol = ee.ImageCollection([]), cntN2 = [];
+  for (var y = 2021; y <= 2025; y++) {
+    var c = LIB.s2refl(region, y + '-10-15', y + '-12-01', thr);
+    peakCol = peakCol.merge(c);
+    cntN2.push(c.select('B8').count().rename('n'));
+  }
+  var pk = peakCol.median();
+  R.peakNDVI = pk.normalizedDifference(['B8', 'B4']).rename('peakNDVI');
+  var sw = pk.select('B11').add(pk.select('B4')), vn = pk.select('B8').add(pk.select('B2'));
+  R.BSI = sw.subtract(vn).divide(sw.add(vn)).rename('BSI');
+  R.N2_minObs = ee.ImageCollection(cntN2).min().rename('n');
+  // F2: available water capacity, 0-30 cm (wv0033 - wv1500), thickness-weighted
+  function wv(name) {
+    var img = ee.Image(LIB.A.SOILWV + name);
+    return img.select('val_0_5cm_mean').multiply(5).add(img.select('val_5_15cm_mean').multiply(10))
+              .add(img.select('val_15_30cm_mean').multiply(15)).divide(30);
+  }
+  R.AWC = wv('wv0033').subtract(wv('wv1500')).rename('AWC');
+  // Degradation evidence layers
+  var gfc = ee.Image(LIB.A.HANSEN);
+  var ly = gfc.select('lossyear').unmask(0);
+  R.treecover2000 = gfc.select('treecover2000').rename('treecover2000');            // DE1
+  R.lossAny = ly.gte(1).and(ly.lte(25)).rename('lossAny');                           // DE2
+  R.N6mask = R.lossAny.and(R.canopy30.lt(0.5).unmask(1)).rename('N6');               // N6: lost, not regrown
+  R.trendNeg = R.D2trend.lt(0).rename('trendNeg');                                   // DE3 (valid pixels only)
+  var base = ee.ImageCollection([]), recent = ee.ImageCollection([]);
+  for (var b = 2000; b <= 2005; b++) { base = base.merge(LIB.landsat57NDVI(region, b + '-09-01', b + '-12-01')); }
+  for (var r2 = 2021; r2 <= 2025; r2++) { recent = recent.merge(LIB.landsatNDVI(region, r2 + '-09-01', r2 + '-12-01')); }
+  R.ndviBase = base.median().rename('ndviBase');                                     // DE4
+  R.ndviRecentL = recent.median().rename('ndviRecent');
+  R.base_nObs = base.count().rename('n');
+  // C8: WorldCover grassland (30) + bare (60)
+  R.wcOpen = R.wc.eq(30).or(R.wc.eq(60)).unmask(0).rename('wcOpen');
+  return R;
+};
+
+/* v2.2 per-pixel scores that are new or renamed (others come from LIB.score). */
+LIB.scoreV22 = function (R, ANCH) {
+  var Z = {};
+  var lo = ee.Number(ANCH.get('N2_ndvi_p2')), hi = ee.Number(ANCH.get('N2_ndvi_p98'));
+  Z.FVC = R.peakNDVI.subtract(lo).divide(hi.subtract(lo).max(1e-9)).clamp(0, 1).pow(2).rename('FVC');  // Gutman & Ignatov 1998
+  Z.BSIpos = R.BSI.gt(0).rename('BSIpos');
+  Z.F2 = LIB.norm(R.AWC, ANCH, 'F2', false).rename('F2');
+  Z.G4 = R.A1.gte(ee.Number(ANCH.get('A1_p95'))).and(R.slopePct.lt(2)).unmask(0).rename('G4');
+  return Z;
 };
 
 /* ######################################################################
