@@ -595,8 +595,13 @@ LIB.checkAssets = function (region, done, v22) {
   if (v22) {
     add('D23 SoilGrids wv0033 (field capacity)', im(A.SOILWV + 'wv0033'));
     add('D23 SoilGrids wv1500 (wilting point)', im(A.SOILWV + 'wv1500'));
-    add('D24 Landsat 5 TM', ic(A.L5, '2003-09-01', '2003-12-01', pt));
-    add('D24 Landsat 7 ETM+', ic(A.L7, '2003-09-01', '2003-12-01', pt));
+    // Dataset access is tested anywhere in the archive; coverage over the range is reported separately
+    // (Landsat 5 has few or no scenes over India in 2000-05; the DE4 baseline merges Landsat 5 and 7).
+    add('D24 Landsat 5 TM', ic(A.L5, '1995-01-01', '2012-01-01'));
+    add('D24 Landsat 7 ETM+', ic(A.L7, '2000-01-01', '2006-01-01'));
+    add('D24 info: Landsat 5 + 7 scenes over the range, Sep-Nov 2000-05',
+        ee.ImageCollection(A.L5).merge(ee.ImageCollection(A.L7)).filterBounds(pt)
+          .filter(ee.Filter.calendarRange(9, 11, 'month')).filterDate('2000-01-01', '2006-01-01').size(), false);
   }
   var inRange = function (lo, hi) { return function (v) { return v >= lo && v <= hi; }; };
   add('FF-03 DEM mosaic scale (m)',
