@@ -1312,46 +1312,238 @@ function step3_scoring(stage) {
     folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'PPI02_field_check_list_' + tag2, fileFormat: 'CSV',
     selectors: FIELD_COLS.concat(['lon', 'lat'])});
 
-  /* ---- On-screen maps and legend (for presentation) ---- */
-  Map.centerObject(AOI, 11);
-  Map.setOptions('HYBRID');
-  THEME_KEYS.forEach(function (t) {
-    Map.addLayer(blockRaster(t), {min: 0, max: 1, palette: ['#f7fbff', '#08306b']}, 'Theme ' + t, false);
-  });
-  Map.addLayer(stabImg, {min: 0, max: 1, palette: ['#d73027', '#ffffbf', '#1a9850']},
-               'Stability (share of MC runs in Cat 1-2)', false);
-  Map.addLayer(rxImg, {min: 1, max: 7, palette: RX_PALETTE}, 'Prescription', false);
-  Map.addLayer(catImg, {min: 1, max: 5, palette: PALETTE}, 'PPI category 1-5');
-  Map.addLayer(ee.Image().byte().paint(fin, 1, 0.5), {palette: ['#333333']}, 'Block outlines', false);
-  Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Range boundary');
+  /* ---- Presentation map: styled blocks, relief, layer switcher, legend with areas,
+          click-to-inspect block card, print-quality exports ---- */
+  var CAT_LABELS = ['Highest priority', 'High priority', 'Moderate (phased)', 'Low priority',
+                    'No plantation / excluded'];
+  var RX_ORDER = ['FULL_PLANTATION', 'GAP_PLANTING_ANR', 'INVASIVE_CLEAR_THEN_PLANT', 'SMC_FIRST',
+                  'FIRE_PROTECTION_FIRST', 'PROTECT_DENSE', 'NOT_PLANTABLE'];
+  var RX_LABELS = {
+    FULL_PLANTATION: 'Full plantation', GAP_PLANTING_ANR: 'Gap planting + ANR',
+    INVASIVE_CLEAR_THEN_PLANT: 'Clear invasives, then plant', SMC_FIRST: 'Soil & moisture works first',
+    FIRE_PROTECTION_FIRST: 'Fire protection first', PROTECT_DENSE: 'Protect (dense forest)',
+    NOT_PLANTABLE: 'Not plantable'
+  };
+  var THEME_NAMES = {A: 'A  Moisture', B: 'B  Soil', C: 'C  Terrain', D: 'D  Restoration need', E: 'E  Risk (high = low risk)'};
+  var GRAD = ['#7f2704', '#d94801', '#fdae6b', '#fff5eb', '#c7e9c0', '#41ab5d', '#00441b'];   // low -> high score
 
-  function legendRow(color, label) {
+  // Block polygons filled by a palette; white outlines keep every 10 ha block readable.
+  function styledBlocks(prop, palette, alpha) {
+    var pal = ee.List(palette.map(function (c) { return c.replace('#', '') + alpha; }));
+    return mapFC.map(function (f) {
+      var i = ee.Number(f.get(prop)).int().subtract(1);
+      return f.set('style', ee.Dictionary({color: 'ffffffcc', width: 0.6, fillColor: pal.get(i)}));
+    }).style({styleProperty: 'style'});
+  }
+  var catVis = styledBlocks('category', PALETTE, 'e6');
+  var rxVis = styledBlocks('rx_code', RX_PALETTE, 'e6');
+  var outlineVis = ee.Image().byte().paint(mapFC, 1, 0.6).visualize({palette: ['ffffff'], opacity: 0.8});
+  function rasterVis(img, palette) {
+    return img.visualize({min: 0, max: 1, palette: palette, opacity: 0.9}).blend(outlineVis);
+  }
+
+  // Relief and focus: hillshade from FABDEM, everything outside the range dimmed.
+  var fabCol = ee.ImageCollection('projects/sat-io/open-datasets/FABDEM').filterBounds(AOI);
+  var fab = fabCol.mosaic().setDefaultProjection(ee.Image(fabCol.first()).projection()).select([0]);
+  var hillshade = ee.Terrain.hillshade(fab, 315, 35).visualize({min: 120, max: 255, palette: ['000000', 'ffffff']});
+  var inside = ee.Image(1).clip(AOI).mask();
+  var dimOutside = ee.Image(0).updateMask(inside.not()).visualize({palette: ['000000'], opacity: 0.55});
+  var boundaryVis = ee.Image().byte().paint(AOI_FC, 1, 2.5).visualize({palette: ['ffff00']});
+
+  Map.clear();
+  Map.setOptions('HYBRID');
+  Map.setControlVisibility({all: true});
+  Map.centerObject(AOI, 12);
+  Map.addLayer(hillshade.updateMask(inside), {opacity: 0.45}, 'Relief (FABDEM hillshade)');
+  Map.addLayer(dimOutside, {}, 'Outside range (dimmed)');
+  Map.addLayer(catVis, {}, 'PPI category 1-5');                       // layer index 2: main layer
+  Map.addLayer(boundaryVis, {}, 'Range boundary');
+  Map.addLayer(ee.Image(), {}, 'Selected block', false);               // index 4: click highlight
+
+  /* ---- Title, north arrow ---- */
+  var subtitle = ui.Label('Sabarkantha Division, Gujarat  ·  PPI-SK v2.1  ·  10 ha blocks',
+                          {fontSize: '12px', color: '#444444', margin: '2px 0 0 0'});
+  Map.add(ui.Panel([
+    ui.Label('Plantation Priority Index — ' + CFG.RANGE_NAME + ' Range',
+             {fontWeight: 'bold', fontSize: '18px', margin: '0'}),
+    subtitle
+  ], ui.Panel.Layout.flow('vertical'), {position: 'top-center', padding: '6px 14px'}));
+  Map.add(ui.Panel([ui.Label('▲', {fontSize: '20px', margin: '0 0 -6px 0', textAlign: 'center', stretch: 'horizontal'}),
+                    ui.Label('N', {fontWeight: 'bold', fontSize: '14px', margin: '0', textAlign: 'center', stretch: 'horizontal'})],
+                   ui.Panel.Layout.flow('vertical'), {position: 'top-right', padding: '2px 8px', width: '44px'}));
+
+  /* ---- Legend (rebuilt when the layer changes), with blocks and hectares per class ---- */
+  var legend = ui.Panel({style: {position: 'bottom-left', padding: '8px 12px', width: '330px'}});
+  var STATS = null;   // filled asynchronously
+  function fmt(n) { return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function swatchRow(color, label, extra) {
     return ui.Panel([
-      ui.Label('', {backgroundColor: color, padding: '8px', margin: '2px 6px 2px 0'}),
-      ui.Label(label, {margin: '2px 0', fontSize: '12px'})
+      ui.Label('', {backgroundColor: color, padding: '9px', margin: '2px 8px 2px 0', border: '1px solid #ffffff'}),
+      ui.Label(label, {margin: '3px 0', fontSize: '12px', stretch: 'horizontal'}),
+      ui.Label(extra || '', {margin: '3px 0', fontSize: '11px', color: '#555555'})
     ], ui.Panel.Layout.flow('horizontal'));
   }
-  var legend = ui.Panel({style: {position: 'bottom-left', padding: '8px 12px'}});
-  legend.add(ui.Label('PPI-SK v2.1 — ' + CFG.RANGE_NAME + ' Range',
-                      {fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0'}));
-  legend.add(ui.Label('Plantation priority category', {fontWeight: 'bold', fontSize: '12px'}));
-  ['1  Highest priority', '2  High', '3  Moderate, phased', '4  Low', '5  No plantation / excluded']
-    .forEach(function (l, ii) { legend.add(legendRow(PALETTE[ii], l)); });
-  legend.add(ui.Label('Prescription layer', {fontWeight: 'bold', fontSize: '12px', margin: '6px 0 0 0'}));
-  Object.keys(RX_CODES).forEach(function (k) { legend.add(legendRow(RX_PALETTE[RX_CODES[k] - 1], k)); });
+  function gradientBar(palette, lo, hi) {
+    var bar = ui.Thumbnail({image: ee.Image.pixelLonLat().select(0),
+      params: {bbox: [0, 0, 1, 0.1], dimensions: '260x14', format: 'png', min: 0, max: 1, palette: palette},
+      style: {stretch: 'horizontal', margin: '4px 0', maxHeight: '18px'}});
+    return [bar, ui.Panel([ui.Label(lo, {fontSize: '11px', margin: '0'}),
+                           ui.Label(hi, {fontSize: '11px', margin: '0 0 0 auto', textAlign: 'right', stretch: 'horizontal'})],
+                          ui.Panel.Layout.flow('horizontal'))];
+  }
+  function areaText(group, key) {
+    if (!STATS || !STATS[group][key]) { return ''; }
+    var s = STATS[group][key];
+    return s.n + ' blocks · ' + fmt(s.ha) + ' ha';
+  }
+  var MODES = {
+    'Priority category (1-5)': function () {
+      legend.add(ui.Label('Plantation priority category', {fontWeight: 'bold', fontSize: '13px', margin: '0 0 4px 0'}));
+      CAT_LABELS.forEach(function (l, i) { legend.add(swatchRow(PALETTE[i], (i + 1) + '  ' + l, areaText('cat', String(i + 1)))); });
+      legend.add(ui.Label('Hectares = net plantable area after constraints.', {fontSize: '10px', color: '#666666'}));
+      return catVis;
+    },
+    'Treatment prescription': function () {
+      legend.add(ui.Label('Treatment prescription', {fontWeight: 'bold', fontSize: '13px', margin: '0 0 4px 0'}));
+      RX_ORDER.forEach(function (k) { legend.add(swatchRow(RX_PALETTE[RX_CODES[k] - 1], RX_LABELS[k], areaText('rx', k))); });
+      return rxVis;
+    },
+    'Reliability (Monte Carlo stability)': function () {
+      legend.add(ui.Label('Share of 500 weight draws in Category 1-2', {fontWeight: 'bold', fontSize: '13px'}));
+      gradientBar(['#d73027', '#ffffbf', '#1a9850'], '0 % (marginal)', '100 % (robust)').forEach(function (w) { legend.add(w); });
+      return rasterVis(blockRaster('stability_cat12', fin), ['d73027', 'ffffbf', '1a9850']);
+    }
+  };
+  THEME_KEYS.forEach(function (t) {
+    MODES['Theme ' + THEME_NAMES[t]] = function () {
+      legend.add(ui.Label('Theme score ' + THEME_NAMES[t], {fontWeight: 'bold', fontSize: '13px'}));
+      gradientBar(GRAD, 'Low (0)', 'High (1)').forEach(function (w) { legend.add(w); });
+      return rasterVis(blockRaster(t), GRAD.map(function (c) { return c.replace('#', ''); }));
+    };
+  });
+  var currentMode = 'Priority category (1-5)';
+  function showMode(name) {
+    currentMode = name;
+    legend.clear();
+    var img = MODES[name]();
+    Map.layers().set(2, ui.Map.Layer(img, {}, name));
+  }
+  var selector = ui.Select({items: Object.keys(MODES), value: currentMode, onChange: showMode,
+                            style: {stretch: 'horizontal'}});
+  Map.add(ui.Panel([ui.Label('Map layer', {fontWeight: 'bold', fontSize: '12px', margin: '4px 0 0 0'}), selector],
+                   ui.Panel.Layout.flow('vertical'), {position: 'top-left', width: '270px', padding: '4px 8px'}));
   Map.add(legend);
+  showMode(currentMode);
 
-  /* ---- Summary chart and table ---- */
-  var catChart = ui.Chart.feature.histogram({features: mapFC, property: 'category', minBucketWidth: 1})
-    .setOptions({title: 'Blocks per PPI category', hAxis: {title: 'Category'}, vAxis: {title: 'Blocks'},
-                 colors: ['#d73027'], legend: {position: 'none'}});
-  print(catChart);
-  var rxArea = mapFC.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'prescription'}),
-                                 ['net_plantable_ha', 'prescription']);
-  print('Net plantable area (ha) by prescription:', rxArea.get('groups'));
-  var catArea = mapFC.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'category'}),
-                                  ['net_plantable_ha', 'category']);
-  print('Net plantable area (ha) by category:', catArea.get('groups'));
+  /* ---- Area statistics (async) -> legend numbers + coloured chart in the Console ---- */
+  evalRetry(function () {
+    var byCat = mapFC.reduceColumns(ee.Reducer.sum().repeat(2).group({groupField: 2, groupName: 'k'}),
+                                    ['net_plantable_ha', 'block_area_ha', 'category']);
+    var byRx = mapFC.reduceColumns(ee.Reducer.sum().repeat(2).group({groupField: 2, groupName: 'k'}),
+                                   ['net_plantable_ha', 'block_area_ha', 'prescription']);
+    return ee.Dictionary({cat: byCat.get('groups'), rx: byRx.get('groups'),
+                          catN: mapFC.aggregate_histogram('category'), rxN: mapFC.aggregate_histogram('prescription'),
+                          anchor: ee.Feature(mapFC.first()).get('anchor_id')});
+  }, function (d, err) {
+    if (err) { print('Area summary could not be computed: ' + err); return; }
+    STATS = {cat: {}, rx: {}};
+    d.cat.forEach(function (g) { STATS.cat[String(g.k)] = {ha: g.sum[0], area: g.sum[1], n: d.catN[String(g.k)] || 0}; });
+    d.rx.forEach(function (g) { STATS.rx[g.k] = {ha: g.sum[0], area: g.sum[1], n: d.rxN[g.k] || 0}; });
+    subtitle.setValue('Sabarkantha Division, Gujarat  ·  PPI-SK v2.1  ·  10 ha blocks  ·  anchors: ' + d.anchor);
+    showMode(currentMode);
+    var rowsC = [['Category', 'Net plantable ha', {role: 'style'}, {role: 'annotation'}]];
+    [1, 2, 3, 4, 5].forEach(function (c) {
+      var s = STATS.cat[String(c)] || {ha: 0, n: 0};
+      rowsC.push([c + ' ' + CAT_LABELS[c - 1], s.ha, PALETTE[c - 1], fmt(s.ha) + ' ha']);
+    });
+    print(ui.Chart(rowsC, 'BarChart', {title: 'Net plantable area by priority category (ha)', legend: {position: 'none'},
+                                       hAxis: {title: 'hectares'}, chartArea: {left: 170}}));
+    var rowsR = [['Treatment', 'Net plantable ha', {role: 'style'}, {role: 'annotation'}]];
+    RX_ORDER.forEach(function (k) {
+      var s = STATS.rx[k] || {ha: 0, n: 0};
+      rowsR.push([RX_LABELS[k], s.ha, RX_PALETTE[RX_CODES[k] - 1], fmt(s.ha) + ' ha']);
+    });
+    print(ui.Chart(rowsR, 'BarChart', {title: 'Net plantable area by treatment (ha)', legend: {position: 'none'},
+                                       hAxis: {title: 'hectares'}, chartArea: {left: 190}}));
+  });
+
+  /* ---- Click a block: info card + highlight ---- */
+  var card = ui.Panel({style: {position: 'bottom-right', width: '300px', padding: '8px 10px', shown: false}});
+  Map.add(card);
+  var clickId = 0;
+  function cardRow(label, value) {
+    return ui.Panel([ui.Label(label, {fontSize: '11px', color: '#555555', margin: '1px 0', width: '120px'}),
+                     ui.Label(String(value), {fontSize: '12px', margin: '1px 0', stretch: 'horizontal'})],
+                    ui.Panel.Layout.flow('horizontal'));
+  }
+  function themeBar(name, v) {
+    var w = Math.max(2, Math.round((v || 0) * 150));
+    var col = v >= 0.66 ? '#1a9850' : (v >= 0.33 ? '#fee08b' : '#d73027');
+    return ui.Panel([ui.Label(name, {fontSize: '11px', margin: '2px 0', width: '120px'}),
+                     ui.Label('', {backgroundColor: col, padding: '5px ' + (w / 2) + 'px', margin: '4px 6px 0 0'}),
+                     ui.Label((v || 0).toFixed(2), {fontSize: '11px', margin: '2px 0'})],
+                    ui.Panel.Layout.flow('horizontal'));
+  }
+  Map.style().set('cursor', 'crosshair');
+  Map.onClick(function (c) {
+    var my = ++clickId;
+    var pt = ee.Geometry.Point([c.lon, c.lat]);
+    var hit = mapFC.filterBounds(pt);
+    card.clear();
+    card.style().set('shown', true);
+    card.add(ui.Label('Loading block ...', {fontSize: '12px', color: '#666666'}));
+    Map.layers().set(4, ui.Map.Layer(ee.Image().byte().paint(hit, 1, 3).visualize({palette: ['00ffff']}), {}, 'Selected block'));
+    evalRetry(function () {
+      var f = ee.Feature(hit.first());
+      return ee.Dictionary({n: hit.size(), p: ee.Algorithms.If(hit.size().gt(0), f.toDictionary(), null)});
+    }, function (d, err) {
+      if (my !== clickId) { return; }
+      card.clear();
+      if (err || !d || !d.n) { card.add(ui.Label('No block here. Click inside the range.', {fontSize: '12px'})); return; }
+      var p = d.p;
+      var cat = p.category;
+      card.add(ui.Label('Block ' + p.block_id, {fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0'}));
+      card.add(swatchRow(PALETTE[cat - 1], 'Category ' + cat + ' — ' + CAT_LABELS[cat - 1], ''));
+      card.add(cardRow('Treatment', RX_LABELS[p.prescription] || p.prescription));
+      card.add(cardRow('PPI (absolute)', p.excluded === 1 ? 'excluded' : Number(p.PPI_absolute).toFixed(3)));
+      card.add(cardRow('Percentile in range', p.excluded === 1 ? '-' : Math.round(p.PPI_percentile) + ' %'));
+      card.add(cardRow('Net plantable', Number(p.net_plantable_ha).toFixed(2) + ' of ' + Number(p.block_area_ha).toFixed(2) + ' ha'));
+      card.add(cardRow('Canopy cover', Number(p.canopy_pct).toFixed(1) + ' %  (' + p.canopy_track + ')'));
+      card.add(cardRow('Site class', p.site_class || '-'));
+      card.add(cardRow('Constraints', p.constraint_reason || 'none'));
+      card.add(cardRow('Fire years 2015-25', p.fire_years));
+      card.add(cardRow('Flags', ['recent_plantation_flag', 'protected_area_flag'].filter(function (k) { return p[k] === 'yes'; })
+                                 .map(function (k) { return k === 'recent_plantation_flag' ? 'F1 recent plantation?' : 'F2 protected area'; })
+                                 .join(', ') || 'none'));
+      var stabRow = cardRow('Reliability', 'computing ...');
+      card.add(stabRow);
+      card.add(ui.Label('Theme scores', {fontWeight: 'bold', fontSize: '12px', margin: '6px 0 2px 0'}));
+      THEME_KEYS.forEach(function (t) { card.add(themeBar(THEME_NAMES[t], p[t])); });
+      card.add(ui.Label('Location: ' + c.lat.toFixed(5) + ' N, ' + c.lon.toFixed(5) + ' E',
+                        {fontSize: '10px', color: '#666666', margin: '6px 0 0 0'}));
+      // Monte Carlo stability comes from the full table (may take a few seconds in the scoring run)
+      evalRetry(function () { return ee.Feature(fin.filterBounds(pt).first()).get('stability_cat12'); }, function (s, e2) {
+        if (my !== clickId) { return; }
+        var txt = (e2 || s === null || s === undefined) ? 'n/a' :
+          Math.round(s * 100) + ' % of runs in Cat 1-2' + (p.category <= 2 ? (s > 0.8 ? ' (robust)' : (s >= 0.5 ? ' (moderate)' : ' (marginal)')) : '');
+        stabRow.widgets().get(1).setValue(txt);
+      });
+    });
+  });
+  print('MAP: choose a layer in "Map layer" (top left). Click any block for its details.');
+
+  /* ---- Print-quality maps (5 m RGB GeoTIFF, block polygons over relief) ---- */
+  var printRegion = AOI.bounds(1).buffer(1500, 10);
+  [['category', catVis], ['prescription', rxVis]].forEach(function (x) {
+    var img = hillshade.blend(x[1]).blend(boundaryVis).clip(printRegion);
+    Export.image.toDrive({image: img, description: 'PPI02_print_' + x[0] + '_RGB', folder: CFG.DRIVE_FOLDER,
+      fileNamePrefix: 'PPI02_print_' + x[0] + '_RGB_' + tag2, region: printRegion, crs: CRS, scale: 5, maxPixels: 1e11});
+  });
+  // Instant PNG download link for slides
+  hillshade.blend(catVis).blend(boundaryVis).getThumbURL({region: printRegion, dimensions: 2048, format: 'png', crs: CRS},
+    function (url, e3) {
+      if (!e3 && url) { print(ui.Label('Download category map PNG (2048 px) for slides', {color: '#1a73e8'}, url)); }
+    });
   print('Field-check blocks:', fieldList.size());
   }
 
@@ -1787,7 +1979,8 @@ function step3_scoring(stage) {
     return f.set({PPI_absolute: 0, PPI_percentile: 0, category: 5});
   })).map(function (f) {
     var rx = rxOf(f);
-    return f.set({prescription: rx, rx_code: RXD.get(rx)});
+    return f.set({prescription: rx, rx_code: RXD.get(rx),
+                  site_class: ee.String('A-').cat(cls(ee.Number(f.get('A')))).cat('/B-').cat(cls(ee.Number(f.get('B'))))});
   });
 
   var finalFC = retOut.merge(exclOut).map(function (f) {
