@@ -113,3 +113,17 @@ Implementation notes for the DPR:
   Map 2 RFI (+ 2b class), Map 3 priority class (codes 1 LOW, 2 MODERATE, 3 HIGH, 4 PROTECTED, 5 EXCLUDED).
 - A raw table saved before revision 1 is converted in RUN 2 (`excluded_c8` becomes `grassland_option`,
   and net area is restored), so RUN 1 does not need to be repeated.
+
+### FRPIM v2.2 spec revision 2 (implemented)
+- RNI and RFI each in **five classes** (1 Very Low ... 5 Very High). Breaks are `CLASS_METHOD` 'quantile'
+  (default: exact nearest-rank 20/40/60/80th percentiles of the retained blocks, printed and stored per block
+  as `rni_breaks`, `rfi_breaks`) or 'fixed' (0.2 steps).
+- **5 x 5 phase matrix** (`PHASE`, editable) gives **Phase 1-5**; priority_class = PHASE_1..PHASE_5 / PROTECTED / EXCLUDED;
+  RPS orders blocks within a phase; ANR rule 9 uses need class Very Low.
+- Monte Carlo recomputes the quintile breaks in every draw (fixed method: breaks jittered +/- 0.05);
+  outputs `stability_p12`, `phase_modal`, `phase_range`, `b1_sensitive`. OAT counts phase changes.
+- Map codes 1-7 on all three maps (6 Protected, 7 Excluded): Map 1 / 1a (RNI 5-class / continuous),
+  Map 2 / 2a (RFI), Map 3 (phase), each its own layer, legend (with hectares) and GeoTIFF.
+- **Section 13.4 area statement**: blocks, gross ha and net plantable ha for every class on every map, the
+  excluded area inside partly constrained blocks and the total; printed as a table and exported as CSV.
+- QC FF-21 (quintile classes 15-25 %, no phase > 40 % or < 5 %) and FF-22 (stability_p12) updated.
