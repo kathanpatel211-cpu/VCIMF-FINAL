@@ -1,0 +1,8 @@
+stratum,stratum_name,N_h_blocks,n_h_main,area_ha,weight_N_h_over_n_h
+1,Phase 1,96,6,789.5,16.0
+2,Phase 2,185,6,1505.6,30.833
+3,Phase 3,149,6,1201.8,24.833
+4,Phase 4,131,6,999.1,21.833
+5,Phase 5,129,6,944.2,21.5
+6,Protected (C1),54,4,362.4,13.5
+7,Excluded (C2-C7),85,4,444.0,21.25
