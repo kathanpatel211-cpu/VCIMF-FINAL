@@ -266,14 +266,14 @@ blocks = blocks.map(function (f) {
   var exC1 = canopy.gte(40);
   var exFr = fr.gt(0.30);
   var excluded = exC1.or(exFr);
-  // C8 naturally open ecosystem (Section 6.6), only for blocks not already excluded
-  var c8 = excluded.not().and(canopy.lt(10)).and(deCount.eq(0)).and(num(f, 'wc_open_frac', 0).gte(0.50));
+  // G5 optional grassland-development note (Section 6.6, rev. 1): never excludes, never changes class
+  var g5 = excluded.not().and(canopy.lt(10)).and(deCount.eq(0)).and(num(f, 'wc_open_frac', 0).gte(0.50));
 
   var reasons = ee.List(['C2', 'C3', 'C4', 'C5', 'C6', 'C7'].map(function (c) {
     return ee.Algorithms.If(num(f, c + '_frac', 0).gte(CFG.REASON_MIN_FRAC), c, '');
   }));
   reasons = ee.List(ee.Algorithms.If(exC1, ee.List(['C1']).cat(reasons), reasons));
-  reasons = ee.List(ee.Algorithms.If(c8, reasons.add('C8'), reasons)).filter(ee.Filter.neq('item', ''));
+  reasons = reasons.filter(ee.Filter.neq('item', ''));
 
   var access = ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('access_m'), null), null,
                                 num(f, 'access_m', 0).divide(1000));
@@ -305,15 +305,15 @@ blocks = blocks.map(function (f) {
     canopy_missing: ee.Algorithms.If(canopyMissing, 1, 0),
     excluded_c1: exC1,
     excluded: excluded,
-    excluded_c8: c8,
-    exclusion_reason: ee.Algorithms.If(exC1, 'C1', ee.Algorithms.If(exFr, 'C2-C7 > 30%',
-                        ee.Algorithms.If(c8, 'C8 naturally open', ''))),
+    excluded_c8: 0,                       // rev. 1: no C8 constraint
+    grassland_option: g5,                 // G5 flag, 1 or 0 (spec 13.3)
+    exclusion_reason: ee.Algorithms.If(exC1, 'C1', ee.Algorithms.If(exFr, 'C2-C7 > 30%', '')),
     constraint_flag: ee.Algorithms.If(exFr, 'excluded',
                        ee.Algorithms.If(fr.gte(0.10), 'partial', 'none')),
     constraint_reason: reasons.join(','),
     canopy_track: ee.Algorithms.If(exC1, 'EXCLUDED_C1',
                     ee.Algorithms.If(canopy.gte(10), 'GAP_ANR', 'FULL')),
-    net_plantable_ha: ee.Algorithms.If(excluded.or(c8), 0, area.multiply(ee.Number(1).subtract(fr))),
+    net_plantable_ha: ee.Algorithms.If(excluded, 0, area.multiply(ee.Number(1).subtract(fr))),
     // advisory flags (Section 6.4)
     recent_plantation_flag: ee.Algorithms.If(num(f, 'G1_frac', 0).gte(0.30).and(canopy.lt(40)), 'yes', 'no'),
     protected_area_flag: ee.Algorithms.If(num(f, 'pa', 0).gte(1), 'yes', 'no'),

@@ -52,19 +52,26 @@ var NAMES = {
   F14: 'Low biotic pressure'
 };
 // priority class display order (map code), spec palette
-var CLASS_ORDER = ['HIGH', 'MODERATE', 'LOW', 'PROTECTED', 'EXCLUDED'];
+var CLASS_ORDER = ['HIGH', 'MODERATE', 'LOW', 'PROTECTED', 'EXCLUDED'];        // legend order
 var CLASS_PAL = ['#d73027', '#fc8d59', '#fee08b', '#1a9850', '#bdbdbd'];
+var MAP3_NAMES = ['LOW', 'MODERATE', 'HIGH', 'PROTECTED', 'EXCLUDED'];          // priority_code_map 1..5
+var MAP3_PAL = ['#fee08b', '#fc8d59', '#d73027', '#1a9850', '#bdbdbd'];
+var PAL_RNI = ['#ffffcc', '#fed976', '#fd8d3c', '#e31a1c', '#800026'];         // Map 1 (spec 13.3)
+var PAL_RFI = ['#8c510a', '#d8b365', '#f6e8c3', '#5ab4ac', '#01665e'];         // Map 2
+var CLS_RNI = ['#ffffcc', '#fd8d3c', '#800026'];                                // Map 1b Low/Medium/High
+var CLS_RFI = ['#8c510a', '#f6e8c3', '#01665e'];                                // Map 2b
 var CLASS_TEXT = {HIGH: 'Phase I: restore in year 1', MODERATE: 'Phase II: SMC first / next season',
-                  LOW: 'Phase III: ANR, SMC or protection', PROTECTED: 'Dense forest or natural grassland',
+                  LOW: 'Phase III: ANR, SMC or protection', PROTECTED: 'Dense forest (canopy >= 40 %)',
                   EXCLUDED: 'Water, drains, steep, built, crop, rock'};
-var RX_ORDER = ['PROTECT_DENSE', 'NOT_PLANTABLE', 'PROTECT_OPEN_ECOSYSTEM', 'FIRE_PROTECTION_FIRST',
-                'HYDRO_COMPATIBLE_PLANTING', 'SOIL_STABILISATION_FIRST', 'ROCKY_MICROSITE',
-                'INVASIVE_CLEAR_THEN_PLANT', 'SMC_DROUGHT_HARDY', 'ANR_GAP_PLANTING', 'MIXED_NATIVE_PLANTATION'];
-var RX_PAL = ['#00441b', '#bdbdbd', '#fff7bc', '#e31a1c', '#2171b5', '#8c510a', '#636363',
-              '#984ea3', '#fd8d3c', '#a1d99b', '#41ab5d'];
+// Section 10.4 (rev. 1): rule order = code 1..11
+var RX_ORDER = ['PROTECT_DENSE', 'NOT_PLANTABLE', 'FIRE_PROTECTION_FIRST', 'HYDRO_COMPATIBLE_PLANTING',
+                'SOIL_STABILISATION_FIRST', 'ROCKY_MICROSITE', 'INVASIVE_CLEAR_THEN_PLANT', 'SMC_DROUGHT_HARDY',
+                'ANR_GAP_PLANTING', 'BLANK_AREA_PLANTATION', 'MIXED_NATIVE_PLANTATION'];
+var RX_PAL = ['#00441b', '#bdbdbd', '#e31a1c', '#2171b5', '#8c510a', '#636363',
+              '#984ea3', '#fd8d3c', '#a1d99b', '#ffd92f', '#41ab5d'];
 var RX_LABELS = {
   PROTECT_DENSE: 'Protect dense forest', NOT_PLANTABLE: 'Not plantable',
-  PROTECT_OPEN_ECOSYSTEM: 'Protect open ecosystem (grassland)', FIRE_PROTECTION_FIRST: 'Fire protection first',
+  BLANK_AREA_PLANTATION: 'Blank-area plantation (native species)', FIRE_PROTECTION_FIRST: 'Fire protection first',
   HYDRO_COMPATIBLE_PLANTING: 'Hydrology-compatible planting', SOIL_STABILISATION_FIRST: 'Soil stabilisation first',
   ROCKY_MICROSITE: 'Rocky microsite planting', INVASIVE_CLEAR_THEN_PLANT: 'Clear invasives, then plant',
   SMC_DROUGHT_HARDY: 'SMC + drought-hardy natives', ANR_GAP_PLANTING: 'ANR + gap planting',
@@ -190,11 +197,17 @@ function publishAll(fin, mapFC) {
     Export.image.toDrive({image: img.clip(AOI), description: 'FRPIM02_' + name, folder: CFG.DRIVE_FOLDER,
       fileNamePrefix: 'FRPIM02_' + name + '_' + tag, region: AOI, crs: CRS, scale: scale, maxPixels: 1e11});
   }
-  /* GeoTIFFs (products 4-7, 9) */
-  exportImg(blockRaster('class_code').toByte(), 'priority_class_map', 30);
+  /* GeoTIFFs: one per map (spec 13.3), then supporting maps (products 5, 7, 9) */
+  var scoredOnly = mapFC.filter(ee.Filter.neq('RNI', -1));
+  [[blockRaster('RNI', scoredOnly), 'Map1_RNI'], [blockRaster('RFI', scoredOnly), 'Map2_RFI'],
+   [blockRaster('priority_code_map'), 'Map3_PriorityClass'],
+   [blockRaster('need_class', scoredOnly), 'Map1b_RNI_class'], [blockRaster('feasibility_class', scoredOnly), 'Map2b_RFI_class']]
+    .forEach(function (p) {
+      Export.image.toDrive({image: p[0].toFloat().clip(AOI), description: 'FRPIM_v2_2_' + tag + '_' + p[1],
+        folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'FRPIM_v2_2_' + tag + '_' + p[1],
+        region: AOI, crs: CRS, scale: 30, maxPixels: 1e13});
+    });
   exportImg(blockRaster('rx_code').toByte(), 'intervention_map', 30);
-  exportImg(blockRaster('RNI').toFloat(), 'RNI_map', 30);
-  exportImg(blockRaster('RFI').toFloat(), 'RFI_map', 30);
   exportImg(blockRaster('stability_high', fin).toFloat(), 'stability_map', 30);
   exportImg(blockRaster('change_code').toByte(), 'v21_v22_comparison_map', 30);
   /* polygons */
@@ -204,18 +217,18 @@ function publishAll(fin, mapFC) {
     'constraint_reason', 'degradation_evidence', 'RNI', 'RFI', 'M', 'S', 'T', 'R', 'need_class', 'feasibility_class',
     'priority_class', 'phase', 'RPS', 'intervention', 'smc_required', 'site_class', 'stability_high',
     'class_modal', 'class_range', 'b1_sensitive', 'recent_plantation_flag', 'protected_area_flag',
-    'waterlogging_flag', 'fire_years', 'v21_category', 'change_type', 'field_check', 'anchor_id'];
+    'waterlogging_flag', 'grassland_option', 'fire_years', 'v21_category', 'change_type', 'field_check', 'anchor_id'];
   var SHP_TO = ['block_id', 'beat_id', 'area_ha', 'net_ha', 'canopy', 'can_track',
     'cons_rsn', 'deg_evid', 'RNI', 'RFI', 'M', 'S', 'T', 'R', 'need_cls', 'feas_cls',
     'priority', 'phase', 'RPS', 'interv', 'smc_req', 'site_cls', 'stab_high',
     'cls_modal', 'cls_range', 'b1_sens', 'g1_plant', 'g2_pa',
-    'g4_wlog', 'fire_yrs', 'v21_cat', 'change', 'field_chk', 'anchor_id'];
+    'g4_wlog', 'g5_grass', 'fire_yrs', 'v21_cat', 'change', 'field_chk', 'anchor_id'];
   Export.table.toDrive({collection: fin.select(SHP_FROM, SHP_TO), description: 'FRPIM02_blocks_shp',
     folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'FRPIM02_blocks_' + tag, fileFormat: 'SHP'});
   /* Product 11: field-check list */
   var FIELD_COLS = ['beat_id', 'block_id', 'priority_class', 'phase', 'RPS', 'stability_high', 'intervention',
     'smc_required', 'site_class', 'species_group', 'net_plantable_ha', 'canopy_pct', 'degradation_evidence',
-    'constraint_reason', 'recent_plantation_flag', 'protected_area_flag', 'waterlogging_flag', 'b1_sensitive',
+    'constraint_reason', 'recent_plantation_flag', 'protected_area_flag', 'waterlogging_flag', 'grassland_option', 'b1_sensitive',
     'field_check_reason', 'fra_rights_check_required', 'staff_rights_FRA_checked', 'staff_encroachment_checked',
     'staff_decision', 'staff_remarks', 'lon', 'lat'];
   var fieldList = fin.filter(ee.Filter.eq('field_check', 'yes')).map(function (f) {
@@ -226,29 +239,34 @@ function publishAll(fin, mapFC) {
   Export.table.toDrive({collection: fieldList, description: 'FRPIM02_field_check_list', folder: CFG.DRIVE_FOLDER,
     fileNamePrefix: 'FRPIM02_field_check_list_' + tag, fileFormat: 'CSV', selectors: FIELD_COLS});
 
-  /* ---- presentation map ---- */
-  function styledBlocks(prop, palette, alpha) {
+  /* ---- presentation map (Section 13.3): three separate maps, each its own layer ---- */
+  function styledBlocks(fc, prop, palette, alpha, offset) {
     var pal = ee.List(palette.map(function (c) { return c.replace('#', '') + alpha; }));
-    return mapFC.map(function (f) {
-      var i = ee.Number(f.get(prop)).int().subtract(1);
+    return fc.map(function (f) {
+      var i = ee.Number(f.get(prop)).int().add(offset || 0);
       return f.set('style', ee.Dictionary({color: 'ffffffcc', width: 0.6, fillColor: pal.get(i)}));
     }).style({styleProperty: 'style'});
   }
+  var scoredFC = mapFC.filter(ee.Filter.neq('RNI', -1));
   var outlineVis = ee.Image().byte().paint(mapFC, 1, 0.6).visualize({palette: ['ffffff'], opacity: 0.8});
   function rasterVis(img, palette, lo, hi) {
     return img.visualize({min: lo, max: hi, palette: palette, opacity: 0.9}).blend(outlineVis);
   }
-  var classVis = styledBlocks('class_code', CLASS_PAL, 'e6');
-  var rxVis = styledBlocks('rx_code', RX_PAL, 'e6');
-  var changeVis = styledBlocks('change_code', CHANGE_PAL, 'e6');
+  var map1 = rasterVis(blockRaster('RNI', scoredFC), PAL_RNI, 0, 1);
+  var map1b = styledBlocks(scoredFC, 'need_class', CLS_RNI, 'e6', 0);
+  var map2 = rasterVis(blockRaster('RFI', scoredFC), PAL_RFI, 0, 1);
+  var map2b = styledBlocks(scoredFC, 'feasibility_class', CLS_RFI, 'e6', 0);
+  var map3 = styledBlocks(mapFC, 'priority_code_map', MAP3_PAL, 'e6', -1);
+  var rxVis = styledBlocks(mapFC, 'rx_code', RX_PAL, 'e6', -1);
+  var changeVis = styledBlocks(mapFC, 'change_code', CHANGE_PAL, 'e6', -1);
+  var g5Vis = ee.Image().byte().paint(mapFC.filter(ee.Filter.eq('grassland_option', 1)), 1, 2).visualize({palette: ['00ffff']});
+  var gridVis = ee.Image().byte().paint(mapFC, 0, 1).visualize({palette: ['333333']});
   var fabCol = ee.ImageCollection('projects/sat-io/open-datasets/FABDEM').filterBounds(AOI);
   var fab = fabCol.mosaic().setDefaultProjection(ee.Image(fabCol.first()).projection()).select([0]);
   var hillshade = ee.Terrain.hillshade(fab, 315, 35).visualize({min: 120, max: 255, palette: ['000000', 'ffffff']});
   var inside = ee.Image(1).clip(AOI).mask();
   var dimOutside = ee.Image(0).updateMask(inside.not()).visualize({palette: ['000000'], opacity: 0.55});
   var boundaryVis = ee.Image().byte().paint(AOI_FC, 1, 2.5).visualize({palette: ['ffff00']});
-  var GRAD = ['7f2704', 'd94801', 'fdae6b', 'fff5eb', 'c7e9c0', '41ab5d', '00441b'];
-  var NEED = ['fff5eb', 'fdd0a2', 'fd8d3c', 'd94801', '7f2704'];
 
   Map.clear();
   Map.setOptions('HYBRID');
@@ -256,20 +274,32 @@ function publishAll(fin, mapFC) {
   Map.centerObject(AOI, 12);
   Map.addLayer(hillshade.updateMask(inside), {opacity: 0.45}, 'Relief (FABDEM hillshade)');
   Map.addLayer(dimOutside, {}, 'Outside range (dimmed)');
-  Map.addLayer(classVis, {}, 'Restoration priority class');           // index 2 = main layer
-  Map.addLayer(boundaryVis, {}, 'Range boundary');
-  Map.addLayer(ee.Image(), {}, 'Selected block', false);               // index 4 = click highlight
+  Map.addLayer(map1, {}, 'Map 1 - Restoration Need Index (RNI)', false);
+  Map.addLayer(map1b, {}, 'Map 1b - RNI class (Low / Medium / High)', false);
+  Map.addLayer(map2, {}, 'Map 2 - Restoration Feasibility Index (RFI)', false);
+  Map.addLayer(map2b, {}, 'Map 2b - RFI class (Low / Medium / High)', false);
+  Map.addLayer(map3, {}, 'Map 3 - Restoration Priority Class', true);
+  Map.addLayer(rxVis, {}, 'Optional - Intervention type', false);
+  Map.addLayer(g5Vis, {}, 'Optional - grassland note (G5)', false);
+  Map.addLayer(changeVis, {}, 'Optional - change from v2.1', false);
+  Map.addLayer(blockRaster('stability_high', fin).visualize({min: 0, max: 1, palette: ['d73027', 'ffffbf', '1a9850']}),
+               {}, 'Optional - reliability (Monte Carlo)', false);
+  Map.addLayer(gridVis, {}, 'Block grid (10 ha)', false);
+  Map.addLayer(boundaryVis, {}, 'Range / beat boundary', true);
+  var SEL_INDEX = Map.layers().length();
+  Map.addLayer(ee.Image(), {}, 'Selected block', false);
 
   var subtitle = ui.Label('Sabarkantha Division, Gujarat  ·  FRPIM v2.2  ·  10 ha blocks',
                           {fontSize: '12px', color: '#444444', margin: '2px 0 0 0'});
   Map.add(ui.Panel([ui.Label('Forest Restoration Priority — ' + CFG.RANGE_NAME + ' Range',
-                             {fontWeight: 'bold', fontSize: '18px', margin: '0'}), subtitle],
+                             {fontWeight: 'bold', fontSize: '18px', margin: '0'}), subtitle,
+                    ui.Label('Layers menu (top right): Map 1 Need · Map 2 Feasibility · Map 3 Priority. Click a block for details.',
+                             {fontSize: '11px', color: '#666666', margin: '2px 0 0 0'})],
                    ui.Panel.Layout.flow('vertical'), {position: 'top-center', padding: '6px 14px'}));
   Map.add(ui.Panel([ui.Label('▲', {fontSize: '20px', margin: '0 0 -6px 0', textAlign: 'center', stretch: 'horizontal'}),
                     ui.Label('N', {fontWeight: 'bold', fontSize: '14px', margin: '0', textAlign: 'center', stretch: 'horizontal'})],
-                   ui.Panel.Layout.flow('vertical'), {position: 'top-right', padding: '2px 8px', width: '44px'}));
+                   ui.Panel.Layout.flow('vertical'), {position: 'top-left', padding: '2px 8px', width: '44px'}));
 
-  var legend = ui.Panel({style: {position: 'bottom-left', padding: '8px 12px', width: '340px'}});
   var STATS = null;
   function swatchRow(color, label, extra) {
     return ui.Panel([
@@ -280,96 +310,69 @@ function publishAll(fin, mapFC) {
   }
   function gradientBar(palette, lo, hi) {
     var bar = ui.Thumbnail({image: ee.Image.pixelLonLat().select(0),
-      params: {bbox: [0, 0, 1, 0.1], dimensions: '260x14', format: 'png', min: 0, max: 1, palette: palette},
-      style: {stretch: 'horizontal', margin: '4px 0', maxHeight: '18px'}});
-    return [bar, ui.Panel([ui.Label(lo, {fontSize: '11px', margin: '0'}),
-                           ui.Label(hi, {fontSize: '11px', margin: '0 0 0 auto', textAlign: 'right', stretch: 'horizontal'})],
+      params: {bbox: [0, 0, 1, 0.1], dimensions: '220x12', format: 'png', min: 0, max: 1,
+               palette: palette.map(function (c) { return c.replace('#', ''); })},
+      style: {stretch: 'horizontal', margin: '3px 0', maxHeight: '16px'}});
+    return [bar, ui.Panel([ui.Label(lo, {fontSize: '10px', margin: '0'}),
+                           ui.Label(hi, {fontSize: '10px', margin: '0 0 0 auto', textAlign: 'right', stretch: 'horizontal'})],
                           ui.Panel.Layout.flow('horizontal'))];
   }
   function areaText(group, key) {
     if (!STATS || !STATS[group][key]) { return ''; }
     return STATS[group][key].n + ' blocks · ' + fmt(STATS[group][key].ha) + ' ha';
   }
-  function head(t) { legend.add(ui.Label(t, {fontWeight: 'bold', fontSize: '13px', margin: '0 0 4px 0'})); }
-  var MODES = {
-    'Restoration priority class': function () {
-      head('Restoration priority (need x feasibility)');
-      CLASS_ORDER.forEach(function (k, i) { legend.add(swatchRow(CLASS_PAL[i], k + ' — ' + CLASS_TEXT[k], areaText('cls', k))); });
-      legend.add(ui.Label('Hectares = net plantable area (protected/excluded: 0).', {fontSize: '10px', color: '#666666'}));
-      return classVis;
-    },
-    'Intervention (11 types)': function () {
-      head('Field intervention');
-      RX_ORDER.forEach(function (k, i) { legend.add(swatchRow(RX_PAL[i], RX_LABELS[k], areaText('rx', k))); });
-      return rxVis;
-    },
-    'Restoration need (RNI)': function () {
-      head('Restoration Need Index — how degraded');
-      gradientBar(NEED, '0 (intact)', '1 (severely degraded)').forEach(function (w) { legend.add(w); });
-      return rasterVis(blockRaster('RNI'), NEED, 0, 1);
-    },
-    'Restoration feasibility (RFI)': function () {
-      head('Restoration Feasibility Index — what the site supports');
-      gradientBar(GRAD, '0 (hard site)', '1 (easy site)').forEach(function (w) { legend.add(w); });
-      return rasterVis(blockRaster('RFI'), GRAD, 0, 1);
-    },
-    'Degradation evidence (0-4 lines)': function () {
-      head('Lines of evidence of past cover (DE1-DE4)');
-      gradientBar(['f7f7f7', 'cccccc', '969696', '525252', '252525'], '0 (not proven)', '4 (all lines)').forEach(function (w) { legend.add(w); });
-      return rasterVis(blockRaster('degradation_evidence'), ['f7f7f7', 'cccccc', '969696', '525252', '252525'], 0, 4);
-    },
-    'Reliability (Monte Carlo)': function () {
-      head('Share of 500 runs in HIGH (weights + thresholds varied)');
-      gradientBar(['d73027', 'ffffbf', '1a9850'], '0 %', '100 % (robust HIGH)').forEach(function (w) { legend.add(w); });
-      return rasterVis(blockRaster('stability_high', fin), ['d73027', 'ffffbf', '1a9850'], 0, 1);
-    },
-    'Change from v2.1': function () {
-      head('v2.1 category -> v2.2 class');
-      CHANGE_ORDER.forEach(function (k, i) { legend.add(swatchRow(CHANGE_PAL[i], CHANGE_LABELS[k], areaText('chg', k))); });
-      return changeVis;
-    }
-  };
-  var currentMode = 'Restoration priority class';
-  function showMode(name) {
-    currentMode = name;
-    legend.clear();
-    Map.layers().set(2, ui.Map.Layer(MODES[name](), {}, name));
+  // Legend for Map 3 (bottom left) and Maps 1-2 (bottom right), with hectares
+  var legend3 = ui.Panel({style: {position: 'bottom-left', padding: '8px 12px', width: '360px'}});
+  var legend12 = ui.Panel({style: {position: 'bottom-right', padding: '8px 12px', width: '300px'}});
+  function drawLegends() {
+    legend3.clear();
+    legend3.add(ui.Label('Map 3 - Restoration Priority Class', {fontWeight: 'bold', fontSize: '13px', margin: '0 0 4px 0'}));
+    [['HIGH', 'HIGH - Phase I'], ['MODERATE', 'MODERATE - Phase II'], ['LOW', 'LOW - Phase III'],
+     ['PROTECTED', 'PROTECTED (dense forest >= 40 %)'], ['EXCLUDED', 'EXCLUDED (water, drain, rock, built, crop, slope)']]
+      .forEach(function (x) { legend3.add(swatchRow(MAP3_PAL[MAP3_NAMES.indexOf(x[0])], x[1], areaText('cls', x[0]))); });
+    legend3.add(ui.Label('Hectares = net plantable area. Optional layers are in the Layers menu.', {fontSize: '10px', color: '#666666'}));
+    legend12.clear();
+    legend12.add(ui.Label('Map 1 - Restoration Need (RNI)', {fontWeight: 'bold', fontSize: '12px', margin: '0'}));
+    gradientBar(PAL_RNI, '0 intact', '1 severely degraded').forEach(function (w) { legend12.add(w); });
+    ['Low', 'Medium', 'High'].forEach(function (l, i) { legend12.add(swatchRow(CLS_RNI[i], 'Map 1b ' + l, areaText('need', String(i)))); });
+    legend12.add(ui.Label('Map 2 - Restoration Feasibility (RFI)', {fontWeight: 'bold', fontSize: '12px', margin: '6px 0 0 0'}));
+    gradientBar(PAL_RFI, '0 hard site', '1 easy site').forEach(function (w) { legend12.add(w); });
+    ['Low', 'Medium', 'High'].forEach(function (l, i) { legend12.add(swatchRow(CLS_RFI[i], 'Map 2b ' + l, areaText('feas', String(i)))); });
   }
-  Map.add(ui.Panel([ui.Label('Map layer', {fontWeight: 'bold', fontSize: '12px', margin: '4px 0 0 0'}),
-                    ui.Select({items: Object.keys(MODES), value: currentMode, onChange: showMode, style: {stretch: 'horizontal'}})],
-                   ui.Panel.Layout.flow('vertical'), {position: 'top-left', width: '280px', padding: '4px 8px'}));
-  Map.add(legend);
-  showMode(currentMode);
+  Map.add(legend3);
+  Map.add(legend12);
+  drawLegends();
 
   evalRetry(function () {
     function grp(field) {
       return mapFC.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'k'}),
                                  ['net_plantable_ha', field]).get('groups');
     }
-    return ee.Dictionary({cls: grp('priority_class'), rx: grp('intervention'), chg: grp('change_type'),
+    return ee.Dictionary({cls: grp('priority_class'), rx: grp('intervention'), need: grp('need_class'), feas: grp('feasibility_class'),
                           clsN: mapFC.aggregate_histogram('priority_class'), rxN: mapFC.aggregate_histogram('intervention'),
-                          chgN: mapFC.aggregate_histogram('change_type'),
+                          needN: mapFC.aggregate_histogram('need_class'), feasN: mapFC.aggregate_histogram('feasibility_class'),
+                          g5N: mapFC.filter(ee.Filter.eq('grassland_option', 1)).size(),
                           anchor: ee.Feature(mapFC.first()).get('anchor_id')});
   }, function (d, err) {
     if (err) { print('Area summary could not be computed: ' + err); return; }
-    STATS = {cls: {}, rx: {}, chg: {}};
-    [['cls', 'clsN'], ['rx', 'rxN'], ['chg', 'chgN']].forEach(function (p) {
-      d[p[0]].forEach(function (g) { STATS[p[0]][g.k] = {ha: g.sum, n: d[p[1]][g.k] || 0}; });
-      Object.keys(d[p[1]]).forEach(function (k) { if (!STATS[p[0]][k]) { STATS[p[0]][k] = {ha: 0, n: d[p[1]][k]}; } });
+    STATS = {cls: {}, rx: {}, need: {}, feas: {}};
+    [['cls', 'clsN'], ['rx', 'rxN'], ['need', 'needN'], ['feas', 'feasN']].forEach(function (p) {
+      (d[p[0]] || []).forEach(function (gq) { STATS[p[0]][String(gq.k)] = {ha: gq.sum, n: (d[p[1]] || {})[String(gq.k)] || 0}; });
     });
-    subtitle.setValue('Sabarkantha Division, Gujarat  ·  FRPIM v2.2  ·  10 ha blocks  ·  anchors: ' + d.anchor);
-    showMode(currentMode);
+    subtitle.setValue('Sabarkantha Division, Gujarat  ·  FRPIM v2.2  ·  10 ha blocks  ·  anchors: ' + d.anchor +
+                      '  ·  G5 grassland note: ' + d.g5N + ' blocks (stay under plantation)');
+    drawLegends();
     var rowsC = [['Class', 'Net plantable ha', {role: 'style'}, {role: 'annotation'}]];
-    CLASS_ORDER.slice(0, 3).forEach(function (k, i) {
-      var s = STATS.cls[k] || {ha: 0};
-      rowsC.push([k, s.ha, CLASS_PAL[i], fmt(s.ha) + ' ha']);
+    ['HIGH', 'MODERATE', 'LOW'].forEach(function (k) {
+      var s2 = STATS.cls[k] || {ha: 0};
+      rowsC.push([k, s2.ha, MAP3_PAL[MAP3_NAMES.indexOf(k)], fmt(s2.ha) + ' ha']);
     });
-    print(ui.Chart(rowsC, 'BarChart', {title: 'Net restorable area by priority class (ha)', legend: {position: 'none'},
+    print(ui.Chart(rowsC, 'BarChart', {title: 'Map 3 - net restorable area by priority class (ha)', legend: {position: 'none'},
                                        hAxis: {title: 'hectares'}, chartArea: {left: 110}}));
     var rowsR = [['Intervention', 'Net plantable ha', {role: 'style'}, {role: 'annotation'}]];
     RX_ORDER.forEach(function (k, i) {
-      var s = STATS.rx[k] || {ha: 0};
-      if (s.ha > 0) { rowsR.push([RX_LABELS[k], s.ha, RX_PAL[i], fmt(s.ha) + ' ha']); }
+      var s2 = STATS.rx[k] || {ha: 0};
+      if (s2.ha > 0) { rowsR.push([RX_LABELS[k], s2.ha, RX_PAL[i], fmt(s2.ha) + ' ha']); }
     });
     print(ui.Chart(rowsR, 'BarChart', {title: 'Net restorable area by intervention (ha)', legend: {position: 'none'},
                                        hAxis: {title: 'hectares'}, chartArea: {left: 230}}));
@@ -401,7 +404,7 @@ function publishAll(fin, mapFC) {
     card.clear();
     card.style().set('shown', true);
     card.add(ui.Label('Loading block ...', {fontSize: '12px', color: '#666666'}));
-    Map.layers().set(4, ui.Map.Layer(ee.Image().byte().paint(hit, 1, 3).visualize({palette: ['00ffff']}), {}, 'Selected block'));
+    Map.layers().set(SEL_INDEX, ui.Map.Layer(ee.Image().byte().paint(hit, 1, 3).visualize({palette: ['ff00ff']}), {}, 'Selected block'));
     evalRetry(function () {
       return ee.Dictionary({n: hit.size(), p: ee.Algorithms.If(hit.size().gt(0), ee.Feature(hit.first()).toDictionary(), null)});
     }, function (d, err) {
@@ -422,13 +425,13 @@ function publishAll(fin, mapFC) {
       card.add(cardRow('Constraints', p.constraint_reason || 'none'));
       card.add(cardRow('Flags', [['recent_plantation_flag', 'G1 recent plantation?'], ['protected_area_flag', 'G2 protected area'],
         ['waterlogging_flag', 'G4 waterlogging']].filter(function (k) { return p[k[0]] === 'yes'; })
+        .concat(p.grassland_option === 1 ? [['g5', 'G5 grassland option (optional)']] : [])
         .map(function (k) { return k[1]; }).join(', ') || 'none'));
       if (p.v21_category) { card.add(cardRow('v2.1 category', p.v21_category + '  (' + (p.change_type || '') + ')')); }
       var stabRow = cardRow('Reliability (HIGH)', 'computing ...');
       card.add(stabRow);
       card.add(ui.Label('Index and group scores', {fontWeight: 'bold', fontSize: '12px', margin: '6px 0 2px 0'}));
-      card.add(bar('RNI need', p.RNI, false));
-      card.add(bar('RFI feasibility', p.RFI));
+      if (p.RNI !== -1) { card.add(bar('RNI need', p.RNI, false)); card.add(bar('RFI feasibility', p.RFI)); }
       card.add(bar('M moisture', p.M)); card.add(bar('S soil', p.S));
       card.add(bar('T terrain', p.T)); card.add(bar('R low risk', p.R));
       card.add(ui.Label('Location: ' + c.lat.toFixed(5) + ' N, ' + c.lon.toFixed(5) + ' E',
@@ -444,14 +447,14 @@ function publishAll(fin, mapFC) {
 
   /* ---- print-quality maps ---- */
   var printRegion = AOI.bounds(1).buffer(1500, 10);
-  [['priority_class', classVis], ['intervention', rxVis]].forEach(function (x) {
+  [['Map3_priority_class', map3], ['Map1b_RNI_class', map1b], ['Map2b_RFI_class', map2b], ['intervention', rxVis]].forEach(function (x) {
     Export.image.toDrive({image: hillshade.blend(x[1]).blend(boundaryVis).clip(printRegion),
       description: 'FRPIM02_print_' + x[0] + '_RGB', folder: CFG.DRIVE_FOLDER,
       fileNamePrefix: 'FRPIM02_print_' + x[0] + '_RGB_' + tag, region: printRegion, crs: CRS, scale: 5, maxPixels: 1e11});
   });
-  hillshade.blend(classVis).blend(boundaryVis).getThumbURL({region: printRegion, dimensions: 2048, format: 'png', crs: CRS},
+  hillshade.blend(map3).blend(boundaryVis).getThumbURL({region: printRegion, dimensions: 2048, format: 'png', crs: CRS},
     function (url, e3) {
-      if (!e3 && url) { print(ui.Label('Download priority map PNG (2048 px) for slides', {color: '#1a73e8'}, url)); }
+      if (!e3 && url) { print(ui.Label('Download Map 3 (priority class) PNG, 2048 px, for slides', {color: '#1a73e8'}, url)); }
     });
   print('Field-check blocks:', fieldList.size());
 }
@@ -460,7 +463,23 @@ function publishAll(fin, mapFC) {
 if (CFG.STAGE === 'SCORE') {
 /* ====================================================================== */
 
-var raw = ee.FeatureCollection(CFG.RAW_ASSET);
+// Spec rev. 1: C8 is replaced by flag G5 grassland_option, which never excludes a block. A raw table made
+// before rev. 1 stores the identical rule as excluded_c8; it is converted here, so RUN 1 need not be repeated.
+var raw = ee.FeatureCollection(CFG.RAW_ASSET).map(function (f) {
+  var oldC8 = ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('excluded_c8'), null), 0, f.get('excluded_c8')));
+  var g5 = ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('grassland_option'), null), oldC8, f.get('grassland_option')));
+  var area = ee.Number(f.get('block_area_ha'));
+  var fr = ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('constrained_frac'), null), 0, f.get('constrained_frac')));
+  var notExcl = ee.Number(f.get('excluded')).eq(0);
+  return f.set({
+    grassland_option: g5,
+    excluded_c8: 0,
+    net_plantable_ha: ee.Algorithms.If(notExcl, area.multiply(ee.Number(1).subtract(fr)), 0),
+    constraint_reason: ee.String(f.get('constraint_reason')).replace('(^|,)C8$', ''),
+    exclusion_reason: ee.Algorithms.If(ee.String(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('exclusion_reason'), null), '',
+                        f.get('exclusion_reason'))).index('C8').gte(0), '', f.get('exclusion_reason'))
+  });
+});
 var N_ALL = raw.size();
 var FILL_KEYS = PARAMS.concat(['F5_opt', 'F5_pes']);
 
@@ -487,7 +506,7 @@ var filled = raw.map(function (f) {
   });
   return out.set('gapfilled', log.join(','));
 });
-// blocks that enter the need x feasibility matrix: not C1, not C2-C7 > 30 %, not C8
+// blocks that enter the need x feasibility matrix: not C1, not C2-C7 > 30 % (G5 never excludes)
 var inMatrix0 = filled.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));
 
 /* ---------- Step 18b: statistics for the CV guard ---------- */
@@ -499,12 +518,13 @@ PARAMS.forEach(function (k) {
 print('Computing block statistics in the background ...');
 evalRetry(function () {
   return ee.Dictionary({N_all: N_ALL, N_in: inMatrix0.size(), nullShare: nullShare, stats: ee.Dictionary(statD),
-                        nC8: filled.filter(ee.Filter.eq('excluded_c8', 1)).size(),
+                        nC8: filled.filter(ee.Filter.eq('grassland_option', 1)).size(),
                         nExcl: filled.filter(ee.Filter.eq('excluded', 1)).size()});
 }, function (STATS, errS) {
 if (errS) { print('STOP: could not read the raw block table (has RUN 1 finished?): ' + errS); return; }
-print('Blocks: all = ' + STATS.N_all + ' | excluded C1-C7 = ' + STATS.nExcl + ' | protected C8 (open ecosystem) = ' +
-      STATS.nC8 + ' | entering the need x feasibility matrix = ' + STATS.N_in);
+print('Blocks: all = ' + STATS.N_all + ' | excluded C1-C7 = ' + STATS.nExcl +
+      ' | entering the need x feasibility matrix = ' + STATS.N_in + ' (of which ' + STATS.nC8 +
+      ' carry the optional G5 grassland note; they stay under plantation)');
 var NR = STATS.N_in;
 if (NR < 10) { print('STOP: fewer than 10 blocks enter the matrix — check the raw table.'); return; }
 function sdOf(k) { var v = STATS.stats[k + '_sd']; return (typeof v === 'number') ? v : 0; }
@@ -648,7 +668,7 @@ function rfiOf(M, S, T, R) {
   return M.max(0.01).pow(EXP_M).multiply(S.max(0.01).pow(EXP_S)).multiply(TR.multiply(0.45).add(0.55));
 }
 var scored = filled.map(function (f) {
-  var deF = ee.Number(ee.Algorithms.If(g(f, 'degradation_evidence').gt(0), 1, 0.5));
+  var deF = ee.Number(1);   // rev. 1: degradation evidence is a confidence score only; RNI is never reduced
   var rni = wsum(f, N_KEYS).divide(100).multiply(deF);
   var M = groupScore(f, 'M'), S = groupScore(f, 'S'), T = groupScore(f, 'T'), R = groupScore(f, 'R');
   var So = groupScore(f, 'S', {F5: 'F5_opt'}), Sp = groupScore(f, 'S', {F5: 'F5_pes'});
@@ -657,16 +677,19 @@ var scored = filled.map(function (f) {
   var fc = ee.Number(ee.Algorithms.If(rfi.gte(CFG.TH.feasHi), 2, ee.Algorithms.If(rfi.gte(CFG.TH.feasLo), 1, 0)));
   var code = ee.Number(ee.List(MATRIX.get(nc)).get(fc));
   var exC1 = g(f, 'excluded_c1').eq(1), exAny = g(f, 'excluded').eq(1), c8 = g(f, 'excluded_c8').eq(1);
-  var pclass = ee.String(ee.Algorithms.If(exC1.or(c8), 'PROTECTED', ee.Algorithms.If(exAny, 'EXCLUDED', CLASS_NAMES.get(code))));
-  var inM = exAny.or(c8).not();
+  var pclass = ee.String(ee.Algorithms.If(exC1, 'PROTECTED', ee.Algorithms.If(exAny, 'EXCLUDED', CLASS_NAMES.get(code))));
+  var inM = exAny.not();
   return f.set({
-    M: M, S: S, T: T, R: R, S_opt: So, S_pes: Sp, RNI: rni, RFI: rfi, RFI_core: M.max(0.01).pow(EXP_M).multiply(S.max(0.01).pow(EXP_S)),
+    M: M, S: S, T: T, R: R, S_opt: So, S_pes: Sp,
+    RNI: ee.Algorithms.If(inM, rni, -1), RFI: ee.Algorithms.If(inM, rfi, -1),       // -1 = not scored (spec 13.3)
+    RFI_core: M.max(0.01).pow(EXP_M).multiply(S.max(0.01).pow(EXP_S)),
     deg_factor: deF,
-    need_class: ee.Algorithms.If(inM, nc, null), feasibility_class: ee.Algorithms.If(inM, fc, null),
+    need_class: ee.Algorithms.If(inM, nc, -1), feasibility_class: ee.Algorithms.If(inM, fc, -1),
     need_label: ee.Algorithms.If(inM, LEVEL.get(nc), ''), feas_label: ee.Algorithms.If(inM, LEVEL.get(fc), ''),
     priority_code: ee.Algorithms.If(inM, code, 0),
     priority_class: pclass,
     class_code: ee.List(CLASS_ORDER).indexOf(pclass).add(1),
+    priority_code_map: ee.List(MAP3_NAMES).indexOf(pclass).add(1),        // Map 3: 1 LOW ... 5 EXCLUDED
     phase: ee.Algorithms.If(inM, PHASES.get(code), ''),
     phase_note: ee.Algorithms.If(inM, ee.List(CELL_TEXT.get(nc)).get(fc), ee.Algorithms.If(exAny, 'Excluded', 'Protected')),
     RPS: ee.Algorithms.If(inM, rni.multiply(0.6).add(rfi.multiply(0.4)), 0)
@@ -679,7 +702,6 @@ function interventionOf(f) {
   return ee.String(
     ee.Algorithms.If(g(f, 'excluded_c1').eq(1), 'PROTECT_DENSE',
     ee.Algorithms.If(g(f, 'excluded').eq(1), 'NOT_PLANTABLE',
-    ee.Algorithms.If(g(f, 'excluded_c8').eq(1), 'PROTECT_OPEN_ECOSYSTEM',
     ee.Algorithms.If(g(f, 'F13').lt(CFG.RX.FIRE_F13), 'FIRE_PROTECTION_FIRST',
     ee.Algorithms.If(ee.String(f.get('waterlogging_flag')).equals('yes'), 'HYDRO_COMPATIBLE_PLANTING',
     ee.Algorithms.If(yes(f, 'X5').and(S.lt(CFG.RX.STAB_S)), 'SOIL_STABILISATION_FIRST',
@@ -688,17 +710,20 @@ function interventionOf(f) {
     ee.Algorithms.If(M.lt(CFG.RX.SMC_M).or(yes(f, 'X1_driest_quartile')), 'SMC_DROUGHT_HARDY',
     ee.Algorithms.If(canopy.gte(10).and(canopy.lt(40)).or(ee.Number(ee.Algorithms.If(
         ee.Algorithms.IsEqual(f.get('need_class'), null), -1, f.get('need_class'))).eq(0)), 'ANR_GAP_PLANTING',
+    ee.Algorithms.If(canopy.lt(10), 'BLANK_AREA_PLANTATION',
     'MIXED_NATIVE_PLANTATION')))))))))));
 }
 var RXD = ee.Dictionary.fromLists(RX_ORDER, RX_ORDER.map(function (k, i) { return i + 1; }));
-var LATE_RX = ee.List(['INVASIVE_CLEAR_THEN_PLANT', 'SMC_DROUGHT_HARDY', 'ANR_GAP_PLANTING', 'MIXED_NATIVE_PLANTATION']);
+// smc_required adds SMC works to any planting intervention 6-11 (rev. 1)
+var LATE_RX = ee.List(['ROCKY_MICROSITE', 'INVASIVE_CLEAR_THEN_PLANT', 'SMC_DROUGHT_HARDY', 'ANR_GAP_PLANTING',
+                       'BLANK_AREA_PLANTATION', 'MIXED_NATIVE_PLANTATION']);
 function speciesOf(rx, M, S) {
   var worst = M.min(S);
   return ee.String(
     ee.Algorithms.If(ee.List(['ROCKY_MICROSITE', 'SMC_DROUGHT_HARDY']).contains(rx), 'Drought-hardy: khair, ber, desi babul, guggal, hingor',
     ee.Algorithms.If(ee.String(rx).equals('HYDRO_COMPATIBLE_PLANTING'), 'Riparian: arjun, jambu, karanj',
     ee.Algorithms.If(ee.String(rx).equals('SOIL_STABILISATION_FIRST'), 'Native grasses and shrubs first, then khair and ber',
-    ee.Algorithms.If(ee.List(['PROTECT_DENSE', 'NOT_PLANTABLE', 'PROTECT_OPEN_ECOSYSTEM']).contains(rx), '-',
+    ee.Algorithms.If(ee.List(['PROTECT_DENSE', 'NOT_PLANTABLE']).contains(rx), '-',
     ee.Algorithms.If(worst.lt(CFG.SITE_SPLITS[0]), 'Drought-hardy: khair, ber, desi babul, guggal, hingor',
     ee.Algorithms.If(worst.lt(CFG.SITE_SPLITS[1]), 'Medium: teak, dhavdo, timru, khakhro, neem, sadad',
                      'Moist/deep: mahudo, bamboo, jambu, karanj, amla')))))));
@@ -865,7 +890,7 @@ var finalFC = retOut.merge(outOfMatrix).map(function (f) {
     ee.Algorithms.If(ee.String(f.get('b1_sensitive')).equals('yes'), 'G3 soil pit', ''),
     ee.Algorithms.If(ee.String(f.get('waterlogging_flag')).equals('yes'), 'G4 waterlogging', ''),
     ee.Algorithms.If(c6.gt(0), 'C6 cultivation inside forest (rights/encroachment)', ''),
-    ee.Algorithms.If(g(f, 'excluded_c8').eq(1), 'C8 confirm natural grassland (re-score if past forest found)', ''),
+    ee.Algorithms.If(g(f, 'grassland_option').eq(1), 'G5 grassland option (optional note; stays under plantation)', ''),
     ee.Algorithms.If(b01(pc.equals('HIGH')).and(g(f, 'degradation_evidence').eq(0)), 'HIGH without degradation evidence', '')
   ]).filter(ee.Filter.neq('item', ''));
   var stabRead = ee.Algorithms.If(stab.gt(0.80), 'Robust', ee.Algorithms.If(stab.gte(0.50), 'Moderately stable', 'Marginal'));
@@ -989,8 +1014,9 @@ var dMC = MEAN_FULL.subtract(MEAN_HALF).abs();
 var nGrid = ee.Number(ee.Feature(raw.first()).get('n_blocks_grid'));
 var FIRE_GAP_TEXT = ee.Feature(raw.first()).get('fire_source_gap');
 var gapPresent = raw.filter(ee.Filter.notNull(['fire_source_gap'])).size().eq(N_ALL);
-var c8bad = compared.filter(ee.Filter.eq('excluded_c8', 1))
-  .filter(ee.Filter.or(ee.Filter.gte('canopy_pct', 10), ee.Filter.gt('degradation_evidence', 0))).size();
+// FF-25 (rev. 1): every G5 block is still classed (HIGH/MODERATE/LOW) and given a planting intervention (3-11)
+var c8bad = withRx.filter(ee.Filter.eq('grassland_option', 1)).filter(ee.Filter.eq('excluded', 0))
+  .filter(ee.Filter.or(ee.Filter.inList('priority_class', ['PROTECTED', 'EXCLUDED']), ee.Filter.lt('rx_code', 3))).size();
 var highNoDE = compared.filter(ee.Filter.eq('priority_class', 'HIGH')).filter(ee.Filter.eq('degradation_evidence', 0)).size();
 var rhoIdx = ee.Number(ee.Dictionary(inM.reduceColumns(ee.Reducer.spearmansCorrelation(), ['RNI', 'RFI'])).values().get(0));
 var transHa = TRANS.aggregate_sum('block_area_ha'), allHa = compared.aggregate_sum('block_area_ha');
@@ -1037,8 +1063,9 @@ var QC_FC = ee.FeatureCollection([
   q('FF-23', 'Rows in raw table = grid blocks', ee.String(N_ALL.format('%d')).cat(' / ').cat(nGrid.format('%.0f')),
     st(N_ALL.eq(nGrid)), 'Raise TILE_SCALE and re-export'),
   q('FF-24', 'fire_source_gap present', FIRE_GAP_TEXT, st(gapPresent), 'Add metadata field'),
-  q('FF-25', 'C8 logic violations; HIGH blocks without degradation evidence (listed for staff)',
-    ee.String(c8bad.format('%d')).cat('; ').cat(highNoDE.format('%d')), st(c8bad.eq(0), 'PASS', 'STOP'), 'Fix C8 logic'),
+  q('FF-25', 'G5 blocks wrongly excluded or without planting; HIGH blocks without degradation evidence (listed)',
+    ee.String(c8bad.format('%d')).cat('; ').cat(highNoDE.format('%d')), st(c8bad.eq(0), 'PASS', 'STOP'),
+    'G5 is wrongly acting as a constraint'),
   q('FF-26', 'Spearman rho(RNI, RFI) within +/- 0.60', rhoIdx, st(rhoIdx.abs().lte(CFG.INDEP_MAX)), 'A parameter leaks between indices; review'),
   q('FF-27', 'v2.1 comparison: hectares match; blocks not in v2.1',
     ee.String(ee.Number(transHa).format('%.1f')).cat(' / ').cat(ee.Number(allHa).format('%.1f')).cat('; ').cat(notInV21.format('%d')),

@@ -103,3 +103,13 @@ Implementation notes for the DPR:
   Engine's reprojection limit.
 - FF-28: the ESA CCI biomass v7.0 asset path is checked on every run. Meta CHMv2 has no public GEE path
   yet, and the script says so.
+
+### FRPIM v2.2 spec revision 1 (implemented)
+- C8 removed. Flag **G5 `grassland_option`** (1/0) marks blocks that could also be developed as grassland;
+  it never excludes a block or changes its class or intervention. FF-25 checks this.
+- Degradation evidence (DE1–DE4) is a confidence score only. RNI is no longer halved when it is 0.
+- New intervention `BLANK_AREA_PLANTATION` (canopy < 10 %). `smc_required` applies to interventions 6–11.
+- Section 13.3: three separate maps, each its own Code Editor layer and GeoTIFF: Map 1 RNI (+ 1b class),
+  Map 2 RFI (+ 2b class), Map 3 priority class (codes 1 LOW, 2 MODERATE, 3 HIGH, 4 PROTECTED, 5 EXCLUDED).
+- A raw table saved before revision 1 is converted in RUN 2 (`excluded_c8` becomes `grassland_option`,
+  and net area is restored), so RUN 1 does not need to be repeated.

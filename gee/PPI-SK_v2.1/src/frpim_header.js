@@ -7,10 +7,12 @@
  *          for the range + 20 km landscape (2-4 min, background), builds
  *          the 10 ha blocks and every layer. Then: Tasks tab -> RUN ALL
  *          -> wait until all tasks show a tick (about 40-70 min).
- *   RUN 2  Press Run again. The FINAL MAP appears: restoration priority
- *          (HIGH / MODERATE / LOW / PROTECTED / EXCLUDED), intervention
- *          (11 types), need, feasibility, degradation evidence,
- *          reliability and change from v2.1. Click any block for details.
+ *   RUN 2  Press Run again. Three separate maps appear (Section 13.3):
+ *          Map 1 Restoration Need (RNI), Map 2 Restoration Feasibility
+ *          (RFI) - each continuous and in 3 classes - and Map 3 Restoration
+ *          Priority Class (HIGH / MODERATE / LOW / PROTECTED / EXCLUDED).
+ *          Optional layers: intervention, G5 grassland note, change from
+ *          v2.1, reliability. Click any block for details.
  *          Tasks tab -> RUN ALL saves every table, map and file to Drive.
  *   Press Run any time after that to see the final map again.
  *  Optional: STEP = 'VALIDATE' for the validation report (V1, V2).
