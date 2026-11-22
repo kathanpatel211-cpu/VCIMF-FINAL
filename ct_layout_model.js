@@ -1,6 +1,6 @@
 // ===== 0. HEADER ==============================================================
 /*******************************************************************************
- * CT-LAYOUT v1.1 : Scientific Contour Trench Layout & Decision Model
+ * CT-LAYOUT v1.2 : Scientific Contour Trench Layout & Decision Model
  * Google Earth Engine Code Editor (JavaScript). Paste into
  * code.earthengine.google.com and click RUN. Edit only the CONFIG block.
  *
@@ -77,7 +77,11 @@ var CONFIG = {
   S2_START: '2025-10-01', S2_END: '2026-01-31', DRY_START: '2026-03-01', DRY_END: '2026-05-31',
   WC_TREES: 10, WC_SHRUB: 20, WC_GRASS: 30, WC_CROP: 40, WC_BUILT: 50, WC_BARE: 60, WC_WATER: 80,
   // --- Terrain ---
-  TPI_RADIUS_M: 60, TPI_RIDGE: 1.5, TPI_VALLEY: -1.5, UPA_KM2: 0.05, DRAIN_BUFFER_M: 10,
+  TPI_RADIUS_M: 60, TPI_RIDGE: 1.5, TPI_VALLEY: -1.5, DRAIN_BUFFER_M: 10,
+  // Drainage mask v1.2: a pixel is a drainage line only if it is among the lowest
+  // DRAIN_CORE_MAX_PCT % of TPI in the plot AND below TPI_VALLEY, or MERIT shows a real
+  // nala (catchment > UPA_KM2) in a convergent hollow. Isolated hollows < DRAIN_MIN_PIX are dropped.
+  DRAIN_CORE_MAX_PCT: 3, DRAIN_MIN_PIX: 20, UPA_KM2: 0.5, DRAIN_WARN_PCT: 20,
   USE_CURVATURE: true, TPI_VALLEY_WEAK: -0.75, CURV_HOLLOW: -0.01,
   LAMBDA_CAP_M: 150,
   // --- Decision ---
@@ -85,6 +89,7 @@ var CONFIG = {
   VI_OVERRIDE: null,
   W: {slope: 0.40, runoff: 0.25, upslope: 0.20, ls: 0.15},
   PRI_BINS: 100,
+  SHEET_BASELINES: 3, SHEET_ROWS_PER_BL: 10,
   MIN_PATCH_M2: 500, HOLE_M2: 200, MIN_ROW_M: 10, ROW_SIMPLIFY_M: 1.0, ROW_REGION_BUFFER_M: 30,
   TREE_CLEARANCE_M: 1.5, MAX_LEVELS: 250,
   // --- Staking ---
@@ -431,10 +436,15 @@ function runPlot(plotFeature, plotName, outPanel) {
   // ===== 7. MASKS =============================================================
   var flat = slopePct.lt(CONFIG.SLOPE_MIN).unmask(0);                     // §5.4
   var steep = slopePct.gt(CONFIG.SLOPE_MAX).unmask(0);
-  var valleyCore = tpi.lt(CONFIG.TPI_VALLEY)                                // §5.2.6
-    .or(merit.select('upa').gt(CONFIG.UPA_KM2).and(tpi.lt(0)))             // MERIT, only in local lows
-    .or(CONFIG.USE_CURVATURE ? tpi.lt(CONFIG.TPI_VALLEY_WEAK).and(curv.lt(CONFIG.CURV_HOLLOW)) : ee.Image(0))
-    .unmask(0).reproject(P5).rename('valley');
+  // §5.2.6 drainage lines (v1.2, stricter): adaptive TPI cut capped at the lowest
+  // DRAIN_CORE_MAX_PCT % of the plot, MERIT only for real nalas, linear-feature filter
+  var tpiCut = ee.Number(ee.Dictionary(rr(tpi.updateMask(inPlot),
+    ee.Reducer.percentile([CONFIG.DRAIN_CORE_MAX_PCT]), plot)).values().get(0)).min(CONFIG.TPI_VALLEY);
+  var meritNala = merit.select('upa').gt(CONFIG.UPA_KM2).and(tpi.lt(CONFIG.TPI_VALLEY_WEAK));
+  if (CONFIG.USE_CURVATURE) meritNala = meritNala.and(curv.lt(CONFIG.CURV_HOLLOW));
+  var valleyRaw = tpi.lt(tpiCut).or(meritNala).unmask(0).reproject(P5);
+  var valleyN = valleyRaw.selfMask().connectedPixelCount(CONFIG.DRAIN_MIN_PIX + 1, true).reproject(P5);
+  var valleyCore = valleyRaw.and(valleyN.gte(CONFIG.DRAIN_MIN_PIX)).unmask(0).reproject(P5).rename('valley');
   var drain = valleyCore.focalMax(CONFIG.DRAIN_BUFFER_M, 'circle', 'meters').reproject(P5).rename('drain');
   var built = wc.eq(CONFIG.WC_BUILT).or(wc.eq(CONFIG.WC_WATER)).unmask(0);
   var excl = flat.or(steep).or(drain).or(rock).or(built).rename('excl');
@@ -766,6 +776,8 @@ function runPlot(plotFeature, plotName, outPanel) {
       ee.List([x0.add(b.sin().multiply(Hend)), y0.add(b.cos().multiply(Hend))])]), CONFIG.CRS, false);
     return ee.Feature(lineT.transform('EPSG:4326', ME), {BL_ID: blId, KIND: 'BASELINE',
       START_PEG: s.get('KIND'), BEARING_deg: rnd(bearingDeg, 1), LENGTH_m: rnd(Hend, 2), N_CROSS: nCross,
+      START_LAT: rnd(ee.List(s.geometry().transform('EPSG:4326', ME).coordinates()).get(1), 6),
+      START_LON: rnd(ee.List(s.geometry().transform('EPSG:4326', ME).coordinates()).get(0), 6),
       name: blId, description: ee.String(blId).cat(' · start ').cat(ee.String(s.get('KIND')))
         .cat(' · compass bearing ').cat(bearingDeg.format('%.0f')).cat('° · ').cat(nCross.format('%.0f'))
         .cat(' row crossings · tape down this line, check VI with A-frame at each peg'),
@@ -773,7 +785,7 @@ function runPlot(plotFeature, plotName, outPanel) {
   });
   var chainage = ee.FeatureCollection(ee.List(baseAll.aggregate_array('chain')).flatten()).sort('SORT_KEY');
   var baselines = baseAll.filter(ee.Filter.gt('N_CROSS', 0)).select(
-    ['BL_ID', 'KIND', 'START_PEG', 'BEARING_deg', 'LENGTH_m', 'N_CROSS', 'name', 'description']);
+    ['BL_ID', 'KIND', 'START_PEG', 'BEARING_deg', 'LENGTH_m', 'N_CROSS', 'START_LAT', 'START_LON', 'name', 'description']);
 
   // ===== 11. METRICS ==========================================================
   var pa = ee.Image.pixelArea();
@@ -853,6 +865,7 @@ function runPlot(plotFeature, plotName, outPanel) {
     WETDAYS_HELD_pct: rnd(wetPct, 1), HI_FULL_RETENTION_m: rnd(HIfull, 2),
     LFACTOR_RED_MED: rnd(ee.Number(tM.get('lsr_median')), 3),
     DRAIN_LEN_APPROX_m: rnd(ee.Number(aS.get('a_valley')).divide(SC), 0), GULLY_PLUG_SITES: gully.size(),
+    DRAIN_CORE_ha: ha('a_valley'), DRAIN_TPI_CUT_m: rnd(tpiCut, 2),
     ROCK_ha: ha('a_rock'), LOOSE_SOIL_TRENCHES: trenches.filter(ee.Filter.eq('PLUG_m', CONFIG.PLUG_LOOSE)).size(),
     N_BASELINES: baselines.size(), N_CHAINAGE_RECORDS: chainage.size(),
     W_SLOPE: CONFIG.W.slope, W_RUNOFF: CONFIG.W.runoff, W_UPSLOPE: CONFIG.W.upslope, W_LS: CONFIG.W.ls,
@@ -991,6 +1004,45 @@ function runPlot(plotFeature, plotName, outPanel) {
     print(L + 'Summary dictionary', s);
     outPanel.add(ch3);
   });
+
+  // ===== FIELD SHEET (one page) ===============================================
+  // Prints a FIELDSHEET code. Copy it into field_sheet.html (Paste box -> Load -> Print).
+  var topBL = baselines.sort('N_CROSS', false).limit(CONFIG.SHEET_BASELINES);
+  var fsData = ee.Dictionary({
+    bl: topBL.toList(CONFIG.SHEET_BASELINES).map(function (f) {
+      return ee.Feature(f).toDictionary(['BL_ID', 'BEARING_deg', 'START_PEG', 'START_LAT', 'START_LON', 'N_CROSS', 'LENGTH_m']);
+    }),
+    ch: chainage.filter(ee.Filter.inList('BL_ID', topBL.aggregate_array('BL_ID'))).toList(2000).map(function (f) {
+      return ee.Feature(f).toDictionary(['BL_ID', 'ROW_ID', 'Cum_tape_dist_from_BM_m', 'Tape_ground_dist_from_prev_row_m']);
+    }),
+    s: summary.select(['N_CCT', 'N_SCT', 'N_TOTAL', 'N_ROWS', 'TREATED_ha', 'TREATED_CCT_ha', 'TREATED_SCT_ha',
+      'EARTHWORK_m3', 'RUNNING_m', 'P_HELD_MED_mm', 'GULLY_PLUG_SITES', 'AREA_DRAIN_ha'])
+  });
+  var fsBox = ui.Textbox({value: 'computing field sheet code…', style: {stretch: 'horizontal'}});
+  outPanel.add(ui.Label('FIELD SHEET CODE (copy all, paste into field_sheet.html)', {fontWeight: 'bold', margin: '8px 4px 1px 4px'}));
+  outPanel.add(fsBox);
+  fsData.evaluate(function (v, err) {
+    if (err) { fsBox.setValue('error: ' + err); return; }
+    var bls = (v.bl || []).map(function (b) {
+      var rowsB = (v.ch || []).filter(function (c) { return c.BL_ID === b.BL_ID; })
+        .sort(function (a, c) { return a.Cum_tape_dist_from_BM_m - c.Cum_tape_dist_from_BM_m; })
+        .slice(0, CONFIG.SHEET_ROWS_PER_BL)
+        .map(function (c) { return [c.ROW_ID, c.Tape_ground_dist_from_prev_row_m, c.Cum_tape_dist_from_BM_m]; });
+      return {id: b.BL_ID, brg: b.BEARING_deg, start: b.START_PEG, lat: b.START_LAT, lon: b.START_LON, n: b.N_CROSS, rows: rowsB};
+    });
+    var now = new Date();
+    var fs = {v: 1, plot: plotName, date: now.toISOString().slice(0, 10), area: A.area_ha, vi: VI,
+      ztop: zTop, r01: zTop - VI, bmLat: A.bm_lat, bmLon: A.bm_lon, pd: Pdesign, T: CONFIG.T_DESIGN,
+      cct: v.s.N_CCT, sct: v.s.N_SCT, tot: v.s.N_TOTAL, nrows: v.s.N_ROWS, tha: v.s.TREATED_ha,
+      tc: v.s.TREATED_CCT_ha, ts: v.s.TREATED_SCT_ha, ew: v.s.EARTHWORK_m3, rm: v.s.RUNNING_m,
+      ph: v.s.P_HELD_MED_mm, gp: v.s.GULLY_PLUG_SITES, dr: v.s.AREA_DRAIN_ha,
+      pc: d.P_CCT, ps: d.P_SCT, tl: CONFIG.TR_LEN, tw: CONFIG.TR_WID, td: CONFIG.TR_DEP, plug: CONFIG.PLUG,
+      gap: CONFIG.SCT_GAP, tol: CONFIG.VI_FIELD_TOL, tree: CONFIG.TREE_CLEARANCE_M, join: CONFIG.ROW_JOIN_TOL_M,
+      bands: CONFIG.STAFF_BANDS, sctSlope: CONFIG.SLOPE_SCT, bl: bls};
+    var code = 'FIELDSHEET' + JSON.stringify(fs);
+    fsBox.setValue(code);
+    print(L + 'FIELD SHEET CODE (copy the whole line into field_sheet.html):', code);
+  });
   rows.sort('k').aggregate_array('ROW_ID').evaluate(function (ids) {
     if (ids) print(L + 'ROW_ID list (top -> down): ' + ids.join(', '));
   });
@@ -1073,7 +1125,7 @@ function runPlot(plotFeature, plotName, outPanel) {
     lenS_max: trenches.filter(ee.Filter.eq('TYPE', 'SCT')).aggregate_max('LEN_m'),
     rowCross: crossJoin, highestRowElev: rows.aggregate_max('ROW_ELEV_m'),
     nVecRaw: nVecRaw, hiMed: tP.get('hi_p50'),
-    nBL: baselines.size(),
+    nBL: baselines.size(), drainHa: ee.Number(aS.get('a_drain')).divide(1e4),
     missing: rows.filter(ee.Filter.inList('ROW_ID', chainRows).not()).aggregate_array('ROW_ID')
   });
   qa.evaluate(function (q, err) {
@@ -1103,6 +1155,9 @@ function runPlot(plotFeature, plotName, outPanel) {
     var miss = q.missing || [];
     T(10, q.nBL >= 1 && miss.length === 0, q.nBL + ' baselines; rows not on any baseline: ' +
       (miss.length ? miss.join(', ') + ' (add a baseline for them)' : 'none'), true);
+    var dPct = q.drainHa / A.area_ha * 100;
+    T(11, dPct <= CONFIG.DRAIN_WARN_PCT, 'drainage (with ' + CONFIG.DRAIN_BUFFER_M + ' m buffer) = ' + fmt(q.drainHa, 2) +
+      ' ha = ' + fmt(dPct, 1) + ' % of plot (warn above ' + CONFIG.DRAIN_WARN_PCT + ' %; verify nalas on the ground)', true);
     print(L + 'QA (§11)\n' + res.join('\n'));
     outPanel.add(ui.Label('QA (§11)', {fontWeight: 'bold', margin: '6px 4px 1px 4px'}));
     res.forEach(function (t) {
@@ -1123,7 +1178,7 @@ function inputRow(label, w) {
 }
 function buildUI() {
   UI.panel = ui.Panel({style: {width: '440px', padding: '6px'}});
-  UI.panel.add(ui.Label('CT-LAYOUT v1.1 · Contour Trench Layout', {fontWeight: 'bold', fontSize: '16px'}));
+  UI.panel.add(ui.Label('CT-LAYOUT v1.2 · Contour Trench Layout', {fontWeight: 'bold', fontSize: '16px'}));
   UI.panel.add(ui.Label('Khedbrahma Range · Sabarkantha · GFD', {fontSize: '11px', color: 'gray'}));
   UI.vi = ui.Textbox({placeholder: 'auto', value: CONFIG.VI_OVERRIDE === null ? '' : String(CONFIG.VI_OVERRIDE)});
   UI.hi = ui.Textbox({value: String(CONFIG.HI_TARGET)});
@@ -1178,7 +1233,7 @@ function runAll() {
   UI.out.clear();
   Map.setOptions('SATELLITE');
   var P = loadPlots();
-  print('CT-LAYOUT v1.1: ' + P.names.length + ' plot(s): ' + P.names.join(', '));
+  print('CT-LAYOUT v1.2: ' + P.names.length + ' plot(s): ' + P.names.join(', '));
   for (var i = 0; i < P.names.length; i++) {
     var nm = String(P.names[i] === null ? ('plot_' + i) : P.names[i]);
     var sub = ui.Panel();
@@ -1193,6 +1248,13 @@ buildUI();
 runAll();
 
 /* ===== CHANGELOG =============================================================
+ v1.2 (22 Nov 2026)
+  - Drainage mask made stricter: adaptive TPI cut (lowest 3 % of the plot and
+    below -1.5 m), MERIT only for nalas > 0.5 km2 in convergent hollows,
+    hollows < 20 pixels dropped. v1.1 flagged 9.2 ha of a 21.7 ha plot.
+  - QA test 11: drainage share of plot (WARN above 20 %).
+  - FIELDSHEET code for the one-page printable field sheet (field_sheet.html).
+  - Fast raster contour-line layers; rows/trenches cached as assets.
  v1.1 (22 Nov 2026)
   - Design storm baseline T = 10 yr (officer decision); T = 5 yr reported.
   - Full spec build: Gumbel EV-I on CHIRPS 1981-2025, SCS-CN with Williams

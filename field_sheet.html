@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contour Trench Field Sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;700&family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#111; --muted:#555; --line:#999; --soft:#eef3ee; --accent:#1b5e20; --warn:#b71c1c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#d9d9d9; color:var(--ink);
+         font-family:"Noto Sans","Noto Sans Gujarati","Nirmala UI","Shruti",Arial,sans-serif; font-size:8pt; line-height:1.24; }
+  .gu { font-family:"Noto Sans Gujarati","Nirmala UI","Shruti",sans-serif; }
+  /* control bar (not printed) */
+  .bar { max-width:210mm; margin:10px auto; padding:10px 12px; background:#fff; border-radius:6px; font-size:10pt; }
+  .bar textarea { width:100%; height:60px; font-family:monospace; font-size:9pt; }
+  .bar button { font-size:10pt; padding:6px 14px; margin:6px 6px 0 0; cursor:pointer; }
+  .bar .msg { color:var(--accent); margin-left:6px; }
+  .bar .err { color:var(--warn); }
+  /* A4 page */
+  .page { width:210mm; min-height:297mm; margin:0 auto 20px; background:#fff; padding:7mm 8mm; }
+  h1 { font-size:13pt; margin:0; }
+  h1 .gu { font-size:11.5pt; font-weight:700; }
+  h2 { font-size:9pt; margin:5px 0 3px; padding:2px 5px; background:var(--accent); color:#fff; border-radius:2px; }
+  h2 .gu { font-weight:400; }
+  .head { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid var(--ink); padding-bottom:3px; }
+  .head .meta { text-align:right; font-size:8pt; }
+  .grid { display:grid; gap:6px; }
+  .g2 { grid-template-columns:1fr 1fr; }
+  .g3 { grid-template-columns:1fr 1fr 1fr; }
+  .box { border:1px solid var(--line); border-radius:3px; padding:4px 6px; }
+  .vi { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--soft); border:2px solid var(--accent); }
+  .vi .big { font-size:24pt; font-weight:700; color:var(--accent); white-space:nowrap; }
+  .vi input { font-size:24pt; font-weight:700; color:var(--accent); width:2.6em; border:none; background:transparent; text-align:right; }
+  .kv { display:grid; grid-template-columns:auto 1fr; column-gap:6px; }
+  .kv b { white-space:nowrap; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:1px 4px; text-align:center; }
+  th { background:#f2f2f2; font-weight:700; }
+  td.l, th.l { text-align:left; }
+  .tape { font-weight:700; font-size:9pt; }
+  ol { margin:0; padding-left:15px; }
+  ol li { margin-bottom:1.5px; }
+  .steps { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .dont { color:var(--warn); }
+  .sig { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:8px; font-size:7.8pt; }
+  .sig div { border-top:1px solid var(--ink); padding-top:2px; text-align:center; }
+  .small { font-size:7.4pt; color:var(--muted); }
+  .bl td { font-size:7.8pt; }
+  svg text { font-family:"Noto Sans",Arial,sans-serif; }
+  @media print {
+    body { background:#fff; }
+    .bar { display:none; }
+    .page { margin:0; padding:7mm 8mm; width:auto; min-height:auto; }
+    @page { size:A4; margin:0; }
+    h2 { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .vi, th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b>How to use:</b> run the GEE script, copy the whole <code>FIELDSHEET{…}</code> line from the panel or console, paste it below, click <b>Load</b>, then <b>Print</b> (A4, one page).
+  You can also type a VI directly in the green box to get the staff table without the code.
+  <textarea id="code" placeholder="Paste FIELDSHEET{...} here"></textarea>
+  <button id="load">Load</button><button id="print">Print</button><button id="clear">Clear</button><span id="msg" class="msg"></span>
+</div>
+
+<div class="page">
+  <div class="head">
+    <div>
+      <h1>CONTOUR TRENCH FIELD SHEET · <span class="gu">કન્ટૂર ટ્રેન્ચ ફિલ્ડ શીટ</span></h1>
+      <div>Khedbrahma Range · Sabarkantha Division · Gujarat Forest Department</div>
+    </div>
+    <div class="meta">
+      Plot / <span class="gu">પ્લોટ</span>: <b id="f-plot">________________</b><br>
+      Area: <b id="f-area">____</b> ha · Date: <b id="f-date">__________</b>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:5px">
+    <div class="box vi">
+      <div>
+        <div><b>VERTICAL DROP BETWEEN ROWS (VI)</b></div>
+        <div class="gu"><b>બે હાર વચ્ચે ઊભો ઘટાડો (VI)</b></div>
+        <div class="small">Controlling value. Check every row peg with A-frame / line level: ± <span id="f-tol">0.10</span> m</div>
+        <div class="small gu">આ મુખ્ય માપ છે. દરેક ખૂંટીએ એ-ફ્રેમથી તપાસો.</div>
+      </div>
+      <div class="big"><input id="vi" type="text" inputmode="decimal" placeholder="—"> m</div>
+    </div>
+    <div class="box kv">
+      <b>BM-0 (crest peg)</b><span>Lat <b id="f-bmlat">________</b> · Lon <b id="f-bmlon">________</b> · Elev <b id="f-ztop">____</b> m</span>
+      <b>First row R01</b><span>one VI below crest, elev <b id="f-r01">____</b> m</span>
+      <b>Trenches</b><span>CCT <b id="f-cct">____</b> · SCT <b id="f-sct">____</b> · total <b id="f-tot">____</b></span>
+      <b>Treated area</b><span><b id="f-tha">____</b> ha (CCT <span id="f-tc">__</span> / SCT <span id="f-ts">__</span>) · rows <span id="f-nrows">__</span></span>
+      <b>Earthwork</b><span><b id="f-ew">____</b> m³ · running <span id="f-rm">____</span> m</span>
+      <b>Storm held</b><span>up to ≈ <b id="f-ph">__</b> mm per rain event · design <span id="f-T">10</span>-yr = <span id="f-pd">___</span> mm</span>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div>
+      <h2>1. STAFF TABLE · <span class="gu">ઢોળાવ પ્રમાણે બે હાર વચ્ચેનું ટેપ અંતર</span></h2>
+      <table>
+        <thead><tr><th>Slope %<br><span class="gu">ઢોળાવ</span></th><th>Horizontal gap HI (m)<br><span class="gu">આડું અંતર</span></th>
+        <th>TAPE along ground (m)<br><span class="gu">જમીન પર ટેપ અંતર</span></th><th>Type<br><span class="gu">પ્રકાર</span></th></tr></thead>
+        <tbody id="staff"></tbody>
+      </table>
+      <div class="small">* SCT where tree canopy. Tape = VI ÷ sin(slope). Use the band for the ground you stand on; the A-frame check of VI is final.<br>
+      <span class="gu">ટેપ અંતર માર્ગદર્શક છે; એ-ફ્રેમથી VI સાચો હોવો જરૂરી.</span></div>
+    </div>
+    <div>
+      <h2>2. TRENCH SIZE &amp; PATTERN · <span class="gu">ખાઈનું માપ અને ગોઠવણ</span></h2>
+      <svg viewBox="0 0 380 128" width="100%" aria-label="Trench pattern diagram">
+        <text x="2" y="10" font-size="9.5" font-weight="700">CCT row (continuous)</text>
+        <g id="cct"></g>
+        <text x="2" y="42" font-size="8.5" id="cap-cct">2.0 m trench + 0.30 m undug plug, repeated</text>
+        <text x="2" y="60" font-size="9.5" font-weight="700">SCT rows (staggered)</text>
+        <g id="sct"></g>
+        <text x="2" y="110" font-size="8.5" id="cap-sct">2.0 m trench + 2.0 m gap; next row shifted 2.0 m</text>
+        <text x="2" y="122" font-size="8.5">so each gap is covered by the row below</text>
+        <text x="228" y="10" font-size="9.5" font-weight="700">Cross-section</text>
+        <line x1="228" y1="34" x2="378" y2="34" stroke="#111" stroke-width="1"/>
+        <rect x="250" y="34" width="46" height="31" fill="#cfd8dc" stroke="#111"/>
+        <path d="M304 34 Q324 14 344 34 Z" fill="#a1887f" stroke="#111"/>
+        <text x="246" y="77" font-size="8.5" id="sx-w">0.45 m wide</text>
+        <text x="300" y="52" font-size="8.5" id="sx-d">0.30 m deep</text>
+        <text x="330" y="20" font-size="8.5">bund</text>
+        <text x="300" y="64" font-size="8.5">downhill →</text>
+        <text x="228" y="92" font-size="8.5">Trench bed LEVEL.</text>
+        <text x="228" y="104" font-size="8.5">Plug = undug ground.</text>
+        <text x="228" y="116" font-size="8.5" class="gu">તળિયું સમતલ, પ્લગ ખોદવો નહીં.</text>
+      </svg>
+    </div>
+  </div>
+
+  <h2>3. BASELINES &amp; ROW PEGS · <span class="gu">બેઝલાઇન અને હાર ખૂંટીઓ</span> <span style="font-weight:400">(tape distance from start peg down the compass bearing)</span></h2>
+  <div class="grid g3" id="baselines">
+    <div class="box small">Load the FIELDSHEET code to fill baselines. / <span class="gu">કોડ લોડ કરો.</span></div>
+  </div>
+
+  <h2>4. FIELD PROCEDURE · <span class="gu">ક્ષેત્ર કાર્યપદ્ધતિ</span></h2>
+  <div class="steps">
+    <ol>
+      <li>Find <b>BM-0</b> with the KML/GPS. Fix a permanent red peg, number it BM-0, photograph it.</li>
+      <li>Lay the tape from the start peg on the <b>compass bearing</b>. Drive a <b>row peg</b> at each cumulative tape distance in Table 3.</li>
+      <li><b>Check with A-frame / line level:</b> drop from previous row peg must equal <b>VI ± <span class="t-tol">0.10</span> m</b>. If not, slide the peg up/down the baseline. <b>VI controls; tape is only a guide.</b></li>
+      <li>From each row peg walk the <b>true contour</b> sideways with the A-frame. Peg every <b><span class="t-pc">2.3</span> m (CCT)</b> or <b><span class="t-ps">4.0</span> m (SCT)</b>.</li>
+      <li>Mark with lime: <span class="t-tl">2.0</span> m trench + <span class="t-plug">0.30</span> m plug (CCT), or <span class="t-tl">2.0</span> m trench + <span class="t-gap">2.0</span> m gap (SCT). SCT: shift alternate rows by <span class="t-gap">2.0</span> m.</li>
+      <li>Dig <span class="t-dim">2.0 × 0.45 × 0.30</span> m. Bed level. Spoil downhill as a bund. Plugs stay undisturbed.</li>
+      <li>Rows from neighbouring baselines must meet; up to <span class="t-join">3</span> m mismatch along the slope is fine. Join by A-frame, not GPS.</li>
+      <li>Trees: shift the trench <b>along the contour</b> to stay ≥ <span class="t-tree">1.5</span> m from the trunk. Never up or down the slope.</li>
+      <li>Nala / drainage line (blue on map): <b>no trench</b>. Note it as a gully plug site.</li>
+    </ol>
+    <ol class="gu">
+      <li>KML/GPS થી <b>BM-0</b> શોધો. કાયમી લાલ ખૂંટી લગાવો, BM-0 લખો, ફોટો લો.</li>
+      <li>શરૂઆતની ખૂંટીથી <b>હોકાયંત્ર દિશા (બેરિંગ)</b> પર ટેપ પાથરો. કોષ્ટક 3 ના દરેક કુલ અંતરે <b>હાર ખૂંટી</b> લગાવો.</li>
+      <li><b>એ-ફ્રેમ / લાઇન લેવલથી તપાસો:</b> અગાઉની ખૂંટીથી ઊભો ઘટાડો <b>VI ± <span class="t-tol">0.10</span> મી</b> હોવો જોઈએ. ન હોય તો ખૂંટી બેઝલાઇન પર ઉપર/નીચે ખસેડો. <b>VI મુખ્ય છે, ટેપ માત્ર માર્ગદર્શક.</b></li>
+      <li>દરેક હાર ખૂંટીથી એ-ફ્રેમ વડે <b>સાચી સમોચ્ચ રેખા</b> પર બાજુમાં ચાલો. CCT માટે દર <b><span class="t-pc">2.3</span> મી</b>, SCT માટે દર <b><span class="t-ps">4.0</span> મી</b> ખૂંટી.</li>
+      <li>ચૂનાથી નિશાન: <span class="t-tl">2.0</span> મી ખાઈ + <span class="t-plug">0.30</span> મી પ્લગ (CCT), અથવા <span class="t-tl">2.0</span> મી ખાઈ + <span class="t-gap">2.0</span> મી જગ્યા (SCT). SCT માં એકાંતરે હાર <span class="t-gap">2.0</span> મી ખસેડો.</li>
+      <li><span class="t-dim">2.0 × 0.45 × 0.30</span> મી ખોદો. તળિયું સમતલ. માટી નીચેની બાજુ પાળા રૂપે. પ્લગ અખંડ રાખો.</li>
+      <li>પડોશી બેઝલાઇનની હાર મળવી જોઈએ; ઢોળાવ પર <span class="t-join">3</span> મી સુધીનો ફરક ચાલે. એ-ફ્રેમ મુજબ જોડો, GPS મુજબ નહીં.</li>
+      <li>ઝાડ: ખાઈ <b>સમોચ્ચ પર બાજુમાં</b> ખસેડો, થડથી ઓછામાં ઓછી <span class="t-tree">1.5</span> મી દૂર. ઉપર-નીચે ક્યારેય નહીં.</li>
+      <li>નાળું / વહેળો (નકશામાં વાદળી): <b>ખાઈ નહીં</b>. ગલી પ્લગ સ્થળ તરીકે નોંધો.</li>
+    </ol>
+  </div>
+
+  <div class="grid g2" style="margin-top:4px">
+    <div class="box dont"><b>DON'T:</b> dig across a nala · trench the crest line itself · exceed the sanctioned number · put spoil uphill · follow GPS instead of the A-frame · cut tree roots.</div>
+    <div class="box dont gu"><b>ન કરો:</b> નાળામાં ખાઈ · ટોચની રેખા પર ખાઈ · મંજૂર સંખ્યાથી વધુ ખાઈ · માટી ઉપરની બાજુ · A-ફ્રેમને બદલે GPS પર આધાર · ઝાડના મૂળ કાપવા.</div>
+  </div>
+
+  <div class="small" style="margin-top:4px">Map positions come from a 30 m DEM (±10–15 m on the ground). Use them only to find the area and BM-0; the A-frame sets the true row.
+    Gully plug sites in plot: <b id="f-gp">__</b> · drainage area excluded: <b id="f-dr">__</b> ha.</div>
+
+  <div class="sig">
+    <div>Beat Guard / <span class="gu">બીટ ગાર્ડ</span></div>
+    <div>Forester / <span class="gu">વનપાલ</span></div>
+    <div>RFO / <span class="gu">વન ક્ષેત્રપાલ</span></div>
+    <div>ACF</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var DEF = {tol: 0.10, pc: 2.3, ps: 4.0, tl: 2.0, tw: 0.45, td: 0.30, plug: 0.30, gap: 2.0, tree: 1.5, join: 3,
+             sctSlope: 33, bands: [[5,10],[10,15],[15,20],[20,25],[25,33],[33,40],[40,50]]};
+  var D = Object.assign({}, DEF);
+  var $ = function (id) { return document.getElementById(id); };
+  function f(x, d) { return (x === null || x === undefined || x === '' || isNaN(Number(x))) ? '—' : Number(x).toFixed(d); }
+  function setText(id, v) { var e = $(id); if (e) e.textContent = v; }
+  function setAll(cls, v) { var es = document.querySelectorAll('.' + cls); for (var i = 0; i < es.length; i++) es[i].textContent = v; }
+
+  function staff() {
+    var vi = parseFloat(String($('vi').value).replace(',', '.'));
+    var tb = $('staff'); tb.innerHTML = '';
+    D.bands.forEach(function (b) {
+      var mid = (b[0] + b[1]) / 2, s = mid / 100, ok = vi > 0;
+      var hi = ok ? vi / s : null, tape = ok ? hi * Math.sqrt(1 + s * s) : null;
+      var ty = mid < D.sctSlope ? 'CCT*' : 'SCT';
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + b[0] + '–' + b[1] + '</td><td>' + f(hi, 1) + '</td><td class="tape">' + f(tape, 1) + '</td><td>' + ty + '</td>';
+      tb.appendChild(tr);
+    });
+  }
+
+  function pattern() {
+    var sc = 12, x0 = 2, W = 205;
+    function cells(y, start, len, gapLen, fill) {
+      var out = '', x = start;
+      while (x < W) {
+        var w = Math.min(len * sc, W - x);
+        out += '<rect x="' + (x0 + x) + '" y="' + y + '" width="' + w + '" height="9" fill="' + fill + '" stroke="#111" stroke-width="0.6"/>';
+        x += (len + gapLen) * sc;
+      }
+      return out;
+    }
+    $('cct').innerHTML = cells(18, 0, D.tl, D.plug, '#e53935');
+    $('sct').innerHTML = cells(68, 0, D.tl, D.gap, '#fb8c00') + cells(86, D.gap * sc, D.tl, D.gap, '#fb8c00');
+    setText('cap-cct', D.tl.toFixed(1) + ' m trench + ' + D.plug.toFixed(2) + ' m undug plug, repeated');
+    setText('cap-sct', D.tl.toFixed(1) + ' m trench + ' + D.gap.toFixed(1) + ' m gap; next row shifted ' + D.gap.toFixed(1) + ' m');
+    setText('sx-w', D.tw.toFixed(2) + ' m wide'); setText('sx-d', D.td.toFixed(2) + ' m deep');
+  }
+
+  function constants() {
+    setAll('t-tol', D.tol.toFixed(2)); setAll('t-pc', D.pc.toFixed(1)); setAll('t-ps', D.ps.toFixed(1));
+    setAll('t-tl', D.tl.toFixed(1)); setAll('t-plug', D.plug.toFixed(2)); setAll('t-gap', D.gap.toFixed(1));
+    setAll('t-join', D.join); setAll('t-tree', D.tree);
+    setAll('t-dim', D.tl.toFixed(1) + ' × ' + D.tw.toFixed(2) + ' × ' + D.td.toFixed(2));
+    setText('f-tol', D.tol.toFixed(2));
+  }
+
+  function baselines(list) {
+    var host = $('baselines'); host.innerHTML = '';
+    if (!list || !list.length) { host.innerHTML = '<div class="box small">No baseline in code.</div>'; return; }
+    list.forEach(function (b) {
+      var div = document.createElement('div'); div.className = 'box bl';
+      var rows = (b.rows || []).slice(0, 10).map(function (r) {
+        return '<tr><td>' + r[0] + '</td><td>' + f(r[1], 1) + '</td><td class="tape">' + f(r[2], 1) + '</td><td style="width:22px"></td></tr>';
+      }).join('');
+      div.innerHTML = '<b>' + b.id + '</b> · start ' + b.start + ' · <b>bearing ' + f(b.brg, 0) + '°</b><br>' +
+        '<span class="small">start Lat ' + f(b.lat, 6) + ' Lon ' + f(b.lon, 6) + ' · ' + b.n + ' rows</span>' +
+        '<table style="margin-top:2px"><thead><tr><th>Row</th><th>prev→ m</th><th>total m</th><th>✓</th></tr></thead><tbody>' +
+        rows + '</tbody></table>';
+      host.appendChild(div);
+    });
+  }
+
+  function load(txt) {
+    var i = txt.indexOf('{'), j = txt.lastIndexOf('}');
+    if (txt.indexOf('FIELDSHEET') < 0 || i < 0 || j < i) throw new Error('No FIELDSHEET{…} code found');
+    var c = JSON.parse(txt.slice(i, j + 1));
+    ['tol','pc','ps','tl','tw','td','plug','gap','tree','join','sctSlope','bands'].forEach(function (k) { if (c[k] !== undefined) D[k] = c[k]; });
+    setText('f-plot', c.plot); setText('f-area', f(c.area, 2)); setText('f-date', c.date);
+    $('vi').value = f(c.vi, 2);
+    setText('f-bmlat', f(c.bmLat, 6)); setText('f-bmlon', f(c.bmLon, 6)); setText('f-ztop', f(c.ztop, 2));
+    setText('f-r01', f(c.r01, 2)); setText('f-cct', c.cct); setText('f-sct', c.sct); setText('f-tot', c.tot);
+    setText('f-tha', f(c.tha, 2)); setText('f-tc', f(c.tc, 2)); setText('f-ts', f(c.ts, 2)); setText('f-nrows', c.nrows);
+    setText('f-ew', f(c.ew, 1)); setText('f-rm', f(c.rm, 0)); setText('f-ph', f(c.ph, 0));
+    setText('f-T', c.T); setText('f-pd', f(c.pd, 1)); setText('f-gp', c.gp); setText('f-dr', f(c.dr, 2));
+    constants(); pattern(); staff(); baselines(c.bl);
+  }
+
+  $('vi').addEventListener('input', staff);
+  $('load').addEventListener('click', function () {
+    var m = $('msg');
+    try { load($('code').value); m.className = 'msg'; m.textContent = 'Loaded. Check the sheet, then Print.';
+      try { localStorage.setItem('ctl_fieldsheet', $('code').value); } catch (e) {}
+    } catch (e) { m.className = 'msg err'; m.textContent = 'Could not read the code: ' + e.message; }
+  });
+  $('print').addEventListener('click', function () { window.print(); });
+  $('clear').addEventListener('click', function () {
+    try { localStorage.removeItem('ctl_fieldsheet'); } catch (e) {}
+    location.reload();
+  });
+
+  constants(); pattern(); staff();
+  try { var saved = localStorage.getItem('ctl_fieldsheet'); if (saved) { $('code').value = saved; load(saved); } } catch (e) {}
+})();
+</script>
+</body>
+</html>
