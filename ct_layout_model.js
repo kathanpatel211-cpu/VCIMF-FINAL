@@ -35,7 +35,8 @@
 var CONFIG = {
   // --- Plot ---
   PLOT_ASSET: 'projects/khedbrahma-range/assets/sample_plot',
-  PLOT_FIELD: null,              // attribute holding plot name, else system:index
+  PLOT_FIELD: null,              // attribute holding plot name (e.g. 'Name'); null -> PLOT_NAME below
+  PLOT_NAME: 'KHEDBRAHMA_PLOT',  // name used on layers, report and export files when PLOT_FIELD is null
   DEMO_IF_MISSING: true,         // if PLOT_ASSET cannot be read, run on a demo polygon
   DEMO_PLOT: [[73.0230, 24.0450], [73.0290, 24.0450], [73.0290, 24.0490], [73.0230, 24.0490]],
   CRS: 'EPSG:32643', WORK_SCALE: 5,
@@ -549,7 +550,7 @@ function runPlot(plotFeature, plotName, outPanel) {
   }
   // §6.2 contour rows: polygon(z >= Z_k) -> rings -> lines -> intersect T
   var zC = zs.resample('bicubic').reproject(PC);             // sub-pixel row tracing grid
-  var region = Tg.bounds(MEP, PU).buffer(CONFIG.ROW_REGION_BUFFER_M, MEP, PU);
+  var region = Tg.bounds(MEP, PU).buffer(CONFIG.ROW_REGION_BUFFER_M, ME);
   var LET = ee.List(LETTERS);
   function rowsAtLevel(k) {
     k = ee.Number(k);
@@ -717,7 +718,7 @@ function runPlot(plotFeature, plotName, outPanel) {
     var x0 = ee.Number(xy.get(0)), y0 = ee.Number(xy.get(1));
     // §7.2.2 mean downslope aspect of T near the start point
     var st = aspSC.reduceRegion({reducer: ee.Reducer.mean().combine(ee.Reducer.count(), null, true),
-      geometry: p.buffer(CONFIG.BL_ASPECT_RADIUS_M, MEP, PU), scale: SC, crs: CONFIG.CRS, maxPixels: 1e9});
+      geometry: p.buffer(CONFIG.BL_ASPECT_RADIUS_M, ME), scale: SC, crs: CONFIG.CRS, maxPixels: 1e9});
     var cnt = ee.Number(st.get('s_count'));
     var ms = ee.Number(ee.Algorithms.If(cnt.gt(0), st.get('s_mean'), 0));
     var mc = ee.Number(ee.Algorithms.If(cnt.gt(0), st.get('c_mean'), 1));
@@ -1138,7 +1139,14 @@ function loadPlots() {
     fc = ee.FeatureCollection([ee.Feature(ee.Geometry.Polygon([CONFIG.DEMO_PLOT]), {name: 'DEMO'})]);
   }
   fc = ee.FeatureCollection(fc).limit(CONFIG.MAX_PLOTS);
-  var names = fc.aggregate_array(CONFIG.PLOT_FIELD || 'system:index').getInfo();
+  var names;
+  if (CONFIG.PLOT_FIELD) {
+    names = fc.aggregate_array(CONFIG.PLOT_FIELD).getInfo();
+  } else {
+    var n = fc.size().getInfo();
+    names = [];
+    for (var j = 0; j < n; j++) names.push(CONFIG.PLOT_NAME + (n > 1 ? '_' + (j + 1) : ''));
+  }
   return {fc: fc, list: fc.toList(CONFIG.MAX_PLOTS), names: names};
 }
 
