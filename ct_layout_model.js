@@ -188,7 +188,7 @@ function explodeFC(geom, minLen) {
   var PU = ee.Projection(CONFIG.CRS);
   return ee.FeatureCollection(ee.Geometry(geom).geometries().map(function (g) {
     g = ee.Geometry(g);
-    return ee.Feature(g, {gtype: g.type(), glen: g.length(CONFIG.ME, PU)});
+    return ee.Feature(g, {gtype: g.type(), glen: g.length(ee.ErrorMargin(CONFIG.ME, 'projected'), PU)});
   })).filter(ee.Filter.eq('gtype', 'LineString')).filter(ee.Filter.gte('glen', minLen));
 }
 
@@ -298,6 +298,7 @@ function runPlot(plotFeature, plotName, outPanel) {
   var P5 = PU.atScale(CONFIG.WORK_SCALE);
   var PC = PU.atScale(CONFIG.CONTOUR_SCALE);
   var ME = CONFIG.ME, SC = CONFIG.WORK_SCALE, PIX = SC * SC;
+  var MEP = ee.ErrorMargin(CONFIG.ME, 'projected');           // error margin in UTM metres (needed when proj is given)
   var L = plotName + ' | ';
   var SRC = {};
   function rr(img, reducer, geom, scale) {
@@ -311,7 +312,7 @@ function runPlot(plotFeature, plotName, outPanel) {
   var plotFC = ee.FeatureCollection([ee.Feature(plot)]);
   var bufA = plot.buffer(CONFIG.AOI_BUFFER_M, ME);           // §5.2.1 300 m buffer
   var bufR = plot.buffer(CONFIG.RAIN_BUFFER_M, ME * 10);     // §4.1 2 km buffer
-  var areaHa = plot.area(ME, PU).divide(1e4);
+  var areaHa = plot.area(MEP, PU).divide(1e4);
   Map.centerObject(plot, CONFIG.ZOOM);
 
   // ===== 4. DATA ==============================================================
@@ -548,7 +549,7 @@ function runPlot(plotFeature, plotName, outPanel) {
   }
   // §6.2 contour rows: polygon(z >= Z_k) -> rings -> lines -> intersect T
   var zC = zs.resample('bicubic').reproject(PC);             // sub-pixel row tracing grid
-  var region = Tg.bounds(ME, PU).buffer(CONFIG.ROW_REGION_BUFFER_M, ME, PU);
+  var region = Tg.bounds(MEP, PU).buffer(CONFIG.ROW_REGION_BUFFER_M, MEP, PU);
   var LET = ee.List(LETTERS);
   function rowsAtLevel(k) {
     k = ee.Number(k);
@@ -566,7 +567,7 @@ function runPlot(plotFeature, plotName, outPanel) {
     }).flatten();
     var segs = rings.map(function (rf) {
       var line = rf.geometry().simplify(CONFIG.ROW_SIMPLIFY_M, PU);       // §6.2.6 smooth
-      return explodeFC(line.intersection(Tg, ME, PU), CONFIG.MIN_ROW_M);  // §6.2.4-5
+      return explodeFC(line.intersection(Tg, MEP, PU), CONFIG.MIN_ROW_M);  // §6.2.4-5
     }).flatten().map(function (s) {
       return s.set('lon', ee.List(s.geometry().centroid(ME).transform('EPSG:4326', ME).coordinates()).get(0));
     }).sort('lon');
@@ -592,20 +593,20 @@ function runPlot(plotFeature, plotName, outPanel) {
       var v = ee.Algorithms.If(gd.contains(key), gd.get(key), 0);
       return ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(v, null), 0, v));
     }
-    return r.set({LENGTH_m: rnd(r.geometry().length(ME, PU), 2), MEAN_SLOPE_pct: rnd(g('slope_mean'), 1),
+    return r.set({LENGTH_m: rnd(r.geometry().length(MEP, PU), 2), MEAN_SLOPE_pct: rnd(g('slope_mean'), 1),
       MEAN_HI_m: rnd(g('hi_mean'), 2), DIST_FROM_PREV_ROW_ground_m: rnd(g('dg_median'), 2), ROW_PRI: g('pri_mean')});
   });
 
   // §6.3 trench cutting: CCT [2.0 trench + 0.30 plug], SCT [2.0 trench + 2.0 gap], even rows offset 2.0 m
   function cutPart(p, pch, off, type) {
     var g = p.geometry();
-    var len = g.length(ME, PU);
-    var pieces = g.cutLines(cutDistances(len, pch, off), ME, PU).geometries();
+    var len = g.length(MEP, PU);
+    var pieces = g.cutLines(cutDistances(len, pch, off), MEP, PU).geometries();
     var parity = ee.Number(off).gt(0);                       // offset rows keep odd pieces
     return ee.FeatureCollection(ee.List.sequence(0, pieces.size().subtract(1)).map(function (i) {
       i = ee.Number(i);
       var pg = ee.Geometry(pieces.get(i));
-      return ee.Feature(pg, {keep: i.mod(2).eq(parity), LEN_m: pg.length(ME, PU), TYPE: type});
+      return ee.Feature(pg, {keep: i.mod(2).eq(parity), LEN_m: pg.length(MEP, PU), TYPE: type});
     })).filter(ee.Filter.eq('keep', 1))
       .filter(ee.Filter.rangeContains('LEN_m', CONFIG.TR_LEN - CONFIG.LEN_TOL, CONFIG.TR_LEN + CONFIG.LEN_TOL));
   }
@@ -614,9 +615,9 @@ function runPlot(plotFeature, plotName, outPanel) {
     var k = ee.Number(r.get('k'));
     var off = ee.Number(ee.Algorithms.If(k.mod(2).eq(0), CONFIG.SCT_GAP, 0));
     var minPart = CONFIG.TR_LEN - CONFIG.LEN_TOL;
-    var c = explodeFC(g.intersection(TgC, ME, PU), minPart)
+    var c = explodeFC(g.intersection(TgC, MEP, PU), minPart)
       .map(function (p) { return cutPart(p, d.P_CCT, 0, 'CCT'); }).flatten();
-    var s = explodeFC(g.intersection(TgS, ME, PU), minPart)
+    var s = explodeFC(g.intersection(TgS, MEP, PU), minPart)
       .map(function (p) { return cutPart(p, d.P_SCT, off, 'SCT'); }).flatten();  // canopy-SCT inside CCT rows too
     var all = c.merge(s);
     var n = all.size();
@@ -716,7 +717,7 @@ function runPlot(plotFeature, plotName, outPanel) {
     var x0 = ee.Number(xy.get(0)), y0 = ee.Number(xy.get(1));
     // §7.2.2 mean downslope aspect of T near the start point
     var st = aspSC.reduceRegion({reducer: ee.Reducer.mean().combine(ee.Reducer.count(), null, true),
-      geometry: p.buffer(CONFIG.BL_ASPECT_RADIUS_M, ME, PU), scale: SC, crs: CONFIG.CRS, maxPixels: 1e9});
+      geometry: p.buffer(CONFIG.BL_ASPECT_RADIUS_M, MEP, PU), scale: SC, crs: CONFIG.CRS, maxPixels: 1e9});
     var cnt = ee.Number(st.get('s_count'));
     var ms = ee.Number(ee.Algorithms.If(cnt.gt(0), st.get('s_mean'), 0));
     var mc = ee.Number(ee.Algorithms.If(cnt.gt(0), st.get('c_mean'), 1));
@@ -727,10 +728,10 @@ function runPlot(plotFeature, plotName, outPanel) {
     var blId = s.get('BL_ID');
     // §7.2.3 row crossing points (nearest crossing to the start)
     var cross = rows.filterBounds(line).map(function (r) {
-      var inter = line.intersection(r.geometry(), ME, PU);
+      var inter = line.intersection(r.geometry(), MEP, PU);
       var pts = ee.FeatureCollection(inter.geometries().map(function (gg) {
         gg = ee.Geometry(gg);
-        return ee.Feature(gg, {gtype: gg.type(), H: gg.distance(p, ME, PU)});
+        return ee.Feature(gg, {gtype: gg.type(), H: gg.distance(p, MEP, PU)});
       })).filter(ee.Filter.eq('gtype', 'Point')).sort('H');
       return ee.Algorithms.If(pts.size().gt(0), ee.Feature(pts.first()).set({
         BL_ID: blId, ROW_ID: r.get('ROW_ID'), k: r.get('k'), ROW_ELEV_m: r.get('ROW_ELEV_m')}), null);
@@ -870,11 +871,11 @@ function runPlot(plotFeature, plotName, outPanel) {
     Map.addLayer(trenches.filter(ee.Filter.eq('TYPE', 'SCT')).style({color: 'ff9900', width: 3}), {}, L + 'Trenches SCT (orange)');
     // white dashed baselines (alternate 5 m pieces)
     var dashes = baselines.map(function (f) {
-      var gU = f.geometry().transform(PU, ME), len = gU.length(ME, PU);
+      var gU = f.geometry().transform(PU, ME), len = gU.length(MEP, PU);
       var nD = len.divide(CONFIG.BL_DASH_M).floor();
       var cuts = ee.List.sequence(1, nD.max(1)).map(function (i) { return ee.Number(i).multiply(CONFIG.BL_DASH_M); })
         .filter(ee.Filter.lt('item', len));
-      var pcs = gU.cutLines(cuts, ME, PU).geometries();
+      var pcs = gU.cutLines(cuts, MEP, PU).geometries();
       return ee.FeatureCollection(ee.List.sequence(0, pcs.size().subtract(1)).map(function (i) {
         return ee.Feature(ee.Geometry(pcs.get(i)), {keep: ee.Number(i).mod(2).eq(0)});
       })).filter(ee.Filter.eq('keep', 1));
@@ -1016,7 +1017,7 @@ function runPlot(plotFeature, plotName, outPanel) {
         var z = ee.Number(f.get('ZCODE'));
         return f.set({CLASS: ee.String('S').cat(z.divide(10).floor().format('%.0f')),
           TYPE: ee.String(ee.Algorithms.If(z.mod(10).eq(1), 'CCT', 'SCT')),
-          AREA_HA: rnd(f.geometry().area(ME, PU).divide(1e4), 4)});
+          AREA_HA: rnd(f.geometry().area(MEP, PU).divide(1e4), 4)});
       });
     Export.table.toDrive({collection: zones, description: pre + '_ZONES_SHP', folder: F,
       fileNamePrefix: pre + '_ZONES', fileFormat: 'SHP'});
