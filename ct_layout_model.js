@@ -96,6 +96,10 @@ var CONFIG = {
   // --- Output ---
   DRIVE_FOLDER: 'CT_LAYOUT_KHEDBRAHMA', MAX_PLOTS: 5, RUN_EXPORTS: true,
   SHOW_VECTOR_LAYERS: true, ZOOM: 16,
+  // Fast map display: trench/row vectors are heavy to draw live. Run the *_ASSET export tasks once;
+  // on the next Run the map loads rows and trenches from these saved assets instantly.
+  ASSET_ROOT: 'projects/khedbrahma-range/assets/',  // folder you can write to
+  CACHE_TO_ASSET: true,
   STAFF_BANDS: [[5, 10], [10, 15], [15, 20], [20, 25], [25, 33], [33, 40], [40, 50]]
 };
 
@@ -112,7 +116,7 @@ function derived() {
 }
 
 // §3.3 Fallback rule: client-side asset check inside try/catch
-function safeLoad(id, label) {
+function safeLoad(id, label, quiet) {
   if (!id) return null;
   try {
     var info = ee.data.getAsset(id);
@@ -123,7 +127,7 @@ function safeLoad(id, label) {
     if (t === 'TABLE' || t === 'FEATURECOLLECTION') return ee.FeatureCollection(id);
     throw new Error('unknown type ' + t);
   } catch (e) {
-    print('WARN: ' + label + ' unavailable, using fallback');
+    if (!quiet) print('WARN: ' + label + ' unavailable, using fallback');
     return null;
   }
 }
@@ -865,11 +869,26 @@ function runPlot(plotFeature, plotName, outPanel) {
   Map.addLayer(typeT, {min: 1, max: 2, palette: ['00ffff', 'ff00ff']}, L + 'Treated set T (cyan CCT, magenta SCT)');
   Map.addLayer(CR.updateMask(Tmask), {min: 0, max: 1, palette: ['d7191c', 'fdae61', 'ffffbf', 'a6d96a', '1a9641']},
     L + 'Capture ratio CR (design storm)', false);
+  // Contour trench lines as a raster: same levels Z_k = z_top - k VI, drawn from the 2 m DEM grid.
+  // Loads in seconds and always shows where every trench row runs (inside T).
+  var lvlC = ee.Image.constant(zTop).subtract(zC).divide(VI).floor().int();
+  var lineC = lvlC.focalMax(1, 'square', 'pixels').neq(lvlC.focalMin(1, 'square', 'pixels')).reproject(PC);
+  Map.addLayer(lineC.updateMask(inPlot).selfMask(), {palette: ['bdbdbd']}, L + 'All contour levels in plot (VI interval)', false);
+  Map.addLayer(lineC.and(typeT.eq(1).unmask(0)).selfMask(), {palette: ['ff0000']}, L + 'CONTOUR TRENCH LINES - CCT rows (red)');
+  Map.addLayer(lineC.and(typeT.eq(2).unmask(0)).selfMask(), {palette: ['ff9900']}, L + 'CONTOUR TRENCH LINES - SCT rows (orange)');
+  // Vector rows / trenches: from saved assets if present (instant), else computed live (slow)
+  var assetBase = CONFIG.ASSET_ROOT + sanitize(plotName);
+  var cRows = CONFIG.CACHE_TO_ASSET ? safeLoad(assetBase + '_ROWS', 'rows asset', true) : null;
+  var cTr = CONFIG.CACHE_TO_ASSET ? safeLoad(assetBase + '_TRENCHES', 'trench asset', true) : null;
+  var rowsShow = cRows ? ee.FeatureCollection(cRows) : rows;
+  var trShow = cTr ? ee.FeatureCollection(cTr) : trenches;
+  print(L + (cTr ? 'Map shows rows/trenches from saved assets ' + assetBase + '_ROWS / _TRENCHES (delete them after changing CONFIG).'
+    : 'Rows/trenches are computed live (may take minutes). For instant display run the _ROWS_ASSET and _TRENCHES_ASSET tasks once, then Run again.'));
   if (CONFIG.SHOW_VECTOR_LAYERS) {
     Map.addLayer(drainPoly.style({color: '2171b5', fillColor: '2171b555', width: 1}), {}, L + 'Drainage lines', false);
-    Map.addLayer(rows.style({color: 'ffffff', width: 1}), {}, L + 'Rows (see printed ROW_ID list)');
-    Map.addLayer(trenches.filter(ee.Filter.eq('TYPE', 'CCT')).style({color: 'ff0000', width: 3}), {}, L + 'Trenches CCT (red)');
-    Map.addLayer(trenches.filter(ee.Filter.eq('TYPE', 'SCT')).style({color: 'ff9900', width: 3}), {}, L + 'Trenches SCT (orange)');
+    Map.addLayer(rowsShow.style({color: 'ffffff', width: 1}), {}, L + 'Rows vector (ROW_ID)', !!cRows);
+    Map.addLayer(trShow.filter(ee.Filter.eq('TYPE', 'CCT')).style({color: 'ff0000', width: 4}), {}, L + 'Trenches CCT 2 m cells (red)');
+    Map.addLayer(trShow.filter(ee.Filter.eq('TYPE', 'SCT')).style({color: 'ff9900', width: 4}), {}, L + 'Trenches SCT 2 m cells (orange)');
     // white dashed baselines (alternate 5 m pieces)
     var dashes = baselines.map(function (f) {
       var gU = f.geometry().transform(PU, ME), len = gU.length(MEP, PU);
@@ -1028,7 +1047,11 @@ function runPlot(plotFeature, plotName, outPanel) {
         HI.updateMask(Tmask).rename('HI_local'), CR.updateMask(Tmask)).toFloat(),
       description: pre + '_ZONEMAP', folder: F, fileNamePrefix: pre + '_ZONEMAP', region: plot,
       scale: SC, crs: CONFIG.CRS, maxPixels: 1e10});
-    print(L + 'Exports queued (Tasks tab -> RUN): TRENCHES KML+CSV, ROWS KML+SHP, BASELINES KML, CHAINAGE CSV, ZONES SHP, SUMMARY CSV, ZONEMAP GeoTIFF');
+    if (CONFIG.CACHE_TO_ASSET && !cTr) {
+      Export.table.toAsset({collection: trenches, description: pre + '_TRENCHES_ASSET', assetId: assetBase + '_TRENCHES'});
+      Export.table.toAsset({collection: rows, description: pre + '_ROWS_ASSET', assetId: assetBase + '_ROWS'});
+    }
+    print(L + 'Exports queued (Tasks tab -> RUN): TRENCHES/ROWS ASSET (for fast map), TRENCHES KML+CSV, ROWS KML+SHP, BASELINES KML, CHAINAGE CSV, ZONES SHP, SUMMARY CSV, ZONEMAP GeoTIFF');
   }
 
   // ===== 14. QA ===============================================================
