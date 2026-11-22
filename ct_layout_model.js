@@ -358,12 +358,14 @@ function runPlot(plotFeature, plotName, outPanel) {
     return ee.Feature(null, {year: y, pmax: v});
   })).filter(ee.Filter.notNull(['pmax']));
   var zmaxN = ee.Number(rr(zs, ee.Reducer.max(), plot).get('z'));
-  var bmLL = rr(ee.Image.pixelLonLat().updateMask(zs.gte(zmaxN.subtract(0.001)).and(inPlot)),
-    ee.Reducer.first(), plot);
+  var bmLL = ee.Dictionary(rr(ee.Image.pixelLonLat().updateMask(zs.gte(zmaxN.subtract(0.05)).and(inPlot)),
+    ee.Reducer.first(), plot));
+  var plotCen = ee.List(plot.centroid(ME).coordinates());     // fallback if the crest pixel is not found
   var A = ee.Dictionary({
     area_ha: areaHa, years: annual.aggregate_array('year'), pmax: annual.aggregate_array('pmax'),
     zmax: zmaxN, zmin: rr(zs, ee.Reducer.min(), plot).get('z'),
-    bm_lon: bmLL.get('longitude'), bm_lat: bmLL.get('latitude'),
+    bm_lon: ee.Algorithms.If(bmLL.get('longitude'), bmLL.get('longitude'), plotCen.get(0)),
+    bm_lat: ee.Algorithms.If(bmLL.get('latitude'), bmLL.get('latitude'), plotCen.get(1)),
     meanTan: rr(tanT, ee.Reducer.mean(), plot).get('tan')
   }).getInfo();                                              // client step 1 (small)
   var zTop = A.zmax, zMinPlot = A.zmin;
@@ -690,6 +692,9 @@ function runPlot(plotFeature, plotName, outPanel) {
 
   // ===== 10. STAKING ==========================================================
   // §7.1 BM-0 at z_top ; §7.2 crest points (TPI > 1.5 m) every 40 m
+  if (typeof A.bm_lon !== 'number' || typeof A.bm_lat !== 'number') {
+    say(L + 'STOP: could not locate BM-0 (lon ' + A.bm_lon + ', lat ' + A.bm_lat + ').', {color: 'red'}); return;
+  }
   var bmPt = ee.Geometry.Point([A.bm_lon, A.bm_lat]);
   var bmFeat = ee.Feature(bmPt, {KIND: 'BM-0', z: zTop, name: 'BM-0',
     description: 'BM-0 crest benchmark · Elev ' + fmt(zTop, 2) + ' m · Lat ' + fmt(A.bm_lat, 6) +
