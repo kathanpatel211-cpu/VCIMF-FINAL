@@ -1,0 +1,1011 @@
+[
+ {
+  "id": "A0",
+  "key": "truecolour",
+  "group": "A. Vegetation and land cover",
+  "title": "Satellite Image (True Colour)",
+  "sub": "Sentinel-2 natural colour, post-monsoon (15 Oct - 30 Nov 2025) median",
+  "unit": "RGB",
+  "scale": 10,
+  "type": "rgb",
+  "min": 0.02,
+  "max": 0.25,
+  "palette": [],
+  "about": "What the land looks like from space after the monsoon: green is active vegetation, brown and grey are open soil and rock, dark patches are water or dense shade.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked.",
+  "used": "Context and visual check of all other layers."
+ },
+ {
+  "id": "A1",
+  "key": "canopy",
+  "group": "A. Vegetation and land cover",
+  "title": "Tree Canopy Cover",
+  "sub": "Share of each 30 m cell under tree crowns >= 5 m tall",
+  "unit": "%",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 60,
+  "palette": [
+   "f7fcb9",
+   "c2e699",
+   "78c679",
+   "31a354",
+   "006837"
+  ],
+  "about": "Canopy cover from a 1 m global canopy-height map: the share of each 30 m cell covered by trees at least 5 m tall. 40 % or more is dense forest (C1, protected).",
+  "data": "Meta / WRI Global Canopy Height 1 m (read at 4.8 m); Hansen loss 2019+ removed.",
+  "used": "N1 Canopy deficit; constraint C1; ANR and blank-area rules."
+ },
+ {
+  "id": "A7",
+  "key": "chm",
+  "group": "A. Vegetation and land cover",
+  "title": "Canopy Height",
+  "sub": "Height of vegetation above ground",
+  "unit": "m",
+  "scale": 10,
+  "type": "cont",
+  "min": 0,
+  "max": 15,
+  "palette": [
+   "440154",
+   "3b528b",
+   "21918c",
+   "5ec962",
+   "fde725"
+  ],
+  "about": "Height of the vegetation canopy above the ground from a global 1 m model. Most of the range is below 2 m: open scrub and grass.",
+  "data": "Meta / WRI Global Canopy Height 1 m (v1).",
+  "used": "Source of canopy cover (A1) and dense-forest distance (F4)."
+ },
+ {
+  "id": "A2",
+  "key": "ndvi_peak",
+  "group": "A. Vegetation and land cover",
+  "title": "Greenness at Peak Season (NDVI)",
+  "sub": "Sentinel-2 NDVI, mid-October to November median 2021-2025",
+  "unit": "NDVI",
+  "scale": 10,
+  "type": "cont",
+  "min": 0,
+  "max": 0.8,
+  "palette": [
+   "f7fcb9",
+   "c2e699",
+   "78c679",
+   "31a354",
+   "006837"
+  ],
+  "about": "NDVI (Normalised Difference Vegetation Index) measures green leaf density: about 0.1 for bare soil, 0.3-0.5 for grass and scrub, above 0.6 for dense green vegetation.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked, 2021-2025.",
+  "used": "N2 Bare soil at peak greenness (via vegetation cover)."
+ },
+ {
+  "id": "A3",
+  "key": "ndvi_dry",
+  "group": "A. Vegetation and land cover",
+  "title": "Greenness in Dry Season (NDVI)",
+  "sub": "Sentinel-2 NDVI, April-May median 2021-2025",
+  "unit": "NDVI",
+  "scale": 10,
+  "type": "cont",
+  "min": 0,
+  "max": 0.6,
+  "palette": [
+   "f7fcb9",
+   "c2e699",
+   "78c679",
+   "31a354",
+   "006837"
+  ],
+  "about": "Green cover at the end of the dry season. Areas green in April-May hold evergreen trees, irrigated land or invasive evergreen shrubs.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked, 2021-2025.",
+  "used": "N7 Shrub invasion signal."
+ },
+ {
+  "id": "A4",
+  "key": "agb",
+  "group": "A. Vegetation and land cover",
+  "title": "Above-Ground Biomass",
+  "sub": "Woody biomass, 2022",
+  "unit": "t/ha",
+  "scale": 100,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "f7fcb9",
+   "c2e699",
+   "78c679",
+   "31a354",
+   "006837"
+  ],
+  "about": "Above-ground woody biomass in tonnes of dry matter per hectare.",
+  "data": "ESA CCI Above-Ground Biomass v6.0, 100 m.",
+  "used": "N5 Biomass deficit."
+ },
+ {
+  "id": "A5",
+  "key": "landcover",
+  "group": "A. Vegetation and land cover",
+  "title": "Land Cover",
+  "sub": "ESA WorldCover 2021, 10 m",
+  "unit": "class",
+  "scale": 10,
+  "type": "cat",
+  "min": 1,
+  "max": 8,
+  "palette": [
+   "006400",
+   "ffbb22",
+   "ffff4c",
+   "f096ff",
+   "fa0000",
+   "b4b4b4",
+   "0064c8",
+   "0096a0"
+  ],
+  "classes": [
+   [
+    1,
+    "Tree cover",
+    "006400"
+   ],
+   [
+    2,
+    "Shrubland",
+    "ffbb22"
+   ],
+   [
+    3,
+    "Grassland",
+    "ffff4c"
+   ],
+   [
+    4,
+    "Cropland",
+    "f096ff"
+   ],
+   [
+    5,
+    "Built-up",
+    "fa0000"
+   ],
+   [
+    6,
+    "Bare / sparse",
+    "b4b4b4"
+   ],
+   [
+    7,
+    "Water",
+    "0064c8"
+   ],
+   [
+    8,
+    "Herbaceous wetland",
+    "0096a0"
+   ]
+  ],
+  "about": "Global 10 m land-cover map. It defines the natural-vegetation landscape used to scale the indicators and the built-up and cropland constraints.",
+  "data": "ESA WorldCover v200 (2021), 10 m.",
+  "used": "Anchors (classes 10/20/30/60); C5 built-up; C6 cropland; C7 bare rock; G5."
+ },
+ {
+  "id": "A6",
+  "key": "shrub",
+  "group": "A. Vegetation and land cover",
+  "title": "Evergreen Shrub Invasion Signal",
+  "sub": "Dry-season green, low seasonal change, canopy < 20 %",
+  "unit": "class",
+  "scale": 10,
+  "type": "cat",
+  "min": 1,
+  "max": 1,
+  "palette": [
+   "a50f15"
+  ],
+  "classes": [
+   [
+    1,
+    "Shrub-invasion signal",
+    "a50f15"
+   ]
+  ],
+  "about": "Pixels that stay green in April-May (NDVI 0.30-0.60), change little between seasons and have little tree canopy: the typical signature of invasive evergreen shrubs such as Prosopis juliflora or Lantana.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked, 2021-2025.",
+  "used": "N7 Evergreen shrub invasion; INVASIVE_CLEAR_THEN_PLANT."
+ },
+ {
+  "id": "B1",
+  "key": "bsi",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Bare Soil Index",
+  "sub": "Sentinel-2 BSI at peak greenness, 2021-2025",
+  "unit": "BSI",
+  "scale": 10,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "fff7bc",
+   "fee391",
+   "fec44f",
+   "d95f0e",
+   "993404"
+  ],
+  "about": "BSI = ((SWIR + Red) - (NIR + Blue)) / ((SWIR + Red) + (NIR + Blue)). Positive values mean exposed soil dominates even in the greenest season.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked.",
+  "used": "N2 Bare soil at peak greenness."
+ },
+ {
+  "id": "B2",
+  "key": "rusle",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Soil Erosion Risk (RUSLE)",
+  "sub": "Potential soil loss A = R x K x LS x C",
+  "unit": "t/ha/yr",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 25,
+  "palette": [
+   "fff7bc",
+   "fee391",
+   "fec44f",
+   "d95f0e",
+   "993404"
+  ],
+  "about": "Potential soil loss from the Revised Universal Soil Loss Equation (support practice P = 1). Under 5 t/ha/yr is slight, 5-10 moderate, 10-20 high, over 20 very high.",
+  "data": "R: CHIRPS rainfall (Singh et al. 1981); K: SoilGrids; LS: MERIT Hydro; C: Sentinel-2 NDVI.",
+  "used": "N4 Erosion; SOIL_STABILISATION_FIRST."
+ },
+ {
+  "id": "B3",
+  "key": "restrend",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Rainfall-Corrected Greenness Trend (RESTREND)",
+  "sub": "Sen's slope of NDVI residuals 2013-2025",
+  "unit": "NDVI/yr",
+  "scale": 30,
+  "type": "cont",
+  "min": -0.01,
+  "max": 0.01,
+  "palette": [
+   "d7191c",
+   "fdae61",
+   "ffffbf",
+   "a6d96a",
+   "1a9641"
+  ],
+  "about": "Each year's post-monsoon NDVI is compared with what that year's rainfall predicts, and the trend of the difference is measured. Red means decline not explained by rainfall (human-induced degradation); green means recovery.",
+  "data": "Landsat 5/7/8/9 Collection 2 Level-2, 30 m; CHIRPS June-September rainfall.",
+  "used": "N3 NDVI decline; degradation evidence DE3."
+ },
+ {
+  "id": "B5",
+  "key": "ndvichange",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Greenness Change Since 2000-2005",
+  "sub": "NDVI 2021-2025 minus 2000-2005 (September-November)",
+  "unit": "NDVI",
+  "scale": 30,
+  "type": "cont",
+  "min": -0.4,
+  "max": 0.4,
+  "palette": [
+   "d7191c",
+   "fdae61",
+   "ffffbf",
+   "a6d96a",
+   "1a9641"
+  ],
+  "about": "Change in post-monsoon greenness over about 20 years; positive values mean greener today. Landsat 8/9 reads slightly higher than Landsat 5/7, so about +0.02 to +0.04 can be sensor difference.",
+  "data": "Landsat 5/7 (2000-2005) and Landsat 8/9 (2021-2025).",
+  "used": "Degradation evidence DE4."
+ },
+ {
+  "id": "B6",
+  "key": "tc2000",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Tree Cover in 2000",
+  "sub": "Hansen Global Forest Change",
+  "unit": "%",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 50,
+  "palette": [
+   "f7fcb9",
+   "c2e699",
+   "78c679",
+   "31a354",
+   "006837"
+  ],
+  "about": "Tree canopy cover in 2000. With today's canopy, it shows whether the land was ever forested in the satellite era.",
+  "data": "Hansen / UMD Global Forest Change v1.13, 30 m.",
+  "used": "Degradation evidence DE1."
+ },
+ {
+  "id": "B9",
+  "key": "lossyear",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Year of Tree Cover Loss",
+  "sub": "Hansen loss 2001-2025 (blank = no loss)",
+  "unit": "year",
+  "scale": 30,
+  "type": "cont",
+  "min": 2001,
+  "max": 2025,
+  "palette": [
+   "ffffb2",
+   "fecc5c",
+   "fd8d3c",
+   "f03b20",
+   "bd0026"
+  ],
+  "about": "Year in which tree cover was lost. Cells without loss are left blank.",
+  "data": "Hansen / UMD Global Forest Change v1.13, 30 m.",
+  "used": "Degradation evidence DE2; N6 unrecovered loss."
+ },
+ {
+  "id": "B7",
+  "key": "fire",
+  "group": "B. Degradation, erosion and fire",
+  "title": "Fire Frequency 2015-2025",
+  "sub": "Number of years with fire detected",
+  "unit": "years",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 5,
+  "palette": [
+   "fff5eb",
+   "fdbe85",
+   "fd8d3c",
+   "d94701",
+   "8c2d04"
+  ],
+  "about": "Number of distinct years in which fire was detected. VIIRS was unavailable from January 2022 to September 2023; MODIS burned area fills the gap.",
+  "data": "VIIRS 375 m active fire; MODIS MCD64A1 burned area 500 m.",
+  "used": "F13 Low fire frequency; FIRE_PROTECTION_FIRST."
+ },
+ {
+  "id": "C1",
+  "key": "cti",
+  "group": "C. Moisture and water",
+  "title": "Topographic Wetness (CTI)",
+  "sub": "Compound Topographic Index",
+  "unit": "index",
+  "scale": 90,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "CTI = ln(upslope area / tan slope). High values are valley floors and depressions that collect run-off; low values are ridges that shed water.",
+  "data": "Hydrography90m (Amatulli et al. 2022), 90 m.",
+  "used": "F1 Wetness (15 points)."
+ },
+ {
+  "id": "C7",
+  "key": "ndmi",
+  "group": "C. Moisture and water",
+  "title": "Vegetation and Surface Moisture (NDMI)",
+  "sub": "Sentinel-2 NDMI, mid-October to November 2021-2025",
+  "unit": "NDMI",
+  "scale": 10,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "NDMI = (NIR - SWIR) / (NIR + SWIR) tracks water in leaves and the surface. Higher values mean moister vegetation and ground after the monsoon.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked.",
+  "used": "Moisture context; basis of the moisture-retention layer C4."
+ },
+ {
+  "id": "C4",
+  "key": "moist",
+  "group": "C. Moisture and water",
+  "title": "Post-Monsoon Moisture Retention",
+  "sub": "NDMI change mid-October to mid-November",
+  "unit": "dNDMI",
+  "scale": 20,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "How fast the land dries after the monsoon. Values closer to zero lose moisture slowly, so planted seedlings have water for longer.",
+  "data": "Sentinel-2 L2A, 10 m, Cloud Score+ masked, 2021-2025.",
+  "used": "SMC rules (driest quartile and driest half)."
+ },
+ {
+  "id": "C2",
+  "key": "awc",
+  "group": "C. Moisture and water",
+  "title": "Soil Available Water Capacity",
+  "sub": "Plant-available water in the top 30 cm",
+  "unit": "vol %",
+  "scale": 250,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "Water held between field capacity (-33 kPa) and wilting point (-1500 kPa).",
+  "data": "SoilGrids 2.0 water retention (wv0033, wv1500), 250 m.",
+  "used": "F2 Soil water capacity (10 points)."
+ },
+ {
+  "id": "C3",
+  "key": "wb",
+  "group": "C. Moisture and water",
+  "title": "Climatic Water Balance",
+  "sub": "Mean annual rainfall minus potential evapotranspiration, 2005-2024",
+  "unit": "mm/yr",
+  "scale": 500,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "Annual water deficit: evaporative demand exceeds rainfall everywhere, so values are negative; less negative is wetter.",
+  "data": "CHIRPS (~5.5 km) and MODIS MOD16A2GF PET (500 m).",
+  "used": "F3 Climatic water balance (5 points)."
+ },
+ {
+  "id": "C6",
+  "key": "rain",
+  "group": "C. Moisture and water",
+  "title": "Mean Annual Rainfall",
+  "sub": "CHIRPS 2005-2024",
+  "unit": "mm/yr",
+  "scale": 1000,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "Mean annual rainfall over 20 years.",
+  "data": "CHIRPS daily rainfall, ~5.5 km.",
+  "used": "Water balance F3; erosivity R in RUSLE; RESTREND."
+ },
+ {
+  "id": "C5",
+  "key": "water",
+  "group": "C. Moisture and water",
+  "title": "Distance to Seasonal Water",
+  "sub": "Distance to water present >= 3 months a year",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "08519c",
+   "3182bd",
+   "6baed6",
+   "bdd7e7",
+   "eff3ff"
+  ],
+  "about": "Distance to the nearest seasonal water body, such as a tank, check-dam pond or river pool.",
+  "data": "JRC Global Surface Water v1.4, 30 m.",
+  "used": "F4 Near seasonal water (5 points)."
+ },
+ {
+  "id": "C8",
+  "key": "gsw",
+  "group": "C. Moisture and water",
+  "title": "Surface Water Occurrence",
+  "sub": "Share of months with water, 1984-2021",
+  "unit": "%",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 100,
+  "palette": [
+   "eff3ff",
+   "bdd7e7",
+   "6baed6",
+   "3182bd",
+   "08519c"
+  ],
+  "about": "How often each 30 m cell was under water in 37 years of Landsat. 50 % or more is permanent water and is excluded (C2).",
+  "data": "JRC Global Surface Water v1.4, 30 m.",
+  "used": "Constraint C2; F4."
+ },
+ {
+  "id": "D0",
+  "key": "elev",
+  "group": "D. Terrain and soil depth",
+  "title": "Elevation",
+  "sub": "Height above sea level",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "006147",
+   "8fbc8f",
+   "f5f5b8",
+   "c9a36b",
+   "8b5a2b",
+   "f0f0f0"
+  ],
+  "about": "Bare-earth elevation with forests and buildings removed from the Copernicus DEM.",
+  "data": "FABDEM v1-2, 30 m.",
+  "used": "Source of all terrain layers."
+ },
+ {
+  "id": "D1",
+  "key": "slope",
+  "group": "D. Terrain and soil depth",
+  "title": "Slope",
+  "sub": "Per cent slope",
+  "unit": "%",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 50,
+  "palette": [
+   "1a9641",
+   "a6d96a",
+   "ffffbf",
+   "fdae61",
+   "d7191c"
+  ],
+  "about": "5-20 % is ideal for planting with soil-moisture conservation; above 35 % is difficult; above 45 % is excluded (C4).",
+  "data": "FABDEM v1-2, 30 m.",
+  "used": "F10 Slope (8 points); constraint C4."
+ },
+ {
+  "id": "D2",
+  "key": "hli",
+  "group": "D. Terrain and soil depth",
+  "title": "Heat Load (Aspect)",
+  "sub": "McCune-Keon heat load index",
+  "unit": "index",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "1a9850",
+   "91cf60",
+   "fee08b",
+   "fc8d59",
+   "d73027"
+  ],
+  "about": "Combines slope, aspect and latitude: hot south-west slopes dry fastest (red), cool north-east slopes stay moister (green).",
+  "data": "FABDEM v1-2, 30 m.",
+  "used": "F11 Cool aspect (7 points)."
+ },
+ {
+  "id": "D3",
+  "key": "curv",
+  "group": "D. Terrain and soil depth",
+  "title": "Slope Curvature",
+  "sub": "Concave (+) vs convex (-) ground",
+  "unit": "index",
+  "scale": 30,
+  "type": "cont",
+  "min": -3,
+  "max": 3,
+  "palette": [
+   "8c510a",
+   "d8b365",
+   "f5f5f5",
+   "5ab4ac",
+   "01665e"
+  ],
+  "about": "Concave ground collects water and soil; convex spurs and ridges shed them.",
+  "data": "FABDEM v1-2, 30 m.",
+  "used": "F12 Concave curvature (3 points)."
+ },
+ {
+  "id": "D4",
+  "key": "tpi",
+  "group": "D. Terrain and soil depth",
+  "title": "Topographic Position",
+  "sub": "Elevation minus the mean of the surrounding 300 m",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": -15,
+  "max": 15,
+  "palette": [
+   "01665e",
+   "5ab4ac",
+   "f5f5f5",
+   "d8b365",
+   "8c510a"
+  ],
+  "about": "Negative values are valleys and foot-slopes with deeper soil; positive values are ridges and hill tops.",
+  "data": "FABDEM v1-2, 30 m.",
+  "used": "F5 Soil depth proxy."
+ },
+ {
+  "id": "D5",
+  "key": "hand",
+  "group": "D. Terrain and soil depth",
+  "title": "Height Above Nearest Drainage",
+  "sub": "Vertical distance to the nearest stream",
+  "unit": "m",
+  "scale": 90,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "08519c",
+   "3182bd",
+   "6baed6",
+   "bdd7e7",
+   "eff3ff"
+  ],
+  "about": "Low values lie close to drainage, with shallow groundwater and deeper soil.",
+  "data": "MERIT Hydro v1.0.1, 90 m.",
+  "used": "F5 Soil depth proxy."
+ },
+ {
+  "id": "D6",
+  "key": "soildepth",
+  "group": "D. Terrain and soil depth",
+  "title": "Soil Depth Proxy",
+  "sub": "0-1 from slope (0.40), topographic position (0.30), HAND (0.30)",
+  "unit": "score",
+  "scale": 30,
+  "type": "cont",
+  "min": 0,
+  "max": 1,
+  "palette": [
+   "d73027",
+   "fc8d59",
+   "fee08b",
+   "91cf60",
+   "1a9850"
+  ],
+  "about": "Deeper soil is expected on gentle, low-lying ground near drainage. Each part is scaled within the range here; the model uses the range + 20 km scale, so block scores can differ slightly.",
+  "data": "FABDEM v1-2, 30 m; MERIT Hydro.",
+  "used": "F5 Soil depth (10.6 points)."
+ },
+ {
+  "id": "D7",
+  "key": "rough",
+  "group": "D. Terrain and soil depth",
+  "title": "Rockiness (Surface Roughness)",
+  "sub": "Standard deviation of elevation, 7 x 7 cells",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "fff7bc",
+   "fee391",
+   "fec44f",
+   "d95f0e",
+   "993404"
+  ],
+  "about": "Rough, broken ground indicates rock outcrops and boulders.",
+  "data": "FABDEM v1-2, 30 m.",
+  "used": "F6 Low rockiness; ROCKY_MICROSITE."
+ },
+ {
+  "id": "E1",
+  "key": "clay",
+  "group": "E. Soil properties",
+  "title": "Soil Clay Content",
+  "sub": "0-30 cm",
+  "unit": "%",
+  "scale": 250,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "fff7bc",
+   "fee391",
+   "fec44f",
+   "d95f0e",
+   "993404"
+  ],
+  "about": "Clay holds water and nutrients; 18-35 % is best for most native species.",
+  "data": "SoilGrids 2.0 (ISRIC), 250 m, 0-30 cm.",
+  "used": "F7 Texture (weight 0 in this range)."
+ },
+ {
+  "id": "E2",
+  "key": "sand",
+  "group": "E. Soil properties",
+  "title": "Soil Sand Content",
+  "sub": "0-30 cm",
+  "unit": "%",
+  "scale": 250,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "fffbe6",
+   "fbeaa5",
+   "f2cf63",
+   "d9a521",
+   "a67300"
+  ],
+  "about": "Sandy soil drains fast and holds little water.",
+  "data": "SoilGrids 2.0 (ISRIC), 250 m, 0-30 cm.",
+  "used": "F7 Texture (weight 0 in this range)."
+ },
+ {
+  "id": "E3",
+  "key": "cfvo",
+  "group": "E. Soil properties",
+  "title": "Coarse Fragments (Gravel and Stones)",
+  "sub": "Volume %, 0-30 cm",
+  "unit": "vol %",
+  "scale": 250,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "fff7bc",
+   "fee391",
+   "fec44f",
+   "d95f0e",
+   "993404"
+  ],
+  "about": "Stony soil holds less water and is hard to dig.",
+  "data": "SoilGrids 2.0 (ISRIC), 250 m, 0-30 cm.",
+  "used": "F8 Low coarse fragments (18.2 points)."
+ },
+ {
+  "id": "E4",
+  "key": "ph",
+  "group": "E. Soil properties",
+  "title": "Soil pH",
+  "sub": "pH in water, 0-30 cm",
+  "unit": "pH",
+  "scale": 250,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "f2f0f7",
+   "cbc9e2",
+   "9e9ac8",
+   "756bb1",
+   "54278f"
+  ],
+  "about": "Soil reaction; 6.0-7.5 is ideal.",
+  "data": "SoilGrids 2.0 (ISRIC), 250 m, 0-30 cm.",
+  "used": "F9 pH (weight 0 in this range)."
+ },
+ {
+  "id": "E5",
+  "key": "soc",
+  "group": "E. Soil properties",
+  "title": "Soil Organic Carbon",
+  "sub": "0-30 cm",
+  "unit": "g/kg",
+  "scale": 250,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "f6eff7",
+   "d0d1e6",
+   "a6bddb",
+   "67a9cf",
+   "02818a"
+  ],
+  "about": "Organic carbon reflects soil health; it also feeds the RUSLE erodibility factor K.",
+  "data": "SoilGrids 2.0 (ISRIC), 250 m, 0-30 cm.",
+  "used": "RUSLE K (N4)."
+ },
+ {
+  "id": "F1",
+  "key": "builtdist",
+  "group": "F. Biotic pressure and access",
+  "title": "Distance to Settlements",
+  "sub": "Distance to the nearest built-up cell",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "54278f",
+   "756bb1",
+   "9e9ac8",
+   "cbc9e2",
+   "f2f0f7"
+  ],
+  "about": "Closer to villages means more grazing, lopping and fuelwood pressure.",
+  "data": "ESA WorldCover built-up, 10 m.",
+  "used": "F14 Low biotic pressure (60 %)."
+ },
+ {
+  "id": "F2",
+  "key": "pop",
+  "group": "F. Biotic pressure and access",
+  "title": "Population Pressure",
+  "sub": "GHSL 2020 population summed within 2 km",
+  "unit": "relative",
+  "scale": 100,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "f2f0f7",
+   "cbc9e2",
+   "9e9ac8",
+   "756bb1",
+   "54278f"
+  ],
+  "about": "Relative population pressure around each cell.",
+  "data": "JRC GHSL P2023A population 2020, 100 m.",
+  "used": "F14 Low biotic pressure (40 %)."
+ },
+ {
+  "id": "F3",
+  "key": "road",
+  "group": "F. Biotic pressure and access",
+  "title": "Distance to Road",
+  "sub": "Distance to the nearest mapped road",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "54278f",
+   "756bb1",
+   "9e9ac8",
+   "cbc9e2",
+   "f2f0f7"
+  ],
+  "about": "Road access for seedlings, water and staff (advisory only, not scored).",
+  "data": "GRIP4 global roads.",
+  "used": "Advisory column advisory_access_km."
+ },
+ {
+  "id": "F4",
+  "key": "dense",
+  "group": "F. Biotic pressure and access",
+  "title": "Distance to Dense Forest",
+  "sub": "Distance to forest with canopy >= 40 %",
+  "unit": "m",
+  "scale": 30,
+  "type": "cont",
+  "min": null,
+  "max": null,
+  "palette": [
+   "006837",
+   "31a354",
+   "78c679",
+   "c2e699",
+   "f7fcb9"
+  ],
+  "about": "Nearby dense forest provides seed and connectivity.",
+  "data": "Meta Global Canopy Height (4.8 m level), 5 km search.",
+  "used": "N8 Near dense forest."
+ },
+ {
+  "id": "F5",
+  "key": "pa",
+  "group": "F. Biotic pressure and access",
+  "title": "Protected Area",
+  "sub": "World Database on Protected Areas",
+  "unit": "class",
+  "scale": 30,
+  "type": "cat",
+  "min": 1,
+  "max": 1,
+  "palette": [
+   "41ab5d"
+  ],
+  "classes": [
+   [
+    1,
+    "Inside protected area",
+    "41ab5d"
+   ]
+  ],
+  "about": "Area inside a notified protected area. Works need approvals consistent with its management plan.",
+  "data": "WDPA (UNEP-WCMC).",
+  "used": "Flag G2."
+ },
+ {
+  "id": "G10",
+  "key": "constraints",
+  "group": "G. Constraints",
+  "title": "Constraints (C1-C7)",
+  "sub": "First constraint that applies to each cell",
+  "unit": "class",
+  "scale": 30,
+  "type": "cat",
+  "min": 1,
+  "max": 7,
+  "palette": [
+   "006837",
+   "0064c8",
+   "6baed6",
+   "8c510a",
+   "fa0000",
+   "f096ff",
+   "636363"
+  ],
+  "classes": [
+   [
+    1,
+    "C1 Dense forest (protect)",
+    "006837"
+   ],
+   [
+    2,
+    "C2 Water",
+    "0064c8"
+   ],
+   [
+    3,
+    "C3 Drain / stream",
+    "6baed6"
+   ],
+   [
+    4,
+    "C4 Slope > 45 %",
+    "8c510a"
+   ],
+   [
+    5,
+    "C5 Built-up",
+    "fa0000"
+   ],
+   [
+    6,
+    "C6 Cropland",
+    "f096ff"
+   ],
+   [
+    7,
+    "C7 Bare rock",
+    "636363"
+   ]
+  ],
+  "about": "Land that cannot be planted, or must be protected. A block is excluded from the priority matrix when C2-C7 cover more than 30 % of it.",
+  "data": "Meta CHM, JRC GSW, MERIT Hydro, FABDEM, WorldCover, Dynamic World, Sentinel-2.",
+  "used": "exclusion_reason, net_plantable_ha."
+ }
+]
