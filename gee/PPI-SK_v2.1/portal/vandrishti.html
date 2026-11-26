@@ -121,6 +121,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .who .av { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 11.5px; color: #fff; }
 .who b { display: block; font-size: 13px; }
 .who small { color: var(--muted); font-size: 11.5px; }
+@media (max-width: 700px) { .top { position: static; } .top .bar { gap: 8px; } .navwrap { order: 3; width: 100%; } .who small { display: none; } }
 .ghostbtn { background: transparent; border: 1px solid var(--line-2); color: var(--ink); border-radius: 9px; padding: 7px 11px; cursor: pointer; font-size: 13px; }
 main { padding-block: 20px 40px; display: grid; gap: 18px; max-width: 1400px; margin: 0 auto; }
 .pagehead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; justify-content: space-between; }
@@ -290,7 +291,8 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .opts label { display: inline-flex; gap: 7px; align-items: center; border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--ink); font-weight: 500; transition: background .15s, border-color .15s; }
 .opts label:has(input:checked) { background: color-mix(in srgb, var(--canopy) 14%, transparent); border-color: var(--canopy); }
-.opts input { accent-color: var(--canopy); margin: 0; }
+.opts input, .field .opts input { accent-color: var(--canopy); margin: 0; width: auto; padding: 0; flex: none; }
+.opts label { line-height: 1.3; }
 .subcard { border: 1px solid var(--line); border-radius: 13px; padding: 14px; display: grid; gap: 12px; background: var(--surface-2); }
 .subcard h3 { font-size: 13.5px; }
 .drop { border: 2px dashed var(--line-2); border-radius: 16px; padding: 28px; text-align: center; display: grid; gap: 8px; justify-items: center; background: var(--surface-2); cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
@@ -364,7 +366,6 @@ const RFO_CHECKS = [
 ];
 const SMC_SUIT = ["Suitable", "Partly suitable", "Not needed", "Not suitable"];
 const SMC_WORKS = ["Continuous contour trenches (CCT)", "Staggered trenches", "Pits with saucers", "Gully plugs / loose boulder checks", "Earthen bunds", "Percolation pits / farm ponds"];
-const SOIL_DEPTH = ["Shallow (< 30 cm)", "Medium (30-60 cm)", "Deep (> 60 cm)"];
 const WATER = ["Tank / check dam within 1 km", "Well or borewell", "Tanker only", "Rain-fed only"];
 /* ACF additional scrutiny */
 const ACF_CHECKS = ["RFO field certification and SMC assessment reviewed", "Cost estimate checked against approved rates and norms", "Scheme guidelines and convergence checked"];
@@ -1066,9 +1067,8 @@ function editView(main, id) {
     el("div", { class: "subcard" }, el("h3", { text: "SMC suitability (assessed by the RFO in the field)" }),
       el("div", { class: "field" }, "Is the site suitable for SMC works?", radioGroup("smcSuit", SMC_SUIT, c0.smcSuit)),
       el("div", { class: "field" }, "SMC works proposed", checkGroup("smcWorks", SMC_WORKS, c0.smcWorks)),
-      el("div", { class: "field" }, "Soil depth observed", radioGroup("soilDepth", SOIL_DEPTH, c0.soilDepth)),
       el("div", { class: "field" }, "Water for watering seedlings", radioGroup("water", WATER, c0.water)),
-      el("label", { class: "field" }, "Field observations", el("textarea", { id: "rc-note", maxlength: "800", placeholder: "Slope, gullies, rock, existing rootstock, grazing pressure, anything the ACF should know" }, c0.note || ""))));
+      el("label", { class: "field" }, "Field observations", el("textarea", { id: "rc-note", maxlength: "800", placeholder: "Slope, gullies, rock, existing rootstock, grazing pressure, anything the ACF should know (optional)" }, c0.note || ""))));
   const smcHint = el("div", { class: "banner a", hidden: true });
   const file = el("input", { type: "file", id: "p-file", hidden: true });
   const fmsg = el("div", { class: "hint" }, st.fileName ? "Current KML: " + st.fileName : "");
@@ -1112,7 +1112,7 @@ function editView(main, id) {
     } catch (e) { fmsg.className = "err"; fmsg.textContent = (e && e.message) || "The file could not be read."; }
   }
   treat.addEventListener("change", refresh); est.addEventListener("input", refresh);
-  const certData = () => ({ checks: certBoxes.map((b) => b.checked), smcSuit: radioVal(cert, "smcSuit"), smcWorks: checkVals(cert, "smcWorks"), soilDepth: radioVal(cert, "soilDepth"),
+  const certData = () => ({ checks: certBoxes.map((b) => b.checked), smcSuit: radioVal(cert, "smcSuit"), smcWorks: checkVals(cert, "smcWorks"),
     water: radioVal(cert, "water"), note: cert.querySelector("#rc-note").value.trim(), at: new Date().toISOString(), by: ROLES.RFO.id });
   async function save(submit) {
     const d = { name: name.value.trim(), beat: beat.value.trim(), scheme: scheme.value, year: year.value, treat: treat.value, estArea: parseFloat(est.value) || null, estCost: parseFloat(cost.value) || null, seedlings: parseInt(seed.value) || null, remarks: rem.value.trim() };
@@ -1125,7 +1125,6 @@ function editView(main, id) {
       if (!c.checks.every(Boolean)) return fail("Certify every item of the field certification before submitting.");
       if (!c.smcSuit) return fail("Record the SMC suitability of the site.");
       if ((c.smcSuit === "Suitable" || c.smcSuit === "Partly suitable") && !c.smcWorks.length) return fail("Tick the SMC works proposed.");
-      if (!c.soilDepth) return fail("Record the soil depth observed.");
       if (!smcHint.hidden && c.note.length < 15) return fail("Your SMC assessment differs from FRPIM. Explain it in the field observations (at least 15 characters).");
     }
     const geom = simplifyFC({ type: "FeatureCollection", features: st.parsed.features.map((f) => ({ type: "Feature", properties: { name: String(f.properties.name || "").slice(0, 80) }, geometry: f.geometry })) });
@@ -1176,7 +1175,7 @@ function rfoCertCard(w) {
     el("div", { class: "subcard" }, el("h3", { text: "SMC suitability" }),
       el("dl", { class: "kv" }, el("dt", { text: "Assessment" }), el("dd", null, el("b", { text: c.smcSuit || "-" })),
         el("dt", { text: "Works proposed" }), el("dd", { text: (c.smcWorks || []).join(", ") || "-" }),
-        el("dt", { text: "Soil depth" }), el("dd", { text: c.soilDepth || "-" }), el("dt", { text: "Water" }), el("dd", { text: c.water || "-" }),
+        el("dt", { text: "Water" }), el("dd", { text: c.water || "-" }),
         el("dt", { text: "FRPIM view" }), el("dd", { text: frp == null ? "-" : "SMC needed on " + fp(frp) + " of the plantable area" })),
       diff ? el("div", { class: "banner a", text: "The field assessment differs from FRPIM. The ACF should check the RFO's explanation." }) : null,
       c.note ? el("div", { class: "banner i", text: c.note }) : null));
@@ -1271,7 +1270,7 @@ function helpView(main) {
   main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: APP.tagline }), el("h1", { text: "How " + APP.name + " works" }), el("p", { text: "Decision support: the officers decide, FRPIM informs, and every step is on record." }))));
   const step = (role, title, body) => el("div", { class: "card" }, el("div", { style: "display:flex;gap:10px;align-items:center" }, avatar(role), el("h2", { text: title })), el("div", { text: body }));
   main.append(el("div", { class: "grid g3" },
-    step("RFO", "1 · RFO proposes and certifies", "Uploads the treatment KML, sees the FRPIM check on all three maps, and certifies the site: boundary walked, area, legal status, species, and the SMC suitability (works proposed, soil depth, water). Where the field assessment differs from FRPIM, the RFO explains why."),
+    step("RFO", "1 · RFO proposes and certifies", "Uploads the treatment KML, sees the FRPIM check on all three maps, and certifies the site: boundary walked, area, legal status, species, and the SMC suitability (works proposed, water). Where the field assessment differs from FRPIM, the RFO explains why."),
     step("ACF", "2 · ACF scrutinises", "Reviews the RFO's certification and the FRPIM findings, checks the estimate and scheme guidelines, may inspect the site, and records remarks. Recommends to the DCF or returns to the RFO. Amber or Red proposals need a written justification."),
     step("DCF", "3 · DCF approves", "Takes the final decision: approve, approve with a recorded deviation from FRPIM, return to the ACF, or not approve. Every deviation is documented with the reason.")));
   main.append(el("div", { class: "grid g2" },
@@ -1314,7 +1313,7 @@ async function saveReport(w) {
     "<table><tr><th>Need (Map 1)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(NEED, r.byNeed, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
     "<table><tr><th>Feasibility (Map 2)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(FEAS, r.byFeas, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
     "<table><tr><th>What FRPIM recommends</th><th class=n>ha</th></tr>" + ["S", "B", "A", "P", "X"].filter((k) => r.byRx[k] > 0).map((k) => "<tr><td>" + esc(RX[k]) + "</td><td class=n>" + r.byRx[k].toFixed(2) + "</td></tr>").join("") + (r.smcHa > 0 ? "<tr><td>of which SMC works required</td><td class=n>" + r.smcHa.toFixed(2) + "</td></tr>" : "") + "</table>" +
-    (c ? "<h2>RFO field certification (" + esc(dd(c.at)) + ")</h2><table>" + RFO_CHECKS.map((t, i) => ck(c.checks && c.checks[i], t)).join("") + "</table><br><table><tr><th>SMC suitability</th><td>" + esc(c.smcSuit) + "</td></tr><tr><th>SMC works proposed</th><td>" + esc((c.smcWorks || []).join(", ")) + "</td></tr><tr><th>Soil depth</th><td>" + esc(c.soilDepth) + "</td></tr><tr><th>Water</th><td>" + esc(c.water) + "</td></tr><tr><th>Field observations</th><td>" + esc(c.note) + "</td></tr></table>" : "") +
+    (c ? "<h2>RFO field certification (" + esc(dd(c.at)) + ")</h2><table>" + RFO_CHECKS.map((t, i) => ck(c.checks && c.checks[i], t)).join("") + "</table><br><table><tr><th>SMC suitability</th><td>" + esc(c.smcSuit) + "</td></tr><tr><th>SMC works proposed</th><td>" + esc((c.smcWorks || []).join(", ")) + "</td></tr><tr><th>Water</th><td>" + esc(c.water) + "</td></tr><tr><th>Field observations</th><td>" + esc(c.note) + "</td></tr></table>" : "") +
     (a ? "<h2>ACF scrutiny (" + esc(dd(a.at)) + ")</h2><table>" + (a.checks && a.checks.length === LEGACY_CHECKS.length ? LEGACY_CHECKS : ACF_CHECKS).map((t, i) => ck(a.checks && a.checks[i], t)).join("") + (a.inspected ? ck(true, "Joint / sample site inspection by ACF" + (a.inspectedOn ? " on " + dd(a.inspectedOn) : "")) : "") + "</table><p><b>ACF remarks:</b> " + esc(a.remarks) + "</p>" : "") +
     (w.dcf ? "<h2>DCF decision</h2><p><b>" + esc(w.dcf.decision) + "</b> (" + esc(dd(w.dcf.at)) + ")<br>" + esc(w.dcf.remarks) + "</p>" : "") +
     "<h2>File movement</h2><table><tr><th>Date</th><th>Officer</th><th>Action</th><th>Remarks</th></tr>" + (w.trail || []).map((t) => "<tr><td>" + esc(dt(t.at)) + "</td><td>" + esc(ROLES[t.role].title) + "</td><td>" + esc(t.action) + "</td><td>" + esc(t.note) + "</td></tr>").join("") + "</table>" +
@@ -1343,7 +1342,7 @@ async function loadDemo() {
     const w = { id, demo: true, range: RANGE.name, name: s.name, beat: p.beat, scheme: p.scheme, year, treat: s.treat, estArea: p.est, estCost: p.cost, seedlings: p.seed || null,
       remarks: "Mock-drill example.", fileName: "example_" + (i + 1) + ".kml", geom: { type: "FeatureCollection", features }, result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, matchPct: vd.matchPct,
       createdAt: iso(p.ago[0]), createdBy: ROLES.RFO.id, model: "FRPIM v2.2 (run 19 Nov 2026)", trail: [],
-      rfoCert: { checks: RFO_CHECKS.map(() => true), smcSuit: p.smc[0], smcWorks: p.smc[1], soilDepth: p.smc[2], water: p.smc[3], note: i === 4 ? "Gullies feeding the village tank; SMC will cut silt inflow." : "Boundary walked with GPS on the date of inspection.", at: iso(p.ago[1]), by: ROLES.RFO.id } };
+      rfoCert: { checks: RFO_CHECKS.map(() => true), smcSuit: p.smc[0], smcWorks: p.smc[1], water: p.smc[3], note: i === 4 ? "Gullies feeding the village tank; SMC will cut silt inflow." : "Boundary walked with GPS on the date of inspection.", at: iso(p.ago[1]), by: ROLES.RFO.id } };
     w.trail.push(mk("RFO", "Draft created", "KML " + w.fileName, p.ago[0]));
     w.trail.push(mk("RFO", "Certified and submitted to ACF", "FRPIM " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2 · SMC: " + p.smc[0] + " (" + p.smc[1].join(", ") + ")", p.ago[1]));
     const ok = ACF_CHECKS.map(() => true);
