@@ -314,6 +314,21 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .foot { color: var(--muted); font-size: 12px; text-align: center; padding-block: 6px 26px; }
 .foot b { font-family: var(--font-display); color: var(--ink); }
 details > summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+/* decision tiles */
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 420px) { .tiles { grid-template-columns: minmax(0, 1fr); } }
+.tile { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; text-align: left; padding: 14px; border-radius: 14px; border: 1.5px solid var(--line-2); background: var(--surface); color: var(--ink); cursor: pointer; transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s, border-color .2s; }
+.tile:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow); }
+.tile:active:not(:disabled) { transform: translateY(0) scale(.99); }
+.tile .ti { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; font-weight: 800; }
+.tile b { display: block; font-family: var(--font-display); font-size: 14.5px; }
+.tile small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.tile.go { border-color: color-mix(in srgb, var(--ok) 55%, transparent); } .tile.go .ti { background: linear-gradient(140deg, #2f9a66, #0f3d2a); color: #fff; }
+.tile.warn { border-color: color-mix(in srgb, var(--ochre) 60%, transparent); } .tile.warn .ti { background: linear-gradient(140deg, #f6c46a, #f0a52a); color: var(--ochre-ink); }
+.tile.back .ti { background: var(--info-soft); color: var(--info); }
+.tile.stop .ti { background: var(--bad-soft); color: var(--bad); }
+.tile:disabled { opacity: .45; cursor: not-allowed; }
+.tile.busy { border-color: var(--ochre); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ochre) 25%, transparent); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
 
@@ -920,6 +935,16 @@ function workView(main, id) {
   right.append(el("div", { class: "card" }, el("h2", { text: "File movement" }), tl));
   main.append(el("div", { class: "grid g-main" }, left, right));
 }
+function decisionTiles(opts) {
+  const wrap = el("div", { class: "tiles" + (opts.length > 2 ? " four" : "") });
+  for (const o of opts) {
+    const b = el("button", { type: "button", class: "tile " + o.tone, disabled: o.disabled ? true : null },
+      el("span", { class: "ti", text: o.icon }), el("span", null, el("b", { text: o.title }), el("small", { text: o.sub })));
+    b.addEventListener("click", () => { if (b.disabled) return; wrap.querySelectorAll(".tile").forEach((t) => t.classList.remove("busy")); b.classList.add("busy"); o.run(); setTimeout(() => b.classList.remove("busy"), 1500); });
+    wrap.append(b);
+  }
+  return wrap;
+}
 function actionBox(w) {
   const msg = el("div", { role: "alert" });
   const fail = (t) => { msg.className = "err"; msg.textContent = t; };
@@ -936,38 +961,32 @@ function actionBox(w) {
   if (ROLE === "ACF" && ["ACF", "RET_ACF"].includes(w.status)) {
     const boxes = ACF_CHECKS.map((c, i) => el("input", { type: "checkbox", id: "ac" + i }));
     const insp = el("input", { type: "checkbox", id: "ac-insp" }), inspOn = el("input", { type: "date", id: "ac-insp-on", style: "max-width:180px" });
-    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Scrutiny remarks on the proposal and the RFO's certification" : "Scrutiny remarks: why you recommend an " + VERDICT[w.verdict][0] + " proposal, or what the RFO must revise" });
-    const box = el("div", { class: "card action" }, el("h2", { text: "ACF scrutiny" }));
-    if (w.status === "RET_ACF") { const last = (w.trail || []).filter((t) => t.role === "DCF").pop(); if (last) box.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the DCF: " }), last.note)); }
-    box.append(el("div", { class: "hint", text: "The RFO has certified the site and SMC suitability (below). Review it, add your scrutiny and remarks." }),
-      el("div", { class: "checks" }, ACF_CHECKS.map((c, i) => el("label", null, boxes[i], c)), el("label", null, insp, "Joint / sample site inspection done by ACF (optional)")),
-      el("label", { class: "field" }, "Date of inspection", inspOn), el("label", { class: "field" }, "ACF remarks *", rem), msg,
-      el("div", { class: "btns" },
-        el("button", { class: "btn gold", type: "button", text: "Recommend to DCF", onclick: () => {
-          const checks = boxes.map((b) => b.checked), r = rem.value.trim();
-          if (!w.rfoCert && !checks[0]) return fail("Review the proposal before recommending it.");
-          if (!checks.every(Boolean)) return fail("Complete the three scrutiny checks before recommending, or return the proposal to the RFO.");
-          if (r.length < 15) return fail("Write your scrutiny remarks (at least 15 characters).");
-          if (w.verdict !== "g" && r.length < 30) return fail("This proposal is " + VERDICT[w.verdict][0] + " on the FRPIM check. Give the justification for recommending it (at least 30 characters).");
-          commit("DCF", "Recommended to DCF", r, { acf: { checks, inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: r, at: new Date().toISOString(), by: ROLES.ACF.id } }); } }),
-        el("button", { class: "btn bad", type: "button", text: "Return to RFO", onclick: () => {
-          const r = rem.value.trim(); if (r.length < 10) return fail("Write what the RFO must revise (at least 10 characters).");
-          commit("RET_RFO", "Returned to RFO", r, { acf: { checks: boxes.map((b) => b.checked), inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: r, at: new Date().toISOString(), by: ROLES.ACF.id } }); } })));
+    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: "Optional: your remarks for the DCF, or what the RFO should review" });
+    const acf = () => ({ checks: boxes.map((b) => b.checked), inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: rem.value.trim(), at: new Date().toISOString(), by: ROLES.ACF.id });
+    const box = el("div", { class: "card action" }, el("h2", null, "ACF scrutiny", el("small", { text: "choose one of the two actions" })));
+    if (w.status === "RET_ACF") { const last = (w.trail || []).filter((t) => t.role === "DCF").pop(); if (last) box.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the DCF: " }), last.note || "re-examine the proposal")); }
+    box.append(el("div", { class: "hint", text: "The RFO has certified the site and SMC suitability (below). Tick what you checked and add remarks if you wish; both are optional." }),
+      el("div", { class: "checks" }, ACF_CHECKS.map((c, i) => el("label", null, boxes[i], c)), el("label", null, insp, "Joint / sample site inspection done by ACF")),
+      el("label", { class: "field" }, "Date of inspection", inspOn), el("label", { class: "field" }, "ACF remarks (optional)", rem),
+      decisionTiles([
+        { tone: "go", icon: "→", title: "Send to DCF", sub: "Recommend the work for final approval", run: () => commit("DCF", "Recommended to DCF", rem.value.trim(), { acf: acf() }) },
+        { tone: "back", icon: "↩", title: "Return to RFO", sub: "Send back for further review or revision", run: () => commit("RET_RFO", "Returned to RFO for further review", rem.value.trim(), { acf: acf() }) }
+      ]), msg);
     return box;
   }
   if (ROLE === "DCF" && w.status === "DCF") {
-    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Remarks (optional)" : "Reason for approving although the FRPIM check is " + VERDICT[w.verdict][0] });
-    const green = w.verdict === "g";
-    return el("div", { class: "card action" }, el("h2", { text: "DCF decision" }),
-      el("div", { class: "hint", text: (green ? "FRPIM check Green" : "FRPIM check " + VERDICT[w.verdict][0] + ": approval is recorded as a deviation with your reason") + ". RFO certification and ACF scrutiny are below." }),
+    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Remarks (optional for approval)" : "Reason, required to approve although the FRPIM check is " + VERDICT[w.verdict][0] });
+    const green = w.verdict === "g", need = (n, t) => { const r = rem.value.trim(); if (r.length < n) { fail(t); rem.focus(); return null; } return r; };
+    return el("div", { class: "card action" }, el("h2", null, "DCF decision", el("small", { text: "final authority" })),
+      el("div", { class: "hint", text: (green ? "FRPIM check Green." : "FRPIM check " + VERDICT[w.verdict][0] + ": approval is recorded as a deviation with your reason.") + " The RFO certification and ACF scrutiny are below." }),
       el("label", { class: "field" }, "Remarks", rem), msg,
-      el("div", { class: "btns" },
-        green ? el("button", { class: "btn gold", type: "button", text: "Approve", onclick: () => commit("APPROVED", "Approved by DCF", rem.value.trim(), { dcf: { decision: "Approved", remarks: rem.value.trim(), at: new Date().toISOString() } }) }) : null,
-        el("button", { class: green ? "btn ghost" : "btn warn", type: "button", text: "Approve with recorded deviation", onclick: () => {
-          const r = rem.value.trim(); if (r.length < 15) return fail("Write the reason for the deviation from FRPIM (at least 15 characters).");
-          commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } }),
-        el("button", { class: "btn bad", type: "button", text: "Return to ACF", onclick: () => { const r = rem.value.trim(); if (r.length < 10) return fail("Write what must be re-examined."); commit("RET_ACF", "Returned to ACF by DCF", r); } }),
-        el("button", { class: "btn bad", type: "button", text: "Not approve", onclick: () => { const r = rem.value.trim(); if (r.length < 10) return fail("Write the reason for not approving."); commit("REJECTED", "Not approved by DCF", r, { dcf: { decision: "Not approved", remarks: r, at: new Date().toISOString() } }); } })));
+      decisionTiles([
+        { tone: "go", icon: "✓", title: "Approve", sub: green ? "Sanction the work as proposed" : "Only for Green works", disabled: !green,
+          run: () => commit("APPROVED", "Approved by DCF", rem.value.trim(), { dcf: { decision: "Approved", remarks: rem.value.trim(), at: new Date().toISOString() } }) },
+        { tone: "warn", icon: "≠", title: "Approve with recorded deviation", sub: "Approve and record why FRPIM is overridden", run: () => { const r = need(15, "Write the reason for the deviation from FRPIM (at least 15 characters)."); if (r) commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } },
+        { tone: "back", icon: "↩", title: "Return to ACF", sub: "Ask for re-examination", run: () => { const r = need(10, "Write what must be re-examined."); if (r) commit("RET_ACF", "Returned to ACF by DCF", r); } },
+        { tone: "stop", icon: "✕", title: "Not approve", sub: "Close the proposal with reasons", run: () => { const r = need(10, "Write the reason for not approving."); if (r) commit("REJECTED", "Not approved by DCF", r, { dcf: { decision: "Not approved", remarks: r, at: new Date().toISOString() } }); } }
+      ]));
   }
   return null;
 }
@@ -978,7 +997,7 @@ function helpView(main) {
   const step = (role, title, body) => el("div", { class: "card" }, el("div", { style: "display:flex;gap:10px;align-items:center" }, avatar(role), el("h2", { text: title })), el("div", { text: body }));
   main.append(el("div", { class: "grid g3" },
     step("RFO", "1 · RFO proposes and certifies", "Uploads the treatment KML, sees the FRPIM check on all three maps, and certifies the site: boundary walked, area, legal status, species, and the SMC suitability (works proposed, water). Where the field assessment differs from FRPIM, the RFO explains why."),
-    step("ACF", "2 · ACF scrutinises", "Reviews the RFO's certification and the FRPIM findings, checks the estimate and scheme guidelines, may inspect the site, and records remarks. Recommends to the DCF or returns to the RFO. Amber or Red proposals need a written justification."),
+    step("ACF", "2 · ACF scrutinises", "Reviews the RFO's certification and the FRPIM findings, ticks what was checked and may add remarks (both optional), then makes one of two choices: send the work to the DCF, or return it to the RFO for further review."),
     step("DCF", "3 · DCF approves", "Takes the final decision: approve, approve with a recorded deviation from FRPIM, return to the ACF, or not approve. Every deviation is documented with the reason.")));
   main.append(el("div", { class: "grid g2" },
     el("div", { class: "card" }, el("h2", { text: "The FRPIM check" }), el("div", { class: "list" },
