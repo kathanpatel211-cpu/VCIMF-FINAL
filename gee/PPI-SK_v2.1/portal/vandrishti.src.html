@@ -168,7 +168,7 @@ main { padding-block: 20px 40px; display: grid; gap: 18px; max-width: 1400px; ma
 /* KPI tiles with 3D tilt */
 .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; perspective: 900px; }
 @media (max-width: 1150px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; } .kpi { padding: 14px; } .kpi b { font-size: 24px; } .kpi span { font-size: 10.5px; letter-spacing: .05em; } }
 .kpi { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 6px; box-shadow: var(--shadow); transform-style: preserve-3d; transition: transform .18s ease-out, box-shadow .2s; overflow: hidden; min-width: 0; }
 .kpi::after { content: ""; position: absolute; inset: 0; background: radial-gradient(300px 120px at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--ochre) 14%, transparent), transparent 70%); pointer-events: none; opacity: 0; transition: opacity .2s; }
 .kpi:hover::after { opacity: 1; }
@@ -176,14 +176,15 @@ main { padding-block: 20px 40px; display: grid; gap: 18px; max-width: 1400px; ma
 .kpi b { font-family: var(--font-num); font-size: 28px; font-weight: 500; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .kpi small { font-size: 12px; color: var(--muted); }
 .kpi.hl { background: linear-gradient(160deg, var(--ochre-soft), var(--surface)); border-color: color-mix(in srgb, var(--ochre) 55%, transparent); }
-.kpi .ring { position: absolute; right: 12px; top: 12px; width: 46px; height: 46px; }
+.kpi .kpirow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.kpi .ring { width: 40px; height: 40px; flex: none; }
 .kpi .ring circle { fill: none; stroke-width: 6; }
 .kpi .ring .tr { stroke: var(--surface-2); }
 .kpi .ring .fg { stroke: var(--ok); stroke-linecap: round; transition: stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1); }
 
 /* pipeline */
 .pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 760px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pipe > :last-child:nth-child(odd) { grid-column: 1 / -1; } }
 .pipe button { text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 14px; padding: 12px 14px; display: grid; gap: 3px; cursor: pointer; position: relative; overflow: hidden; transition: transform .2s, border-color .2s; color: var(--ink); }
 .pipe button:hover { transform: translateY(-2px); border-color: var(--canopy); }
 .pipe b { font-family: var(--font-num); font-size: 26px; font-weight: 500; }
@@ -637,7 +638,8 @@ function shell() {
 /* ---------------- dashboard ---------------- */
 function sumHa(list) { return list.reduce((s, w) => s + (w.result ? w.result.total : 0), 0); }
 function kpiTile(label, value, dec, suf, sub, hl, extra) {
-  return el("div", { class: "kpi" + (hl ? " hl" : "") }, el("span", { text: label }), el("b", { "data-count": String(value), "data-dec": String(dec), "data-suf": suf, text: (+value).toFixed(dec) + suf }), el("small", { text: sub }), extra || null);
+  const num = el("b", { "data-count": String(value), "data-dec": String(dec), "data-suf": suf, text: (+value).toFixed(dec) + suf });
+  return el("div", { class: "kpi" + (hl ? " hl" : "") }, el("span", { text: label }), extra ? el("div", { class: "kpirow" }, num, extra) : num, el("small", { text: sub }));
 }
 function ring(p) {
   const c = 2 * Math.PI * 19, off = c * (1 - Math.max(0, Math.min(100, p)) / 100);
