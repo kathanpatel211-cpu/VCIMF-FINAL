@@ -9,7 +9,9 @@ plus the cleaned original polygons (<prefix>_polygons_clean.kml / .zip), a summa
 an overview map PNG.
 
 Areas are true hectares in WGS 84 / UTM 43N (EPSG:32643).
-Usage : python merge_division_kml.py INPUT.kml OUTPUT_DIR [PREFIX]
+Usage : python merge_division_kml.py INPUT.kml OUTPUT_DIR [PREFIX] [--division "NAME"] [--range-map "Old=New,Old2=New"]
+        --division sets one division name for every polygon; --range-map renames / merges ranges.
+        The original values are kept in ORIG_DIV and ORIG_RANGE.
 Needs : shapely>=2, pyproj, numpy, pyshp, matplotlib
 """
 import collections
@@ -158,7 +160,7 @@ def merge(recs, keyfn, namefn):
         a0 = rs[0]["a"]
         units.append({"key": k, "name": namefn(a0), "geom": g, "n_polygons": len(rs),
                       "parts": 1 if g.geom_type == "Polygon" else len(g.geoms), "area_ha": round(utm_area_ha(g), 2),
-                      "DIVISION": a0.get("DIVISION", ""), "RANGE": a0.get("RANGE", ""),
+                      "DIVISION": a0.get("DIVISION", ""), "RANGE": a0.get("RANGE", ""), "ORIG_RANGE": ", ".join(sorted({r["a"].get("ORIG_RANGE", "") for r in rs})),
                       "ROUND": a0.get("ROUND", "") or "Unassigned", "BEAT": a0.get("BEAT", "") or "Unassigned",
                       "n_rounds": len({r["a"].get("ROUND", "") or "Unassigned" for r in rs}),
                       "n_beats": len({(r["a"].get("ROUND", ""), r["a"].get("BEAT", "") or "Unassigned") for r in rs})})
@@ -187,19 +189,35 @@ def overview_png(path, ranges, title):
 
 
 def main():
-    src, out = Path(sys.argv[1]), Path(sys.argv[2])
-    prefix = sys.argv[3] if len(sys.argv) > 3 else "Division"
+    args, opts = [], {}
+    it = iter(sys.argv[1:])
+    for x in it:
+        if x.startswith("--"):
+            opts[x[2:]] = next(it)
+        else:
+            args.append(x)
+    src, out = Path(args[0]), Path(args[1])
+    prefix = args[2] if len(args) > 2 else "Division"
     out.mkdir(parents=True, exist_ok=True)
     recs = read(src)
     print(f"{len(recs)} polygons read, {sum(r['fixed'] for r in recs)} repaired")
+    rmap = dict(kv.split("=", 1) for kv in opts.get("range-map", "").split(",") if "=" in kv)
+    for r in recs:
+        a = r["a"]
+        a["ORIG_DIV"], a["ORIG_RANGE"] = a.get("DIVISION", ""), a.get("RANGE", "")
+        if "division" in opts:
+            a["DIVISION"] = opts["division"]
+        a["RANGE"] = rmap.get(a.get("RANGE", ""), a.get("RANGE", ""))
+    if rmap or "division" in opts:
+        print("ranges now:", sorted({r["a"]["RANGE"] for r in recs}), "| divisions:", sorted({r["a"]["DIVISION"] for r in recs}))
     levels = [
         ("Division", lambda a: (a.get("DIVISION", ""),), lambda a: a.get("DIVISION", ""), None, ["DIVISION", "n_polygons", "parts", "area_ha"]),
         ("Range", lambda a: (a.get("DIVISION", ""), a.get("RANGE", "")), lambda a: a.get("RANGE", ""), "DIVISION",
-         ["RANGE", "DIVISION", "n_polygons", "parts", "n_rounds", "n_beats", "area_ha"]),
+         ["RANGE", "DIVISION", "ORIG_RANGE", "n_polygons", "parts", "n_rounds", "n_beats", "area_ha"]),
         ("Round", lambda a: (a.get("DIVISION", ""), a.get("RANGE", ""), a.get("ROUND", "") or "Unassigned"),
-         lambda a: a.get("ROUND", "") or "Unassigned", "RANGE", ["ROUND", "RANGE", "DIVISION", "n_polygons", "parts", "n_beats", "area_ha"]),
+         lambda a: a.get("ROUND", "") or "Unassigned", "RANGE", ["ROUND", "RANGE", "ORIG_RANGE", "DIVISION", "n_polygons", "parts", "n_beats", "area_ha"]),
         ("Beat", lambda a: (a.get("DIVISION", ""), a.get("RANGE", ""), a.get("ROUND", "") or "Unassigned", a.get("BEAT", "") or "Unassigned"),
-         lambda a: a.get("BEAT", "") or "Unassigned", "RANGE", ["BEAT", "ROUND", "RANGE", "DIVISION", "n_polygons", "parts", "area_ha"]),
+         lambda a: a.get("BEAT", "") or "Unassigned", "RANGE", ["BEAT", "ROUND", "RANGE", "ORIG_RANGE", "DIVISION", "n_polygons", "parts", "area_ha"]),
     ]
     types = {"n_polygons": "I", "parts": "I", "n_rounds": "I", "n_beats": "I", "area_ha": "N"}
     result = {}
@@ -216,21 +234,21 @@ def main():
     for i, r in enumerate(recs):
         a = r["a"]
         u = {"name": f"{a.get('RANGE', '')} / {a.get('BEAT', '') or 'Unassigned'} / {a.get('F_SNO', '') or i + 1}", "geom": r["g"],
-             "POLY_ID": i + 1, "DIVISION": a.get("DIVISION", ""), "RANGE": a.get("RANGE", ""), "ROUND": a.get("ROUND", "") or "Unassigned",
+             "POLY_ID": i + 1, "DIVISION": a.get("DIVISION", ""), "RANGE": a.get("RANGE", ""), "ORIG_RANGE": a.get("ORIG_RANGE", ""), "ORIG_DIV": a.get("ORIG_DIV", ""), "ROUND": a.get("ROUND", "") or "Unassigned",
              "BEAT": a.get("BEAT", "") or "Unassigned", "area_ha": round(utm_area_ha(r["g"]), 3), "repaired": "yes" if r["fixed"] else "no"}
         for k in keep:
             u[k] = a.get(k, "")
         clean.append(u)
-    cf = ["POLY_ID", "DIVISION", "RANGE", "ROUND", "BEAT"] + keep + ["area_ha", "repaired"]
+    cf = ["POLY_ID", "DIVISION", "RANGE", "ROUND", "BEAT", "ORIG_RANGE", "ORIG_DIV"] + keep + ["area_ha", "repaired"]
     write_kml(out / f"{prefix}_polygons_clean.kml", f"{prefix} forest polygons (cleaned)", clean, cf, folder_key="RANGE", colour_key="RANGE")
     write_shp_zip(out / f"{prefix}_polygons_clean.zip", clean, cf, dict(types, POLY_ID="I"))
     with open(out / f"{prefix}_summary.csv", "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        w.writerow(["Level", "Division", "Range", "Round", "Beat", "Polygons", "Separate parts", "Area (ha)"])
+        w.writerow(["Level", "Division", "Range", "Round", "Beat", "Included former ranges", "Polygons", "Separate parts", "Area (ha)"])
         for lvl in ("Division", "Range", "Round", "Beat"):
             for u in result[lvl]:
                 w.writerow([lvl, u["DIVISION"], u["RANGE"] if lvl != "Division" else "", u["ROUND"] if lvl in ("Round", "Beat") else "",
-                            u["BEAT"] if lvl == "Beat" else "", u["n_polygons"], u["parts"], u["area_ha"]])
+                            u["BEAT"] if lvl == "Beat" else "", u["ORIG_RANGE"] if lvl != "Division" else "", u["n_polygons"], u["parts"], u["area_ha"]])
     overview_png(out / f"{prefix}_ranges_overview.png", result["Range"], f"{prefix}: forest area by range")
     return result
 
