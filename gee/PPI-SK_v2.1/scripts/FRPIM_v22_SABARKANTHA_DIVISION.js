@@ -36,6 +36,9 @@ var SETTINGS = {
     {name: 'Rdf Khedbrahma', code: 'KHE'}, {name: 'Rdf Poshina', code: 'RPO'}, {name: 'Vadali', code: 'VAD'},
     {name: 'Vijaynagar', code: 'VIJ'}
   ],
+  // re-run only some ranges: their short codes, e.g. ['RPO', 'POS']. Empty [] = all ranges (normal RUN 1).
+  // With codes here, RUN 1 creates only those range tasks (no QC, anchor or constraint-map tasks again).
+  ONLY_RANGES: [],
   ID_PREFIX: 'SBK_',
   CRS: 'EPSG:32643',               // UTM 43N (checked automatically against the division)
   ASSET_ROOT: 'projects/khedbrahma-range/assets/',
@@ -799,7 +802,7 @@ LIB.scoreV22 = function (R, ANCH) {
 function stepLayers() {
   var CFG = {
     AOI_ASSET: SETTINGS.AOI_ASSET, RANGE_NAME: SETTINGS.RANGE_NAME, ID_PREFIX: SETTINGS.ID_PREFIX,
-    DIVISION_NAME: SETTINGS.DIVISION_NAME, RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
+    DIVISION_NAME: SETTINGS.DIVISION_NAME, RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES, ONLY: SETTINGS.ONLY_RANGES || [],
     MODEL_VERSION: 'FRPIM_v2.2', BLOCK_SIDE: 316.2278, MIN_BLOCK_HA: 2.0,
     BEAT_FIELD: SETTINGS.BEAT_FIELD, CRS: SETTINGS.CRS, STATE_CRS: SETTINGS.CRS,
     ANCHOR_MODE: 'LOCAL', ANCHOR_ASSET: null, STATE_NAME: 'Gujarat', LIVE_ANCHOR_SCALE: 500,
@@ -976,7 +979,7 @@ function stepLayers() {
     var anchFC = ee.FeatureCollection([ee.Feature(null, LOCAL_ANCH).set({
       anchor_id: ANCHOR_ID, anchor_landscape: CFG.RANGE_NAME + ' + ' + CFG.LOCAL_BUFFER_KM + ' km buffer',
       anchor_scales: LOCAL_LOG, land_mask: 'WorldCover 10/20/30/60', created: today})]);
-    Export.table.toDrive({collection: anchFC, description: 'FRPIM01_local_anchor_table',
+    if (!CFG.ONLY.length) Export.table.toDrive({collection: anchFC, description: 'FRPIM01_local_anchor_table',
       folder: CFG.DRIVE_FOLDER, fileNamePrefix: 'FRPIM01_local_anchors_' + CFG.RANGE_NAME, fileFormat: 'CSV'});
   } else if (CFG.ANCHOR_MODE === 'LIVE') {
     print('WARNING: LIVE anchors at ' + CFG.LIVE_ANCHOR_SCALE + ' m — provisional (FF-09 = WARN).');
@@ -1198,13 +1201,14 @@ function stepLayers() {
 
   /* ---------- Step 17: EXPORT the raw block table — mandatory checkpoint ---------- */
   // one raw block table per range: smaller, independent tasks for a division-size run
-  CFG.RANGES.forEach(function (r) {
+  CFG.RANGES.filter(function (r) { return !CFG.ONLY.length || CFG.ONLY.indexOf(r.code) >= 0; }).forEach(function (r) {
     Export.table.toAsset({
       collection: finishBlocks(reduceAll(gridFor(r.name))),
       description: 'FRPIM01_raw_blocks_' + r.code,
       assetId: CFG.RAW_PREFIX + r.code
     });
   });
+  if (!CFG.ONLY.length) {
   Export.table.toAsset({
     collection: QC01,
     description: 'FRPIM01_qc01_to_asset',
@@ -1229,8 +1233,10 @@ function stepLayers() {
     scale: 10,
     maxPixels: 1e11
   });
+  }   // end of the shared tasks (skipped when ONLY_RANGES is set)
 
   print('====================================================================');
+  if (CFG.ONLY.length) { print('RE-RUN of ranges ' + CFG.ONLY.join(', ') + ' only: Tasks tab -> RUN those tasks. Then set ONLY_RANGES back to [] and press Run for RUN 2.'); }
   print('NEXT: Tasks tab -> RUN ALL. When all ' + CFG.RANGES.length + ' FRPIM01_raw_blocks_<range> tasks');
   print('and FRPIM01_qc01_to_asset have completed, press Run again (RUN 2: division map).');
   print('Range tables:', CFG.RAW_PREFIX + '<DHO, POS, RAI, KHE, RPO, VAD, VIJ>');
@@ -2587,7 +2593,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 4 (light Console, per-range counts)');
+print('Script: FRPIM v2.2 division, build 5 (re-run selected ranges)');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -2603,11 +2609,13 @@ ids.forEach(function (id) {
     var missing = SETTINGS.RANGES.filter(function (r, i) { return !found[ASSETS.RAW_PARTS[i]]; });
     if (STEP !== 'AUTO') { runFrpimStep(STEP); return; }
     if (have.length === 0) { runFrpimStep('LAYERS'); return; }
+    if ((SETTINGS.ONLY_RANGES || []).length) { runFrpimStep('LAYERS'); return; }
     if (missing.length > 0) {
       print('WAIT: range tables saved for ' + have.map(function (r) { return r.name; }).join(', ') +
             '; still missing: ' + missing.map(function (r) { return r.name; }).join(', ') + '.');
-      print('Check the Tasks tab: run or re-run the FRPIM01_raw_blocks_<range> tasks that have not finished, ' +
-            'then press Run again. (To rebuild everything, set STEP = \'LAYERS\'.)');
+      print('If those tasks are still running, wait and press Run again. If they FAILED, set ONLY_RANGES: ' +
+            JSON.stringify(missing.map(function (r) { return r.code; })) + ' (and TILE_SCALE: 16 for a memory error), ' +
+            'press Run, and run just those tasks. Then set ONLY_RANGES back to [] and press Run.');
       return;
     }
     if (!HAS_QC01) { print('Note: the QC01 table is missing; the map is not affected, the QC log marks those checks NOT RECORDED.'); }

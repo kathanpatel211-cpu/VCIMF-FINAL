@@ -61,6 +61,9 @@ var SETTINGS = {
     {name: 'Rdf Khedbrahma', code: 'KHE'}, {name: 'Rdf Poshina', code: 'RPO'}, {name: 'Vadali', code: 'VAD'},
     {name: 'Vijaynagar', code: 'VIJ'}
   ],
+  // re-run only some ranges: their short codes, e.g. ['RPO', 'POS']. Empty [] = all ranges (normal RUN 1).
+  // With codes here, RUN 1 creates only those range tasks (no QC, anchor or constraint-map tasks again).
+  ONLY_RANGES: [],
   ID_PREFIX: 'SBK_',
   CRS: 'EPSG:32643',               // UTM 43N (checked automatically against the division)
   ASSET_ROOT: 'projects/khedbrahma-range/assets/',
@@ -121,7 +124,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 4 (light Console, per-range counts)');
+print('Script: FRPIM v2.2 division, build 5 (re-run selected ranges)');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -137,11 +140,13 @@ ids.forEach(function (id) {
     var missing = SETTINGS.RANGES.filter(function (r, i) { return !found[ASSETS.RAW_PARTS[i]]; });
     if (STEP !== 'AUTO') { runFrpimStep(STEP); return; }
     if (have.length === 0) { runFrpimStep('LAYERS'); return; }
+    if ((SETTINGS.ONLY_RANGES || []).length) { runFrpimStep('LAYERS'); return; }
     if (missing.length > 0) {
       print('WAIT: range tables saved for ' + have.map(function (r) { return r.name; }).join(', ') +
             '; still missing: ' + missing.map(function (r) { return r.name; }).join(', ') + '.');
-      print('Check the Tasks tab: run or re-run the FRPIM01_raw_blocks_<range> tasks that have not finished, ' +
-            'then press Run again. (To rebuild everything, set STEP = \'LAYERS\'.)');
+      print('If those tasks are still running, wait and press Run again. If they FAILED, set ONLY_RANGES: ' +
+            JSON.stringify(missing.map(function (r) { return r.code; })) + ' (and TILE_SCALE: 16 for a memory error), ' +
+            'press Run, and run just those tasks. Then set ONLY_RANGES back to [] and press Run.');
       return;
     }
     if (!HAS_QC01) { print('Note: the QC01 table is missing; the map is not affected, the QC log marks those checks NOT RECORDED.'); }
@@ -201,6 +206,12 @@ r1 = edit(r1, [
      "Map.centerObject(AOI, 9);\nMap.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Division forest boundary');\n"
      "print('Map: the division forest boundary is shown. Parameter previews are off for a division-size run (they exceed the Console memory); the export tasks are not affected.');\n"
      "if (CFG.SHOW_MAP) {"),
+    ("  Export.table.toDrive({collection: anchFC, description: 'FRPIM01_local_anchor_table',",
+     "  if (!CFG.ONLY.length) Export.table.toDrive({collection: anchFC, description: 'FRPIM01_local_anchor_table',"),
+    ("Export.table.toAsset({\n  collection: QC01,", "if (!CFG.ONLY.length) {\nExport.table.toAsset({\n  collection: QC01,"),
+    ("  maxPixels: 1e11\n});\n", "  maxPixels: 1e11\n});\n}   // end of the shared tasks (skipped when ONLY_RANGES is set)\n"),
+    ("print('NEXT: Tasks tab -> RUN ALL. When FRPIM01_raw_blocks_to_asset');\nprint('and FRPIM01_qc01_to_asset",
+     "if (CFG.ONLY.length) { print('RE-RUN of ranges ' + CFG.ONLY.join(', ') + ' only: Tasks tab -> RUN those tasks. Then set ONLY_RANGES back to [] and press Run for RUN 2.'); }\nprint('NEXT: Tasks tab -> RUN ALL. When FRPIM01_raw_blocks_to_asset');\nprint('and FRPIM01_qc01_to_asset"),
     ("  utm: LIB.utmCrs(AOI)\n};", "  utm: LIB.utmCrs(AOI),\n  ranges: AOI_FC.aggregate_array(CFG.RANGE_FIELD).distinct().sort(),\n  n_range_field: AOI_FC.filter(ee.Filter.notNull([CFG.RANGE_FIELD])).size()\n};"),
     ("  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);",
      "  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);\n"
@@ -240,7 +251,7 @@ blocks = reduceGroup(MIN30, blocks, ee.Reducer.min(), 30);""",
   assetId: CFG.RAW_ASSET
 });""",
      """// one raw block table per range: smaller, independent tasks for a division-size run
-CFG.RANGES.forEach(function (r) {
+CFG.RANGES.filter(function (r) { return !CFG.ONLY.length || CFG.ONLY.indexOf(r.code) >= 0; }).forEach(function (r) {
   Export.table.toAsset({
     collection: finishBlocks(reduceAll(gridFor(r.name))),
     description: 'FRPIM01_raw_blocks_' + r.code,
@@ -258,7 +269,7 @@ assert 'collection: blocks,' not in r1
 
 cfg01 = """  var CFG = {
     AOI_ASSET: SETTINGS.AOI_ASSET, RANGE_NAME: SETTINGS.RANGE_NAME, ID_PREFIX: SETTINGS.ID_PREFIX,
-    DIVISION_NAME: SETTINGS.DIVISION_NAME, RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
+    DIVISION_NAME: SETTINGS.DIVISION_NAME, RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES, ONLY: SETTINGS.ONLY_RANGES || [],
     MODEL_VERSION: 'FRPIM_v2.2', BLOCK_SIDE: 316.2278, MIN_BLOCK_HA: 2.0,
     BEAT_FIELD: SETTINGS.BEAT_FIELD, CRS: SETTINGS.CRS, STATE_CRS: SETTINGS.CRS,
     ANCHOR_MODE: 'LOCAL', ANCHOR_ASSET: null, STATE_NAME: 'Gujarat', LIVE_ANCHOR_SCALE: 500,
