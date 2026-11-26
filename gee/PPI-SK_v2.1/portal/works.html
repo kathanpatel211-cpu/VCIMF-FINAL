@@ -1,0 +1,1010 @@
+<title>FRPIM Restoration Works Portal</title>
+<link rel="artifact-thumbnail" href="thumb.png">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Leaflet 1.9.4 (BSD-2-Clause), image references removed */
+ .leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas, .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer { position: absolute; left: 0; top: 0; } .leaflet-container { overflow: hidden; } .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow { -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-user-drag: none; } .leaflet-tile::selection { background: transparent; } .leaflet-safari .leaflet-tile { image-rendering: -webkit-optimize-contrast; } .leaflet-safari .leaflet-tile-container { width: 1600px; height: 1600px; -webkit-transform-origin: 0 0; } .leaflet-marker-icon, .leaflet-marker-shadow { display: block; } .leaflet-container .leaflet-overlay-pane svg { max-width: none !important; max-height: none !important; } .leaflet-container .leaflet-marker-pane img, .leaflet-container .leaflet-shadow-pane img, .leaflet-container .leaflet-tile-pane img, .leaflet-container img.leaflet-image-layer, .leaflet-container .leaflet-tile { max-width: none !important; max-height: none !important; width: auto; padding: 0; } .leaflet-container img.leaflet-tile { mix-blend-mode: plus-lighter; } .leaflet-container.leaflet-touch-zoom { -ms-touch-action: pan-x pan-y; touch-action: pan-x pan-y; } .leaflet-container.leaflet-touch-drag { -ms-touch-action: pinch-zoom; touch-action: none; touch-action: pinch-zoom; } .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom { -ms-touch-action: none; touch-action: none; } .leaflet-container { -webkit-tap-highlight-color: transparent; } .leaflet-container a { -webkit-tap-highlight-color: rgba(51, 181, 229, 0.4); } .leaflet-tile { filter: inherit; visibility: hidden; } .leaflet-tile-loaded { visibility: inherit; } .leaflet-zoom-box { width: 0; height: 0; -moz-box-sizing: border-box; box-sizing: border-box; z-index: 800; } .leaflet-overlay-pane svg { -moz-user-select: none; } .leaflet-pane { z-index: 400; } .leaflet-tile-pane { z-index: 200; } .leaflet-overlay-pane { z-index: 400; } .leaflet-shadow-pane { z-index: 500; } .leaflet-marker-pane { z-index: 600; } .leaflet-tooltip-pane { z-index: 650; } .leaflet-popup-pane { z-index: 700; } .leaflet-map-pane canvas { z-index: 100; } .leaflet-map-pane svg { z-index: 200; } .leaflet-vml-shape { width: 1px; height: 1px; } .lvml { behavior: none; display: inline-block; position: absolute; } .leaflet-control { position: relative; z-index: 800; pointer-events: visiblePainted; pointer-events: auto; } .leaflet-top, .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; } .leaflet-top { top: 0; } .leaflet-right { right: 0; } .leaflet-bottom { bottom: 0; } .leaflet-left { left: 0; } .leaflet-control { float: left; clear: both; } .leaflet-right .leaflet-control { float: right; } .leaflet-top .leaflet-control { margin-top: 10px; } .leaflet-bottom .leaflet-control { margin-bottom: 10px; } .leaflet-left .leaflet-control { margin-left: 10px; } .leaflet-right .leaflet-control { margin-right: 10px; } .leaflet-fade-anim .leaflet-popup { opacity: 0; -webkit-transition: opacity 0.2s linear; -moz-transition: opacity 0.2s linear; transition: opacity 0.2s linear; } .leaflet-fade-anim .leaflet-map-pane .leaflet-popup { opacity: 1; } .leaflet-zoom-animated { -webkit-transform-origin: 0 0; -ms-transform-origin: 0 0; transform-origin: 0 0; } svg.leaflet-zoom-animated { will-change: transform; } .leaflet-zoom-anim .leaflet-zoom-animated { -webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1); -moz-transition: -moz-transform 0.25s cubic-bezier(0,0,0.25,1); transition: transform 0.25s cubic-bezier(0,0,0.25,1); } .leaflet-zoom-anim .leaflet-tile, .leaflet-pan-anim .leaflet-tile { -webkit-transition: none; -moz-transition: none; transition: none; } .leaflet-zoom-anim .leaflet-zoom-hide { visibility: hidden; } .leaflet-interactive { cursor: pointer; } .leaflet-grab { cursor: -webkit-grab; cursor: -moz-grab; cursor: grab; } .leaflet-crosshair, .leaflet-crosshair .leaflet-interactive { cursor: crosshair; } .leaflet-popup-pane, .leaflet-control { cursor: auto; } .leaflet-dragging .leaflet-grab, .leaflet-dragging .leaflet-grab .leaflet-interactive, .leaflet-dragging .leaflet-marker-draggable { cursor: move; cursor: -webkit-grabbing; cursor: -moz-grabbing; cursor: grabbing; } .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-image-layer, .leaflet-pane > svg path, .leaflet-tile-container { pointer-events: none; } .leaflet-marker-icon.leaflet-interactive, .leaflet-image-layer.leaflet-interactive, .leaflet-pane > svg path.leaflet-interactive, svg.leaflet-image-layer.leaflet-interactive path { pointer-events: visiblePainted; pointer-events: auto; } .leaflet-container { background: #ddd; outline-offset: 1px; } .leaflet-container a { color: #0078A8; } .leaflet-zoom-box { border: 2px dotted #38f; background: rgba(255,255,255,0.5); } .leaflet-container { font-family: "Helvetica Neue", Arial, Helvetica, sans-serif; font-size: 12px; font-size: 0.75rem; line-height: 1.5; } .leaflet-bar { box-shadow: 0 1px 5px rgba(0,0,0,0.65); border-radius: 4px; } .leaflet-bar a { background-color: #fff; border-bottom: 1px solid #ccc; width: 26px; height: 26px; line-height: 26px; display: block; text-align: center; text-decoration: none; color: black; } .leaflet-bar a, .leaflet-control-layers-toggle { background-position: 50% 50%; background-repeat: no-repeat; display: block; } .leaflet-bar a:hover, .leaflet-bar a:focus { background-color: #f4f4f4; } .leaflet-bar a:first-child { border-top-left-radius: 4px; border-top-right-radius: 4px; } .leaflet-bar a:last-child { border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; border-bottom: none; } .leaflet-bar a.leaflet-disabled { cursor: default; background-color: #f4f4f4; color: #bbb; } .leaflet-touch .leaflet-bar a { width: 30px; height: 30px; line-height: 30px; } .leaflet-touch .leaflet-bar a:first-child { border-top-left-radius: 2px; border-top-right-radius: 2px; } .leaflet-touch .leaflet-bar a:last-child { border-bottom-left-radius: 2px; border-bottom-right-radius: 2px; } .leaflet-control-zoom-in, .leaflet-control-zoom-out { font: bold 18px 'Lucida Console', Monaco, monospace; text-indent: 1px; } .leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out { font-size: 22px; } .leaflet-control-layers { box-shadow: 0 1px 5px rgba(0,0,0,0.4); background: #fff; border-radius: 5px; } .leaflet-control-layers-toggle { background-image: none; width: 36px; height: 36px; } .leaflet-retina .leaflet-control-layers-toggle { background-image: none; background-size: 26px 26px; } .leaflet-touch .leaflet-control-layers-toggle { width: 44px; height: 44px; } .leaflet-control-layers .leaflet-control-layers-list, .leaflet-control-layers-expanded .leaflet-control-layers-toggle { display: none; } .leaflet-control-layers-expanded .leaflet-control-layers-list { display: block; position: relative; } .leaflet-control-layers-expanded { padding: 6px 10px 6px 6px; color: #333; background: #fff; } .leaflet-control-layers-scrollbar { overflow-y: scroll; overflow-x: hidden; padding-right: 5px; } .leaflet-control-layers-selector { margin-top: 2px; position: relative; top: 1px; } .leaflet-control-layers label { display: block; font-size: 13px; font-size: 1.08333em; } .leaflet-control-layers-separator { height: 0; border-top: 1px solid #ddd; margin: 5px -10px 5px -6px; } .leaflet-default-icon-path { background-image: none; } .leaflet-container .leaflet-control-attribution { background: #fff; background: rgba(255, 255, 255, 0.8); margin: 0; } .leaflet-control-attribution, .leaflet-control-scale-line { padding: 0 5px; color: #333; line-height: 1.4; } .leaflet-control-attribution a { text-decoration: none; } .leaflet-control-attribution a:hover, .leaflet-control-attribution a:focus { text-decoration: underline; } .leaflet-attribution-flag { display: inline !important; vertical-align: baseline !important; width: 1em; height: 0.6669em; } .leaflet-left .leaflet-control-scale { margin-left: 5px; } .leaflet-bottom .leaflet-control-scale { margin-bottom: 5px; } .leaflet-control-scale-line { border: 2px solid #777; border-top: none; line-height: 1.1; padding: 2px 5px 1px; white-space: nowrap; -moz-box-sizing: border-box; box-sizing: border-box; background: rgba(255, 255, 255, 0.8); text-shadow: 1px 1px #fff; } .leaflet-control-scale-line:not(:first-child) { border-top: 2px solid #777; border-bottom: none; margin-top: -2px; } .leaflet-control-scale-line:not(:first-child):not(:last-child) { border-bottom: 2px solid #777; } .leaflet-touch .leaflet-control-attribution, .leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar { box-shadow: none; } .leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar { border: 2px solid rgba(0,0,0,0.2); background-clip: padding-box; } .leaflet-popup { position: absolute; text-align: center; margin-bottom: 20px; } .leaflet-popup-content-wrapper { padding: 1px; text-align: left; border-radius: 12px; } .leaflet-popup-content { margin: 13px 24px 13px 20px; line-height: 1.3; font-size: 13px; font-size: 1.08333em; min-height: 1px; } .leaflet-popup-content p { margin: 17px 0; margin: 1.3em 0; } .leaflet-popup-tip-container { width: 40px; height: 20px; position: absolute; left: 50%; margin-top: -1px; margin-left: -20px; overflow: hidden; pointer-events: none; } .leaflet-popup-tip { width: 17px; height: 17px; padding: 1px; margin: -10px auto 0; pointer-events: auto; -webkit-transform: rotate(45deg); -moz-transform: rotate(45deg); -ms-transform: rotate(45deg); transform: rotate(45deg); } .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: white; color: #333; box-shadow: 0 3px 14px rgba(0,0,0,0.4); } .leaflet-container a.leaflet-popup-close-button { position: absolute; top: 0; right: 0; border: none; text-align: center; width: 24px; height: 24px; font: 16px/24px Tahoma, Verdana, sans-serif; color: #757575; text-decoration: none; background: transparent; } .leaflet-container a.leaflet-popup-close-button:hover, .leaflet-container a.leaflet-popup-close-button:focus { color: #585858; } .leaflet-popup-scrolled { overflow: auto; } .leaflet-oldie .leaflet-popup-content-wrapper { -ms-zoom: 1; } .leaflet-oldie .leaflet-popup-tip { width: 24px; margin: 0 auto; -ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)"; filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678); } .leaflet-oldie .leaflet-control-zoom, .leaflet-oldie .leaflet-control-layers, .leaflet-oldie .leaflet-popup-content-wrapper, .leaflet-oldie .leaflet-popup-tip { border: 1px solid #999; } .leaflet-div-icon { background: #fff; border: 1px solid #666; } .leaflet-tooltip { position: absolute; padding: 6px; background-color: #fff; border: 1px solid #fff; border-radius: 3px; color: #222; white-space: nowrap; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.4); } .leaflet-tooltip.leaflet-interactive { cursor: pointer; pointer-events: auto; } .leaflet-tooltip-top:before, .leaflet-tooltip-bottom:before, .leaflet-tooltip-left:before, .leaflet-tooltip-right:before { position: absolute; pointer-events: none; border: 6px solid transparent; background: transparent; content: ""; } .leaflet-tooltip-bottom { margin-top: 6px; } .leaflet-tooltip-top { margin-top: -6px; } .leaflet-tooltip-bottom:before, .leaflet-tooltip-top:before { left: 50%; margin-left: -6px; } .leaflet-tooltip-top:before { bottom: 0; margin-bottom: -12px; border-top-color: #fff; } .leaflet-tooltip-bottom:before { top: 0; margin-top: -12px; margin-left: -6px; border-bottom-color: #fff; } .leaflet-tooltip-left { margin-left: -6px; } .leaflet-tooltip-right { margin-left: 6px; } .leaflet-tooltip-left:before, .leaflet-tooltip-right:before { top: 50%; margin-top: -6px; } .leaflet-tooltip-left:before { right: 0; margin-right: -12px; border-left-color: #fff; } .leaflet-tooltip-right:before { left: 0; margin-left: -12px; border-right-color: #fff; } @media print { .leaflet-control { -webkit-print-color-adjust: exact; print-color-adjust: exact; } } 
+/* Layout: an office workflow portal. Green top bar with role and navigation; content column of cards; a work file opens as one page with the map panel, FRPIM findings, scrutiny and the action box. */
+:root {
+  --bg: #f2f5f1; --surface: #ffffff; --surface-2: #edf2ec; --ink: #16211a; --muted: #5b6b60; --line: #d6ded7;
+  --brand: #17462c; --brand-2: #1f5f3a; --brand-ink: #ffffff; --accent: #b86e00; --accent-soft: #fdf0dc;
+  --soft: #e1eee5; --mapbg: #e8ede7;
+  --ok: #1a7f37; --ok-soft: #e1f2e6; --warn: #a15c07; --warn-soft: #fbeed6; --bad: #b42318; --bad-soft: #fbe3e0;
+  --info: #1d5fa8; --info-soft: #e2edf9;
+  --font-ui: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --shadow: 0 1px 2px rgba(20, 40, 28, .06), 0 2px 8px rgba(20, 40, 28, .05);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111714; --surface: #18201b; --surface-2: #1f2923; --ink: #e5ece7; --muted: #9aab9f; --line: #2d3a32;
+  --brand: #0f2a1b; --brand-2: #1c4a2f; --brand-ink: #eaf3ec; --accent: #e7a54a; --accent-soft: #3a2a13;
+  --soft: #1d3326; --mapbg: #1b231e;
+  --ok: #5cc27a; --ok-soft: #16301f; --warn: #e3a34a; --warn-soft: #382913; --bad: #f07a6c; --bad-soft: #3b1b18;
+  --info: #7fb2ec; --info-soft: #172739; --shadow: none; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111714; --surface: #18201b; --surface-2: #1f2923; --ink: #e5ece7; --muted: #9aab9f; --line: #2d3a32;
+  --brand: #0f2a1b; --brand-2: #1c4a2f; --brand-ink: #eaf3ec; --accent: #e7a54a; --accent-soft: #3a2a13;
+  --soft: #1d3326; --mapbg: #1b231e;
+  --ok: #5cc27a; --ok-soft: #16301f; --warn: #e3a34a; --warn-soft: #382913; --bad: #f07a6c; --bad-soft: #3b1b18;
+  --info: #7fb2ec; --info-soft: #172739; --shadow: none; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.gut { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- login ---------- */
+.login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 860px) { .login { grid-template-columns: minmax(0, 1fr); } }
+.login .brandside { background: var(--brand); color: var(--brand-ink); padding-block: 48px; display: grid; align-content: space-between; gap: 32px; position: relative; overflow: hidden; }
+.login .brandside canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .35; }
+.login .brandside > * { position: relative; }
+.login .mark { display: flex; gap: 12px; align-items: center; font-weight: 700; letter-spacing: .02em; }
+.login .mark i { width: 38px; height: 38px; border-radius: 9px; background: var(--brand-ink); display: grid; place-items: center; }
+.login .brandside h1 { font-size: clamp(28px, 4vw, 44px); line-height: 1.08; letter-spacing: -0.02em; max-width: 14ch; }
+.login .brandside p { max-width: 46ch; opacity: .85; font-size: 15px; }
+.login .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+.login .flow span { background: rgba(255,255,255,.12); padding: 5px 10px; border-radius: 999px; }
+.login .formside { padding-block: 48px; display: grid; align-content: center; justify-items: center; }
+.login .box { width: 100%; max-width: 420px; display: grid; gap: 16px; }
+.login .box h2 { font-size: 22px; }
+.rolecards { display: grid; gap: 8px; }
+.rolecard { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.rolecard:hover { border-color: var(--brand-2); }
+.rolecard[aria-pressed="true"] { border-color: var(--brand-2); box-shadow: 0 0 0 2px var(--soft); }
+.rolecard .av { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; }
+.rolecard b { display: block; }
+.rolecard small { color: var(--muted); }
+.rolecard code { font-family: var(--font-num); font-size: 12px; color: var(--muted); }
+.field { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field input, .field select, .field textarea { font-weight: 400; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px; width: 100%; min-width: 0; }
+.field textarea { min-height: 74px; resize: vertical; }
+.hint { font-size: 12px; color: var(--muted); }
+.err { color: var(--bad); font-size: 13px; }
+.okm { color: var(--ok); font-size: 13px; }
+
+/* ---------- app shell ---------- */
+.top { background: var(--brand); color: var(--brand-ink); position: sticky; top: 0; z-index: 1000; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--brand); z-index: 1001; }
+.top .bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; padding-block: 10px; }
+.top .title { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.top .title i { width: 30px; height: 30px; border-radius: 7px; background: var(--brand-ink); display: grid; place-items: center; flex: none; }
+.top .title b { font-size: 15px; display: block; }
+.top .title small { opacity: .75; font-size: 12px; display: block; }
+.who { display: flex; gap: 10px; align-items: center; }
+.who .av { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.who b { display: block; font-size: 13px; }
+.who small { opacity: .75; font-size: 11.5px; }
+.top button.out { background: transparent; border: 1px solid rgba(255,255,255,.4); color: var(--brand-ink); border-radius: 7px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+.nav { display: flex; gap: 2px; overflow-x: auto; background: var(--brand-2); }
+.nav button { background: transparent; border: 0; color: var(--brand-ink); opacity: .8; padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13.5px; border-bottom: 3px solid transparent; white-space: nowrap; }
+.nav button[aria-current="page"] { opacity: 1; border-bottom-color: var(--accent); }
+.nav .count { background: var(--accent); color: #1b1203; border-radius: 999px; padding: 0 7px; font-size: 11.5px; margin-left: 6px; }
+main { padding-block: 18px 40px; display: grid; gap: 16px; max-width: 1360px; margin: 0 auto; }
+.pagehead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; justify-content: space-between; }
+.pagehead h1 { font-size: 22px; letter-spacing: -0.01em; }
+.pagehead p { margin: 2px 0 0; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 16px; display: grid; gap: 12px; min-width: 0; align-content: start; }
+.card > h2 { font-size: 15px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.card > h2 small { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g-main { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 980px) { .g2, .g3, .g-main { grid-template-columns: minmax(0, 1fr); } }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 4px; box-shadow: var(--shadow); }
+.kpi span { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.kpi b { font-family: var(--font-num); font-size: 26px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi small { font-size: 12px; color: var(--muted); }
+.kpi.hl { border-color: var(--accent); background: var(--accent-soft); }
+
+.btn { border: 1px solid var(--brand-2); background: var(--brand-2); color: var(--brand-ink); border-radius: 7px; padding: 9px 15px; font-weight: 600; font-size: 13.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.btn.ghost { background: transparent; color: var(--brand-2); }
+.btn.warn { background: var(--warn); border-color: var(--warn); color: #fff; }
+.btn.bad { background: transparent; border-color: var(--bad); color: var(--bad); }
+.btn.big { padding: 11px 18px; font-size: 14.5px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+:root:not([data-theme="light"]) .btn.ghost { color: var(--ink); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.c-g { background: var(--ok-soft); color: var(--ok); } .c-a { background: var(--warn-soft); color: var(--warn); } .c-r { background: var(--bad-soft); color: var(--bad); }
+.c-i { background: var(--info-soft); color: var(--info); } .c-s { background: var(--surface-2); color: var(--muted); } .c-x { background: var(--accent-soft); color: var(--accent); }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 720px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pipe button { text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 9px; padding: 10px 12px; display: grid; gap: 2px; cursor: pointer; position: relative; }
+.pipe button:hover { border-color: var(--brand-2); }
+.pipe b { font-family: var(--font-num); font-size: 22px; font-weight: 500; }
+.pipe span { font-size: 12.5px; font-weight: 600; }
+.pipe small { color: var(--muted); font-size: 12px; }
+.pipe .bar { height: 4px; border-radius: 2px; margin-top: 4px; }
+
+/* charts */
+.hbars { display: grid; gap: 8px; }
+.hbar { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 76px; gap: 10px; align-items: center; font-size: 13px; }
+.hbar .tr { height: 14px; background: var(--surface-2); border-radius: 3px; overflow: hidden; display: flex; }
+.hbar .tr div { height: 100%; }
+.hbar .v { text-align: right; font-family: var(--font-num); font-size: 12.5px; }
+.stack { display: flex; height: 22px; border-radius: 5px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); }
+.stack div { height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 5px; align-items: center; }
+.legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,.2); }
+
+/* lists */
+.list { display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px 10px 0; background: var(--surface); cursor: pointer; text-align: left; width: 100%; }
+.item:hover { border-color: var(--brand-2); }
+.item .st { align-self: stretch; border-radius: 9px 0 0 9px; }
+.item .t { font-weight: 700; overflow-wrap: anywhere; }
+.item .m { font-size: 12.5px; color: var(--muted); }
+.item .r { display: grid; gap: 4px; justify-items: end; }
+.empty { border: 1px dashed var(--line); border-radius: 10px; padding: 22px; text-align: center; color: var(--muted); display: grid; gap: 6px; justify-items: center; }
+.empty b { color: var(--ink); }
+.feed { display: grid; gap: 10px; }
+.feed > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; font-size: 13px; }
+.feed .av { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; }
+.feed small { color: var(--muted); display: block; }
+
+/* tables */
+.tw { overflow-x: auto; }
+table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.t th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
+table.t td { border-bottom: 1px solid var(--line); padding: 7px 8px; vertical-align: middle; }
+table.t td.n, table.t th.n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+table.t tr.click { cursor: pointer; }
+table.t tr.click:hover td { background: var(--surface-2); }
+table.t i.sw { width: 11px; height: 11px; border-radius: 2px; display: inline-block; margin-right: 7px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters select, .filters input { border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; background: var(--surface); min-width: 0; }
+.filters input { flex: 1 1 200px; }
+
+/* work file */
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; counter-reset: s; }
+.steps div { position: relative; padding: 0 8px 0 0; display: grid; gap: 4px; font-size: 12.5px; }
+.steps div::before { content: ""; height: 6px; border-radius: 3px; background: var(--surface-2); }
+.steps div.done::before { background: var(--ok); }
+.steps div.now::before { background: var(--accent); }
+.steps div.back::before { background: var(--bad); }
+.steps b { font-size: 13px; }
+.steps small { color: var(--muted); }
+@media (max-width: 560px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; } }
+.maps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .maps3 { grid-template-columns: minmax(0, 1fr); } }
+.maps3 figure { margin: 0; display: grid; gap: 6px; }
+.maps3 figcaption { font-size: 12.5px; font-weight: 700; }
+.maps3 svg { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--mapbg); display: block; }
+.maps3 .legend { font-size: 11px; }
+.verdict { border-radius: 9px; padding: 12px 14px; border-left: 6px solid; display: grid; gap: 4px; }
+.verdict.g { background: var(--ok-soft); border-color: var(--ok); } .verdict.a { background: var(--warn-soft); border-color: var(--warn); } .verdict.r { background: var(--bad-soft); border-color: var(--bad); }
+.verdict b { font-size: 16px; }
+.verdict.g b { color: var(--ok); } .verdict.a b { color: var(--warn); } .verdict.r b { color: var(--bad); }
+.verdict ul { margin: 2px 0 0; padding-left: 18px; font-size: 13px; }
+.mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .mini { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mini div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; }
+.mini b { font-family: var(--font-num); font-size: 18px; font-weight: 500; }
+.mini span { font-size: 11.5px; color: var(--muted); }
+dl.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+.timeline { display: grid; gap: 0; }
+.timeline > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding-bottom: 14px; position: relative; font-size: 13px; }
+.timeline > div::after { content: ""; position: absolute; left: 16px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+.timeline > div:last-child::after { display: none; }
+.timeline .av { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; z-index: 1; }
+.timeline small { color: var(--muted); display: block; }
+.timeline q { display: block; margin-top: 3px; color: var(--ink); background: var(--surface-2); padding: 6px 9px; border-radius: 6px; quotes: none; }
+.action { border: 2px solid var(--accent); background: var(--accent-soft); }
+.checks { display: grid; gap: 6px; }
+.checks label { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px; cursor: pointer; }
+.checks input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--brand-2); }
+.drop { border: 2px dashed var(--line); border-radius: 10px; padding: 22px; text-align: center; display: grid; gap: 6px; background: var(--surface-2); cursor: pointer; }
+.drop.over { border-color: var(--brand-2); background: var(--soft); }
+.drop b { font-size: 15px; }
+.formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.formgrid .full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .formgrid { grid-template-columns: minmax(0, 1fr); } }
+.banner { border-radius: 9px; padding: 10px 14px; font-size: 13.5px; }
+.banner.r { background: var(--bad-soft); color: var(--ink); border-left: 5px solid var(--bad); }
+.banner.i { background: var(--info-soft); border-left: 5px solid var(--info); }
+#bigmap { height: min(70vh, 680px); min-height: 380px; border: 1px solid var(--line); border-radius: 10px; background: var(--mapbg); }
+.leaflet-container { background: var(--mapbg); font-family: var(--font-ui); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; padding: 7px 12px; cursor: pointer; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--brand-2); color: var(--brand-ink); font-weight: 600; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 13.5px; z-index: 2000; box-shadow: 0 6px 20px rgba(0,0,0,.2); max-width: calc(100vw - 32px); }
+.foot { color: var(--muted); font-size: 12px; text-align: center; padding-block: 6px 24px; }
+details > summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="app" aria-live="polite"></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   FRPIM Restoration Works Portal: RFO -> ACF -> DCF approval workflow
+   with every treatment map checked against FRPIM Maps 1-3.
+   ===================================================================== */
+const RANGE = { code: "KB", name: "Khedbrahma Range" };
+const ROLES = {
+  RFO: { id: "rfo.khedbrahma", title: "Range Forest Officer", office: "Khedbrahma Range", colour: "#1f5f3a", can: "Prepares proposals and uploads treatment KMLs" },
+  ACF: { id: "acf.khedbrahma", title: "Assistant Conservator of Forests", office: "Khedbrahma Sub-division", colour: "#1d5fa8", can: "Scrutinises proposals and recommends them to the DCF" },
+  DCF: { id: "dcf.division", title: "Deputy Conservator of Forests", office: "Forest Division", colour: "#8a4b00", can: "Final approval authority" }
+};
+const DEMO_PASSWORD = "demo@123";
+const STATUS = {
+  DRAFT: ["Draft", "c-s"], ACF: ["With ACF for scrutiny", "c-i"], RET_RFO: ["Returned to RFO", "c-r"], DCF: ["With DCF for approval", "c-x"],
+  RET_ACF: ["Returned to ACF", "c-r"], APPROVED: ["Approved", "c-g"], APPROVED_DEV: ["Approved with recorded deviation", "c-g"], REJECTED: ["Not approved", "c-r"]
+};
+const INBOX = { RFO: ["DRAFT", "RET_RFO"], ACF: ["ACF", "RET_ACF"], DCF: ["DCF"] };
+const PHASE = { 1: ["Phase 1", "#a50026"], 2: ["Phase 2", "#f46d43"], 3: ["Phase 3", "#fdae61"], 4: ["Phase 4", "#fee08b"], 5: ["Phase 5", "#ffffbf"], 6: ["Protected (C1)", "#1a9850"], 7: ["Excluded (C2-C7)", "#bdbdbd"] };
+const NEED = { 1: ["Very low", "#ffffcc"], 2: ["Low", "#fed976"], 3: ["Moderate", "#fd8d3c"], 4: ["High", "#e31a1c"], 5: ["Very high", "#800026"], 6: PHASE[6], 7: PHASE[7] };
+const FEAS = { 1: ["Very low", "#8c510a"], 2: ["Low", "#d8b365"], 3: ["Moderate", "#c7eae5"], 4: ["High", "#5ab4ac"], 5: ["Very high", "#2166ac"], 6: PHASE[6], 7: PHASE[7] };
+const OUTSIDE = ["Outside range blocks", "#ffffff"];
+const RX = { S: "SMC + drought-hardy planting", B: "Blank-area plantation", A: "ANR + gap planting", P: "Protect dense forest", X: "Not plantable" };
+const SG = { D: "Drought-hardy (khair, ber, desi babul, guggal, hingor)", M: "Medium (teak, dhavdo, timru, khakhro, neem, sadad)", W: "Moist / deep (mahudo, bamboo, jambu, karanj, amla)" };
+const TREAT = { PLANT_SMC: "Plantation with SMC", BLANK: "Blank-area plantation", ANR: "ANR / gap planting", SMC: "Soil-moisture conservation only", OTHER: "Fire protection / other" };
+const TREAT_MATCH = { PLANT_SMC: ["S", "B"], BLANK: ["B", "S"], ANR: ["A"], SMC: ["S"], OTHER: null };
+const SCHEMES = ["CAMPA", "State plan", "MGNREGA", "Nagar Van", "Other"];
+const VERDICT = { g: ["Green", "Matches FRPIM priority"], a: ["Amber", "Partly matches: review before approval"], r: ["Red", "Does not match: justify or revise"] };
+const CHECKLIST = [
+  "Site visited and treatment boundary verified on the ground",
+  "Area in the estimate agrees with the KML area",
+  "No encroachment, FRA claim or other legal issue on the site",
+  "Proposed treatment and species suit the site",
+  "SMC works and water availability checked",
+  "Protected or excluded land kept out of the estimate"
+];
+const SAMPLES = [{"name":"Plantation with SMC, Compt. A","treat":"PLANT_SMC","coords":[[73.048594,24.170595],[73.047917,24.172115],[73.046736,24.172458],[73.044667,24.17252],[73.044173,24.171325],[73.043603,24.169847],[73.045154,24.168855],[73.046736,24.168261],[73.048043,24.169095],[73.048594,24.170595]]},{"name":"Blank-area plantation, Compt. B","treat":"BLANK","coords":[[73.026704,24.178878],[73.025976,24.180706],[73.02485,24.180788],[73.023091,24.180454],[73.022213,24.179626],[73.021887,24.177982],[73.023221,24.176814],[73.024938,24.176973],[73.026384,24.177617],[73.026704,24.178878]]},{"name":"Gap planting near village, Compt. C","treat":"ANR","coords":[[72.970757,24.158159],[72.970868,24.159475],[72.9691,24.160694],[72.9674,24.160246],[72.965976,24.158871],[72.965768,24.157371],[72.96752,24.156452],[72.96913,24.155549],[72.970385,24.156907],[72.970757,24.158159]]},{"name":"Plantation on hill slope, Compt. D","treat":"PLANT_SMC","coords":[[73.134015,24.091719],[73.133331,24.093226],[73.131914,24.094373],[73.130311,24.094026],[73.129634,24.09266],[73.12881,24.090909],[73.130437,24.089854],[73.132018,24.088983],[73.133575,24.089986],[73.134015,24.091719]]},{"name":"SMC works, Compt. E","treat":"SMC","coords":[[73.086976,24.13682],[73.085956,24.138227],[73.084521,24.138744],[73.08252,24.13872],[73.081626,24.137754],[73.081543,24.136131],[73.08273,24.135017],[73.08455,24.134026],[73.086101,24.135475],[73.086976,24.13682]]}];
+
+/* ---------------- helpers ---------------- */
+const $ = (s, r) => (r || document).querySelector(s);
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else if (k === "style") e.setAttribute("style", v);
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
+}
+const svgEl = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
+const ha = (x) => (x == null ? "-" : x >= 1000 ? Math.round(x).toLocaleString("en-IN") : x >= 100 ? x.toFixed(0) : x.toFixed(1));
+const pct = (a, b) => (b > 0 ? (100 * a) / b : 0);
+const fp = (x) => (x == null ? "-" : (x >= 10 || x === 0 ? x.toFixed(0) : x.toFixed(1)) + " %");
+const dt = (iso) => { try { return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return iso; } };
+const dd = (iso) => { try { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch (e) { return iso; } };
+const daysAgo = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 864e5));
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const dispId = (id) => id.replace(/^([A-Z]+)-(\d{4}-\d{2})-(\d+)$/, "$1/$2/$3");
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 3200); }
+async function useCap(name) { try { return window.claude && window.claude.use ? await window.claude.use(name) : null; } catch (e) { return null; } }
+const ss = { get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+function fyNow() { const d = new Date(), y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return y + "-" + String(y + 1).slice(2); }
+function fyList() { const y0 = parseInt(fyNow()); const out = []; for (let y = y0 - 1; y <= y0 + 2; y++) out.push(y + "-" + String(y + 1).slice(2)); return out; }
+function avatar(role, cls) { return el("div", { class: cls || "av", style: "background:" + ROLES[role].colour, text: role }); }
+
+/* ---------------- data store: shared database, else this browser ---------------- */
+const Store = {
+  docs: new Map(), mode: "memory", db: null, subs: [], ready: false,
+  async init() {
+    this.db = await useCap("db");
+    if (this.db) {
+      this.mode = "db";
+      await new Promise((resolve) => {
+        const t = setTimeout(() => { resolve(); }, 10000);
+        this.db.collection("works").onSnapshot((snap) => {
+          this.docs.clear(); snap.docs.forEach((d) => this.docs.set(d.id, d.data()));
+          clearTimeout(t); this.ready = true; resolve(); this.emit();
+        }, () => { clearTimeout(t); this.db = null; this.mode = "local"; this.loadLocal(); resolve(); this.emit(); });
+      });
+    } else { this.mode = "local"; this.loadLocal(); }
+    this.ready = true;
+  },
+  loadLocal() { try { const raw = localStorage.getItem("frpim_works_v1"); if (raw) JSON.parse(raw).forEach((d) => this.docs.set(d.id, d)); } catch (e) { /* none */ } },
+  saveLocal() { try { localStorage.setItem("frpim_works_v1", JSON.stringify(Array.from(this.docs.values()))); } catch (e) { /* storage unavailable */ } },
+  on(fn) { this.subs.push(fn); }, emit() { this.subs.forEach((f) => f()); },
+  all() { return Array.from(this.docs.values()); },
+  get(id) { return this.docs.get(id); },
+  async put(doc) {
+    const clean = JSON.parse(JSON.stringify(doc));
+    if (this.mode === "db") await this.db.doc("works/" + doc.id).set(clean);
+    this.docs.set(doc.id, clean);
+    if (this.mode !== "db") this.saveLocal();
+    this.emit();
+  },
+  async remove(id) {
+    if (this.mode === "db") await this.db.doc("works/" + id).delete();
+    this.docs.delete(id); if (this.mode !== "db") this.saveLocal(); this.emit();
+  }
+};
+function nextId(year) {
+  const pre = RANGE.code + "-" + year + "-";
+  const n = Store.all().filter((d) => !d.demo && d.id.startsWith(pre)).map((d) => parseInt(d.id.slice(pre.length)) || 0);
+  return pre + String((n.length ? Math.max(...n) : 0) + 1).padStart(3, "0");
+}
+
+/* ---------------- FRPIM blocks and the check ---------------- */
+let BLOCKS = [], BOUNDARY = null;
+async function loadBlocks() {
+  const [bl, bd] = await Promise.all([fetch("blocks.json").then((r) => r.json()), fetch("boundary.json").then((r) => r.json())]);
+  BLOCKS = bl.map((b) => { const geom = { type: b.t === "M" ? "MultiPolygon" : "Polygon", coordinates: b.c };
+    const feature = { type: "Feature", properties: {}, geometry: geom }; return Object.assign(b, { geom, feature, bbox: turf.bbox(feature) }); });
+  BOUNDARY = bd;
+}
+function parseCoords(text) { const out = []; for (const tup of text.trim().split(/\s+/)) { const p = tup.split(",").map(Number); if (p.length >= 2 && isFinite(p[0]) && isFinite(p[1])) out.push([p[0], p[1]]); } return out; }
+function closeRing(r) { if (r.length && (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1])) r.push([r[0][0], r[0][1]]); return r; }
+const kids = (n, name) => Array.from(n.children).filter((c) => c.localName === name);
+const desc = (n, name) => n.getElementsByTagNameNS("*", name)[0] || null;
+function parseKML(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("This file is not a valid KML file.");
+  const feats = [], notes = { points: 0, lines: 0, closedLines: 0 };
+  Array.from(doc.getElementsByTagNameNS("*", "Placemark")).forEach((pm, i) => {
+    const nm = kids(pm, "name")[0], name = nm ? nm.textContent.trim() : "Polygon " + (i + 1);
+    for (const poly of Array.from(pm.getElementsByTagNameNS("*", "Polygon"))) {
+      const ob = kids(poly, "outerBoundaryIs")[0]; const oc = ob && desc(ob, "coordinates"); if (!oc) continue;
+      const rings = [closeRing(parseCoords(oc.textContent))];
+      for (const ib of kids(poly, "innerBoundaryIs")) { const ic = desc(ib, "coordinates"); if (ic) rings.push(closeRing(parseCoords(ic.textContent))); }
+      if (rings[0].length >= 4) feats.push({ type: "Feature", properties: { name }, geometry: { type: "Polygon", coordinates: rings } });
+    }
+    for (const ls of Array.from(pm.getElementsByTagNameNS("*", "LineString"))) {
+      const c = desc(ls, "coordinates"); if (!c) continue; const pts = parseCoords(c.textContent);
+      if (pts.length >= 4 && turf.distance(pts[0], pts[pts.length - 1], { units: "meters" }) <= 30) { notes.closedLines++; feats.push({ type: "Feature", properties: { name }, geometry: { type: "Polygon", coordinates: [closeRing(pts)] } }); }
+      else notes.lines++;
+    }
+    notes.points += pm.getElementsByTagNameNS("*", "Point").length;
+  });
+  return { features: feats, notes };
+}
+function parseGeoJSON(text) {
+  const g = JSON.parse(text), feats = [], notes = { points: 0, lines: 0, closedLines: 0 };
+  const list = g.type === "FeatureCollection" ? g.features : g.type === "Feature" ? [g] : [{ type: "Feature", properties: {}, geometry: g }];
+  list.forEach((f, i) => { const t = f.geometry && f.geometry.type, name = (f.properties && (f.properties.name || f.properties.Name)) || "Polygon " + (i + 1);
+    if (t === "Polygon") feats.push({ type: "Feature", properties: { name }, geometry: f.geometry });
+    else if (t === "MultiPolygon") f.geometry.coordinates.forEach((c) => feats.push({ type: "Feature", properties: { name }, geometry: { type: "Polygon", coordinates: c } }));
+    else if (t && t.includes("Point")) notes.points++; else if (t) notes.lines++; });
+  return { features: feats, notes };
+}
+async function readFile(file) {
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".kmz")) {
+    const zip = await JSZip.loadAsync(file); const kmls = Object.keys(zip.files).filter((k) => k.toLowerCase().endsWith(".kml"));
+    if (!kmls.length) throw new Error("The KMZ file holds no KML document.");
+    return parseKML(await zip.file(kmls.find((k) => k.toLowerCase().endsWith("doc.kml")) || kmls[0]).async("string"));
+  }
+  const text = await file.text();
+  if (n.endsWith(".geojson") || n.endsWith(".json") || text.trim().startsWith("{")) return parseGeoJSON(text);
+  return parseKML(text);
+}
+function cleanPolys(f) { const g = turf.cleanCoords(turf.truncate(f, { precision: 7, coordinates: 2 })); return turf.kinks(g).features.length ? turf.unkinkPolygon(g).features : [g]; }
+function analyse(features) {
+  let u = null, failed = false;
+  for (const f of features) for (const g of cleanPolys(f)) { if (!u) { u = g; continue; } try { const r = turf.union(u, g); if (r) u = r; } catch (e) { failed = true; } }
+  if (!u) throw new Error("No usable polygon was found in the file.");
+  const total = turf.area(u) / 1e4, [minX, minY, maxX, maxY] = turf.bbox(u);
+  const byPhase = {}, byNeed = {}, byFeas = {}, byRx = {}, bySg = {}; let inside = 0, smcHa = 0, rniW = 0, rfiW = 0, retained = 0; const touched = [];
+  for (const b of BLOCKS) {
+    const bb = b.bbox; if (bb[2] < minX || bb[0] > maxX || bb[3] < minY || bb[1] > maxY) continue;
+    let inter = null; try { inter = turf.intersect(u, b.feature); } catch (e) { inter = null; }
+    if (!inter) continue; const a = turf.area(inter) / 1e4; if (a < 0.005) continue;
+    inside += a; byPhase[b.p] = (byPhase[b.p] || 0) + a;
+    const nk = b.p >= 6 ? b.p : b.n, fk = b.p >= 6 ? b.p : b.f;
+    byNeed[nk] = (byNeed[nk] || 0) + a; byFeas[fk] = (byFeas[fk] || 0) + a; byRx[b.rx] = (byRx[b.rx] || 0) + a;
+    if (b.p <= 5) { retained += a; rniW += b.rni * a; rfiW += b.rfi * a; if (b.smc) smcHa += a; if (b.sg in SG) bySg[b.sg] = (bySg[b.sg] || 0) + a; }
+    touched.push({ id: b.id, ha: +a.toFixed(2), p: b.p });
+  }
+  touched.sort((a, b) => a.p - b.p || b.ha - a.ha);
+  const r2 = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, +v.toFixed(3)]));
+  return { total: +total.toFixed(3), inside: +inside.toFixed(3), outside: +Math.max(0, total - inside).toFixed(3), byPhase: r2(byPhase), byNeed: r2(byNeed), byFeas: r2(byFeas), byRx: r2(byRx), bySg: r2(bySg),
+    smcHa: +smcHa.toFixed(3), retained: +retained.toFixed(3), rni: retained ? +(rniW / retained).toFixed(4) : null, rfi: retained ? +(rfiW / retained).toFixed(4) : null, touched: touched.slice(0, 300), unionFailed: failed };
+}
+function verdictOf(r, treat, claimed) {
+  const p = (k) => r.byPhase[k] || 0;
+  const s12 = pct(p(1) + p(2), r.total), s45 = pct(p(4) + p(5), r.total), sPE = pct(p(6) + p(7), r.total), sOut = pct(r.outside, r.total);
+  const reasons = []; let v;
+  if (sOut > 50) { v = "r"; reasons.push(fp(sOut) + " of the area lies outside the range blocks"); }
+  else if (sPE > 20) { v = "r"; reasons.push(fp(sPE) + " falls on Protected dense forest or Excluded land"); }
+  else if (s45 > 50) { v = "r"; reasons.push(fp(s45) + " is in Phase 4-5 (low priority)"); }
+  else if (s12 >= 60 && sPE <= 5) { v = "g"; reasons.push(fp(s12) + " of the area is in Phase 1-2"); }
+  else { v = "a"; reasons.push(fp(s12) + " in Phase 1-2, " + fp(s45) + " in Phase 4-5"); }
+  if (v !== "r" && sPE > 0.5) reasons.push(fp(sPE) + " on Protected or Excluded land: keep it out of the estimate");
+  if (v !== "r" && sOut > 2) reasons.push(fp(sOut) + " lies outside the range blocks");
+  const m = TREAT_MATCH[treat]; let matchPct = null;
+  if (m && r.retained > 0) { matchPct = pct(m.reduce((s, k) => s + (r.byRx[k] || 0), 0), r.retained); if (matchPct < 50) reasons.push("FRPIM recommends a different treatment on " + fp(100 - matchPct) + " of the plantable area"); }
+  if (claimed > 0 && Math.abs(claimed - r.total) / r.total > 0.10) reasons.push("Estimate area " + claimed.toFixed(2) + " ha differs from the KML area " + r.total.toFixed(2) + " ha by more than 10 %");
+  return { v, reasons, s12: +s12.toFixed(2), s45: +s45.toFixed(2), sPE: +sPE.toFixed(2), sOut: +sOut.toFixed(2), matchPct: matchPct == null ? null : +matchPct.toFixed(1) };
+}
+function simplifyFC(fc) {
+  let tol = 0.00002;
+  for (let i = 0; i < 8; i++) { const g = turf.truncate(turf.simplify(fc, { tolerance: tol, highQuality: false }), { precision: 6, coordinates: 2 }); if (JSON.stringify(g).length < 150000) return g; tol *= 2; }
+  return null;
+}
+
+/* ---------------- static SVG maps (Need, Feasibility, Priority) ---------------- */
+function mapSVG(geom, layer, opts) {
+  const W = (opts && opts.w) || 420, H = (opts && opts.h) || 320;
+  const [x0, y0, x1, y1] = turf.bbox(geom);
+  const padX = (x1 - x0) * 0.35 + 0.003, padY = (y1 - y0) * 0.35 + 0.003;
+  let bx = [x0 - padX, y0 - padY, x1 + padX, y1 + padY]; const k = Math.cos(((y0 + y1) / 2) * Math.PI / 180);
+  const s = Math.min(W / ((bx[2] - bx[0]) * k), H / (bx[3] - bx[1]));
+  const cx = (bx[0] + bx[2]) / 2, cy = (bx[1] + bx[3]) / 2; bx = [cx - W / s / k / 2, cy - H / s / 2, cx + W / s / k / 2, cy + H / s / 2];
+  const tx = (x) => ((x - bx[0]) * k * s).toFixed(1), ty = (y) => (H - (y - bx[1]) * s).toFixed(1);
+  const path = (g) => { const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : []; return polys.map((p) => p.map((r) => "M" + r.map((c) => tx(c[0]) + " " + ty(c[1])).join("L") + "Z").join("")).join(""); };
+  const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE;
+  let out = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + (layer === "n" ? "Need" : layer === "f" ? "Feasibility" : "Priority") + ' map with the treatment boundary">';
+  out += '<rect width="' + W + '" height="' + H + '" fill="#eef1ec"/>';
+  for (const b of BLOCKS) { const bb = b.bbox; if (bb[2] < bx[0] || bb[0] > bx[2] || bb[3] < bx[1] || bb[1] > bx[3]) continue;
+    const code = b.p >= 6 ? b.p : layer === "n" ? b.n : layer === "f" ? b.f : b.p;
+    out += '<path d="' + path(b.geom) + '" fill="' + tbl[code][1] + '" stroke="#ffffff" stroke-width="0.7"/>'; }
+  const feats = geom.type === "FeatureCollection" ? geom.features.map((f) => f.geometry) : [geom.geometry || geom];
+  for (const g of feats) out += '<path d="' + path(g) + '" fill="rgba(0,0,0,0.10)" stroke="#ffffff" stroke-width="5" stroke-linejoin="round"/><path d="' + path(g) + '" fill="none" stroke="#111" stroke-width="2.2" stroke-linejoin="round"/>';
+  // scale bar
+  const mPerPx = 111320 / s, target = W * 0.22 * mPerPx, steps = [100, 200, 250, 500, 1000, 2000, 5000];
+  const L = steps.find((v) => v >= target) || 5000, Lpx = L / mPerPx;
+  out += '<rect x="10" y="' + (H - 28) + '" width="' + (Lpx + 16).toFixed(0) + '" height="20" fill="#ffffff" opacity="0.85" rx="3"/><rect x="18" y="' + (H - 16) + '" width="' + Lpx.toFixed(1) + '" height="4" fill="#111"/><text x="18" y="' + (H - 19) + '" font-size="10" font-family="sans-serif" fill="#111">' + (L >= 1000 ? L / 1000 + " km" : L + " m") + "</text>";
+  out += '<g transform="translate(' + (W - 22) + ',12)"><path d="M0 0 L7 18 L0 14 L-7 18 Z" fill="#111"/><text x="0" y="30" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="700" fill="#111">N</text></g>';
+  return out + "</svg>";
+}
+function legendRow(tbl, keys) { return el("div", { class: "legend" }, keys.map((k) => el("span", null, el("i", { style: "background:" + tbl[k][1] }), tbl[k][0]))); }
+function maps3(geom) {
+  const wrap = el("div", { class: "maps3" });
+  [["n", "Map 1 · Restoration need", NEED, [1, 2, 3, 4, 5]], ["f", "Map 2 · Feasibility", FEAS, [1, 2, 3, 4, 5]], ["p", "Map 3 · Priority phase", PHASE, [1, 2, 3, 4, 5, 6, 7]]].forEach(([k, t, tbl, keys]) =>
+    wrap.append(el("figure", null, el("figcaption", { text: t }), svgEl(mapSVG(geom, k)), legendRow(tbl, keys))));
+  return wrap;
+}
+
+/* ---------------- findings blocks ---------------- */
+function verdictBox(w) {
+  const v = VERDICT[w.verdict];
+  return el("div", { class: "verdict " + w.verdict, role: "status" }, el("b", { text: "FRPIM check: " + v[0] + " · " + v[1] }), el("ul", null, (w.reasons || []).map((x) => el("li", { text: x }))));
+}
+function miniKpis(w) {
+  return el("div", { class: "mini" },
+    el("div", null, el("b", { text: w.result.total.toFixed(2) }), el("span", { text: "ha in the KML" })),
+    el("div", null, el("b", { text: fp(w.s12) }), el("span", { text: "in Phase 1-2" })),
+    el("div", null, el("b", { text: fp(w.sPE) }), el("span", { text: "Protected or Excluded" })),
+    el("div", null, el("b", { text: w.matchPct == null ? "-" : fp(w.matchPct) }), el("span", { text: "treatment agrees with FRPIM" })));
+}
+function classTable(title, tbl, data, total, keys) {
+  const tb = el("tbody");
+  for (const k of keys) { const a = data[k] || 0; if (a <= 0) continue; const [nm, col] = k === "out" ? OUTSIDE : tbl[k];
+    tb.append(el("tr", null, el("td", null, el("i", { class: "sw", style: "background:" + col }), nm), el("td", { class: "n", text: ha(a) }), el("td", { class: "n", text: fp(pct(a, total)) }))); }
+  return el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, el("th", { text: title }), el("th", { class: "n", text: "ha" }), el("th", { class: "n", text: "%" }))), tb));
+}
+function findings(w) {
+  const r = w.result, box = el("div", { class: "grid", style: "gap:14px" });
+  box.append(verdictBox(w), miniKpis(w));
+  box.append(el("div", null, el("div", { class: "stack", role: "img", "aria-label": "Share of area by priority phase" },
+    [1, 2, 3, 4, 5, 6, 7].map((k) => (r.byPhase[k] > 0 ? el("div", { style: "width:" + pct(r.byPhase[k], r.total) + "%;background:" + PHASE[k][1], title: PHASE[k][0] }) : null)),
+    r.outside > 0 ? el("div", { style: "width:" + pct(r.outside, r.total) + "%;background:repeating-linear-gradient(45deg,#999 0 2px,transparent 2px 6px)", title: OUTSIDE[0] }) : null)));
+  box.append(el("div", { class: "grid g3", style: "gap:12px" },
+    classTable("Priority (Map 3)", PHASE, Object.assign({}, r.byPhase, { out: r.outside }), r.total, [1, 2, 3, 4, 5, 6, 7, "out"]),
+    classTable("Need (Map 1)", NEED, r.byNeed, r.total, [5, 4, 3, 2, 1, 6, 7]),
+    classTable("Feasibility (Map 2)", FEAS, r.byFeas, r.total, [5, 4, 3, 2, 1, 6, 7])));
+  const rt = el("tbody");
+  for (const k of ["S", "B", "A", "P", "X"]) if (r.byRx[k] > 0) rt.append(el("tr", null, el("td", { text: RX[k] }), el("td", { class: "n", text: ha(r.byRx[k]) })));
+  if (r.smcHa > 0) rt.append(el("tr", null, el("td", { text: "of which SMC works required" }), el("td", { class: "n", text: ha(r.smcHa) })));
+  for (const k of ["D", "M", "W"]) if (r.bySg[k] > 0) rt.append(el("tr", null, el("td", { text: "Species: " + SG[k] }), el("td", { class: "n", text: ha(r.bySg[k]) })));
+  box.append(el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, el("th", { text: "What FRPIM recommends on this land" }), el("th", { class: "n", text: "ha" }))), rt)));
+  if (r.rni != null) box.append(el("div", { class: "hint", text: "Area-weighted mean RNI " + r.rni.toFixed(3) + " · RFI " + r.rfi.toFixed(3) + " · " + r.touched.length + " FRPIM blocks touched" + (r.unionFailed ? " · some overlapping polygons could not be merged" : "") }));
+  return box;
+}
+
+/* ---------------- session and routing ---------------- */
+let ROLE = null, VIEW = { v: "dash" }, bigmap = null;
+function go(v) { VIEW = v; if (bigmap) { bigmap.remove(); bigmap = null; } render(); window.scrollTo(0, 0); }
+function trail(w, action, note) { (w.trail = w.trail || []).push({ at: new Date().toISOString(), role: ROLE, user: ROLES[ROLE].id, action, note: note || "" }); w.updatedAt = new Date().toISOString(); }
+function inboxOf(role) { return Store.all().filter((w) => INBOX[role].includes(w.status)); }
+
+function render() {
+  const app = $("#app"); app.replaceChildren();
+  if (!ROLE) { app.append(loginView()); drawContours(); return; }
+  app.append(shell());
+  const main = el("main", { class: "gut" }); app.append(main);
+  if (!Store.ready || !BLOCKS.length) { main.append(el("div", { class: "card" }, el("b", { text: "Loading the FRPIM blocks and the register…" }))); return; }
+  const v = VIEW.v;
+  if (v === "dash") dashView(main); else if (v === "inbox") inboxView(main); else if (v === "works") worksView(main);
+  else if (v === "map") mapView(main); else if (v === "new") editView(main, VIEW.id); else if (v === "work") workView(main, VIEW.id); else if (v === "help") helpView(main);
+  app.append(el("div", { class: "foot gut", text: "FRPIM v2.2 decision support · model run 19 Nov 2026 · " + (Store.mode === "db" ? "shared register" : "register kept in this browser") + " · the final decision rests with the ACF and the DCF" }));
+}
+
+/* ---------------- login ---------------- */
+function loginView() {
+  let pick = "RFO";
+  const idIn = el("input", { id: "lg-id", autocomplete: "username", value: ROLES.RFO.id });
+  const pwIn = el("input", { id: "lg-pw", type: "password", autocomplete: "current-password", value: DEMO_PASSWORD });
+  const msg = el("div", { class: "err", role: "alert" });
+  const cards = el("div", { class: "rolecards" });
+  const setPick = (r) => { pick = r; idIn.value = ROLES[r].id; pwIn.value = DEMO_PASSWORD; cards.querySelectorAll(".rolecard").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.role === r))); };
+  for (const r of ["RFO", "ACF", "DCF"]) cards.append(el("button", { type: "button", class: "rolecard", "data-role": r, "aria-pressed": String(r === pick), onclick: () => setPick(r) },
+    el("div", { class: "av", style: "background:" + ROLES[r].colour, text: r }), el("div", null, el("b", { text: ROLES[r].title }), el("small", { text: ROLES[r].office + " · " + ROLES[r].can })), el("code", { text: ROLES[r].id })));
+  const form = el("form", { class: "box", onsubmit: (e) => {
+    e.preventDefault(); const id = idIn.value.trim().toLowerCase(), r = Object.keys(ROLES).find((k) => ROLES[k].id === id);
+    if (!r || pwIn.value !== DEMO_PASSWORD) { msg.textContent = "User ID or password is not correct."; return; }
+    ROLE = r; ss.set("frpim_role", r); VIEW = { v: "dash" }; render(); } },
+    el("h2", { text: "Sign in" }), el("div", { class: "hint", text: "Choose your office. Demonstration accounts for the mock drill; the password for all three is " + DEMO_PASSWORD + "." }),
+    cards, el("label", { class: "field" }, "User ID", idIn), el("label", { class: "field" }, "Password", pwIn), msg, el("button", { class: "btn big", type: "submit", text: "Sign in" }));
+  return el("div", { class: "login" },
+    el("div", { class: "brandside gut" }, el("canvas", { id: "contours", "aria-hidden": "true" }),
+      el("div", { class: "mark" }, el("i", null, leafIcon("#17462c")), "FRPIM Works Portal"),
+      el("div", { style: "display:grid;gap:14px" }, el("h1", { text: "Restoration works, checked against the map before they are approved" }),
+        el("p", { text: "Every treatment KML is overlaid on the FRPIM need, feasibility and priority maps of " + RANGE.name + ". The RFO proposes, the ACF scrutinises and the DCF approves, with the full record kept for each work." }),
+        el("div", { class: "flow" }, el("span", { text: "RFO uploads KML" }), "→", el("span", { text: "ACF scrutiny" }), "→", el("span", { text: "DCF approval" }))),
+      el("div", { style: "font-size:12.5px;opacity:.75", text: "829 blocks of 10 ha · FRPIM v2.2 · decision support system" })),
+    el("div", { class: "formside gut" }, form));
+}
+function leafIcon(col) { return svgEl('<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 19c0-8 5-14 15-15-1 10-7 15-15 15z" fill="' + col + '"/><path d="M5 19 13 11" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/></svg>'); }
+function drawContours() {
+  const c = document.getElementById("contours"); if (!c) return;
+  const r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1; c.width = r.width * d; c.height = r.height * d;
+  const g = c.getContext("2d"); g.scale(d, d); g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 1;
+  const hills = [[0.25, 0.3, 1], [0.7, 0.62, 1.3], [0.5, 0.95, 0.9]];
+  for (let lvl = 1; lvl <= 14; lvl++) for (const [hx, hy, sc] of hills) {
+    g.beginPath();
+    for (let a = 0; a <= 64; a++) { const t = (a / 64) * Math.PI * 2, rr = lvl * 26 * sc * (1 + 0.18 * Math.sin(3 * t + lvl) + 0.08 * Math.cos(5 * t));
+      const x = hx * r.width + rr * Math.cos(t), y = hy * r.height + rr * 0.72 * Math.sin(t); a ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.stroke();
+  }
+}
+
+/* ---------------- shell ---------------- */
+function shell() {
+  const R = ROLES[ROLE], n = inboxOf(ROLE).length;
+  const nav = [["dash", "Dashboard"], ["inbox", ROLE === "RFO" ? "My drafts & returns" : "Inbox"], ["works", "All works"], ["map", "Division map"]];
+  if (ROLE === "RFO") nav.splice(1, 0, ["new", "New proposal"]);
+  nav.push(["help", "How it works"]);
+  return el("header", { class: "top" },
+    el("div", { class: "bar gut" },
+      el("div", { class: "title" }, el("i", null, leafIcon("#17462c")), el("div", null, el("b", { text: "FRPIM Works Portal" }), el("small", { text: RANGE.name + " · restoration works approval" }))),
+      el("div", { class: "who" }, el("div", { class: "av", style: "background:" + R.colour, text: ROLE }), el("div", null, el("b", { text: R.title }), el("small", { text: R.id + " · " + R.office })),
+        el("button", { class: "out", type: "button", onclick: () => { ROLE = null; ss.set("frpim_role", null); go({ v: "dash" }); }, text: "Sign out" }))),
+    el("nav", { class: "nav gut", "aria-label": "Main" }, nav.map(([k, t]) => el("button", { type: "button", "aria-current": VIEW.v === k || (k === "inbox" && VIEW.v === "work" && false) ? "page" : null,
+      onclick: () => go(k === "new" ? { v: "new" } : { v: k }) }, t, k === "inbox" && n ? el("span", { class: "count", text: String(n) }) : null))));
+}
+
+/* ---------------- dashboard ---------------- */
+function sumHa(list) { return list.reduce((s, w) => s + (w.result ? w.result.total : 0), 0); }
+function dashView(main) {
+  const all = Store.all(), R = ROLES[ROLE], mine = inboxOf(ROLE);
+  const approved = all.filter((w) => w.status === "APPROVED" || w.status === "APPROVED_DEV");
+  const apHa = sumHa(approved), apP12 = approved.reduce((s, w) => s + (w.result.byPhase[1] || 0) + (w.result.byPhase[2] || 0), 0);
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("h1", { text: "Welcome, " + R.title }), el("p", { text: R.office + " · financial year " + fyNow() })),
+    el("div", { class: "btns" }, ROLE === "RFO" ? el("button", { class: "btn big", type: "button", onclick: () => go({ v: "new" }), text: "+ New proposal" }) : null,
+      mine.length ? el("button", { class: "btn ghost big", type: "button", onclick: () => go({ v: "inbox" }), text: "Open inbox (" + mine.length + ")" }) : null)));
+  if (!all.length) {
+    main.append(el("div", { class: "card" }, el("div", { class: "empty" }, el("b", { text: "No works in the register yet" }),
+      el("span", { text: ROLE === "RFO" ? "Create a proposal and upload its treatment KML, or load the mock-drill set to see every stage of the workflow." : "The RFO's proposals will appear here. For the mock drill, load the example set to see every stage." }),
+      el("div", { class: "btns" }, ROLE === "RFO" ? el("button", { class: "btn", type: "button", onclick: () => go({ v: "new" }), text: "New proposal" }) : null,
+        el("button", { class: "btn ghost", type: "button", onclick: loadDemo, text: "Load mock-drill examples" })))));
+    return;
+  }
+  const kp = el("div", { class: "kpis" });
+  const tile = (label, val, sub, hl) => kp.append(el("div", { class: "kpi" + (hl ? " hl" : "") }, el("span", { text: label }), el("b", { text: val }), el("small", { text: sub })));
+  tile("Pending with you", String(mine.length), ROLE === "RFO" ? "drafts and returned works" : "awaiting your action", mine.length > 0);
+  tile("Works proposed", String(all.length), ha(sumHa(all)) + " ha in all");
+  tile("Approved", ha(apHa) + " ha", approved.length + " works");
+  tile("FRPIM alignment", approved.length ? fp(pct(apP12, apHa)) : "-", "of approved area in Phase 1-2");
+  tile("Green checks", String(all.filter((w) => w.verdict === "g").length), "of " + all.length + " treatment maps");
+  main.append(kp);
+
+  const stages = [["DRAFT", "Draft / returned", ["DRAFT", "RET_RFO"], "#8a978e"], ["ACF", "With ACF", ["ACF", "RET_ACF"], "#1d5fa8"], ["DCF", "With DCF", ["DCF"], "#b86e00"], ["APPROVED", "Approved", ["APPROVED", "APPROVED_DEV"], "#1a7f37"], ["REJECTED", "Not approved", ["REJECTED"], "#b42318"]];
+  const pipe = el("div", { class: "pipe" });
+  stages.forEach(([, t, sts, col]) => { const l = all.filter((w) => sts.includes(w.status));
+    pipe.append(el("button", { type: "button", onclick: () => go({ v: "works", status: sts.join(",") }) }, el("span", { text: t }), el("b", { text: String(l.length) }), el("small", { text: ha(sumHa(l)) + " ha" }), el("div", { class: "bar", style: "background:" + col }))); });
+  main.append(el("div", { class: "card" }, el("h2", null, "Approval pipeline", el("small", { text: "click a stage to see its works" })), pipe));
+
+  const g = el("div", { class: "grid g2" });
+  // area by FRPIM check
+  const vb = el("div", { class: "hbars" }), maxV = Math.max(1, ...["g", "a", "r"].map((v) => sumHa(all.filter((w) => w.verdict === v))));
+  [["g", "var(--ok)"], ["a", "var(--warn)"], ["r", "var(--bad)"]].forEach(([v, c]) => { const l = all.filter((w) => w.verdict === v), h = sumHa(l);
+    vb.append(el("div", { class: "hbar" }, el("span", { text: VERDICT[v][0] + " (" + l.length + ")" }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(h, maxV) + "%;background:" + c })), el("span", { class: "v", text: ha(h) + " ha" }))); });
+  g.append(el("div", { class: "card" }, el("h2", null, "Proposed area by FRPIM check", el("small", { text: "all works" })), vb,
+    el("div", { class: "hint", text: "Green: at least 60 % in Phase 1-2 and no more than 5 % on protected or excluded land. Red: mostly low priority, protected or excluded land." })));
+  // phase mix proposed vs approved
+  const mix = (list) => { const o = {}; let t = 0; list.forEach((w) => { for (const k in w.result.byPhase) { o[k] = (o[k] || 0) + w.result.byPhase[k]; t += w.result.byPhase[k]; } o.out = (o.out || 0) + w.result.outside; t += w.result.outside; }); return [o, t]; };
+  const bar = (label, list) => { const [o, t] = mix(list); return el("div", { style: "display:grid;gap:4px" }, el("div", { class: "hint", text: label + " · " + ha(t) + " ha" }),
+    el("div", { class: "stack" }, [1, 2, 3, 4, 5, 6, 7].map((k) => (o[k] > 0 ? el("div", { style: "width:" + pct(o[k], t) + "%;background:" + PHASE[k][1], title: PHASE[k][0] + " " + ha(o[k]) + " ha" }) : null)),
+      o.out > 0 ? el("div", { style: "width:" + pct(o.out, t) + "%;background:repeating-linear-gradient(45deg,#999 0 2px,transparent 2px 6px)" }) : null)); };
+  g.append(el("div", { class: "card" }, el("h2", null, "Where the works fall on Map 3", el("small", { text: "share of area by priority phase" })),
+    bar("All proposed works", all), approved.length ? bar("Approved works", approved) : el("div", { class: "hint", text: "No approved works yet." }), legendRow(PHASE, [1, 2, 3, 4, 5, 6, 7])));
+  // by scheme
+  const sb = el("div", { class: "hbars" }), maxS = Math.max(1, ...SCHEMES.map((s) => sumHa(all.filter((w) => w.scheme === s))));
+  SCHEMES.forEach((s) => { const l = all.filter((w) => w.scheme === s); if (!l.length) return; const h = sumHa(l), a = sumHa(l.filter((w) => w.status.startsWith("APPROVED")));
+    sb.append(el("div", { class: "hbar" }, el("span", { text: s }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(a, maxS) + "%;background:var(--ok)" }), el("div", { style: "width:" + pct(h - a, maxS) + "%;background:var(--line)" })), el("span", { class: "v", text: ha(h) + " ha" }))); });
+  g.append(el("div", { class: "card" }, el("h2", null, "Area by scheme", el("small", { text: "green part approved" })), sb));
+  // activity feed
+  const ev = []; all.forEach((w) => (w.trail || []).forEach((t) => ev.push([t, w])));
+  ev.sort((a, b) => b[0].at.localeCompare(a[0].at));
+  const feed = el("div", { class: "feed" });
+  ev.slice(0, 7).forEach(([t, w]) => feed.append(el("div", null, avatar(t.role), el("div", null, el("b", { text: t.action }), " · ", el("a", { href: "#", onclick: (e) => { e.preventDefault(); go({ v: "work", id: w.id }); }, text: dispId(w.id) }), el("small", { text: w.name + " · " + dt(t.at) })))));
+  g.append(el("div", { class: "card" }, el("h2", null, "Recent activity"), feed));
+  main.append(g);
+  if (mine.length) main.append(el("div", { class: "card" }, el("h2", null, ROLE === "RFO" ? "Waiting for you" : "Your inbox", el("small", { text: mine.length + " works" })), workList(mine.slice(0, 5))));
+  if (all.every((w) => w.demo)) main.append(el("div", { class: "card" }, el("h2", { text: "Mock-drill data" }), el("div", { class: "hint", text: "Every work in the register is a mock-drill example. Remove them before real use." }),
+    el("div", { class: "btns" }, confirmButton("Remove mock-drill examples", "Remove all example works from the register?", async () => { for (const w of Store.all().filter((x) => x.demo)) await Store.remove(w.id); toast("Examples removed"); go({ v: "dash" }); }))));
+}
+function confirmButton(label, question, fn) {
+  const wrap = el("span", { class: "btns" });
+  const b = el("button", { class: "btn bad", type: "button", text: label, onclick: () => wrap.replaceChildren(el("span", { text: question }),
+    el("button", { class: "btn bad", type: "button", text: "Yes", onclick: fn }), el("button", { class: "btn ghost", type: "button", text: "Cancel", onclick: () => wrap.replaceChildren(b) })) });
+  wrap.append(b); return wrap;
+}
+function workList(list) {
+  if (!list.length) return el("div", { class: "empty" }, el("b", { text: "Nothing here" }), el("span", { text: "Works waiting for this office appear here." }));
+  const box = el("div", { class: "list" });
+  list.slice().sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")).forEach((w) => {
+    const st = STATUS[w.status], col = w.verdict === "g" ? "var(--ok)" : w.verdict === "a" ? "var(--warn)" : "var(--bad)";
+    box.append(el("button", { type: "button", class: "item", onclick: () => go({ v: "work", id: w.id }) }, el("div", { class: "st", style: "background:" + col }),
+      el("div", null, el("div", { class: "t", text: w.name }), el("div", { class: "m", text: dispId(w.id) + " · " + [w.beat, w.scheme, TREAT[w.treat]].filter(Boolean).join(" · ") }),
+        el("div", { class: "m", text: "Updated " + dd(w.updatedAt) + " (" + daysAgo(w.updatedAt) + " days)" + (w.demo ? " · example" : "") })),
+      el("div", { class: "r" }, el("span", { class: "chip " + st[1], text: st[0] }), el("span", { class: "chip c-" + w.verdict, text: VERDICT[w.verdict][0] + " · " + fp(w.s12) + " P1-2" }), el("span", { class: "m num", text: ha(w.result.total) + " ha" }))));
+  });
+  return box;
+}
+
+/* ---------------- inbox ---------------- */
+function inboxView(main) {
+  const list = inboxOf(ROLE);
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("h1", { text: ROLE === "RFO" ? "My drafts and returned works" : "Inbox" }),
+    el("p", { text: ROLE === "RFO" ? "Complete drafts and revise works the ACF returned." : ROLE === "ACF" ? "Proposals from the RFO waiting for your scrutiny and recommendation." : "Proposals recommended by the ACF, waiting for your approval." }))));
+  main.append(el("div", { class: "card" }, workList(list)));
+}
+
+/* ---------------- all works / register ---------------- */
+function worksView(main) {
+  const f = { status: VIEW.status || "", verdict: "", scheme: "", year: "", q: "" };
+  const head = el("div", { class: "pagehead" }, el("div", null, el("h1", { text: "All works" }), el("p", { text: "The register of every proposal in " + RANGE.name + "." })),
+    el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => exportCSV(filtered()), text: "Export register (CSV)" })));
+  main.append(head);
+  const sel = (id, opts, lab) => el("select", { id, "aria-label": lab }, opts.map(([v, t]) => el("option", { value: v, text: t })));
+  const fs = sel("w-status", [["", "All statuses"]].concat(Object.entries(STATUS).map(([k, v]) => [k, v[0]])), "Status");
+  if (f.status && f.status.includes(",")) fs.append(el("option", { value: f.status, text: "Selected stage" }));
+  fs.value = f.status;
+  const fv = sel("w-verdict", [["", "All FRPIM checks"], ["g", "Green"], ["a", "Amber"], ["r", "Red"]], "FRPIM check");
+  const fsc = sel("w-scheme", [["", "All schemes"]].concat(SCHEMES.map((s) => [s, s])), "Scheme");
+  const fy = sel("w-year", [["", "All years"]].concat(fyList().map((y) => [y, y])), "Year");
+  const q = el("input", { id: "w-q", type: "search", placeholder: "Search name, ID or beat", "aria-label": "Search" });
+  const body = el("div");
+  const filtered = () => Store.all().filter((w) => (!fs.value || fs.value.split(",").includes(w.status)) && (!fv.value || w.verdict === fv.value) && (!fsc.value || w.scheme === fsc.value) && (!fy.value || w.year === fy.value) &&
+    (!q.value || (w.name + " " + w.id + " " + (w.beat || "")).toLowerCase().includes(q.value.toLowerCase()))).sort((a, b) => b.id.localeCompare(a.id));
+  const draw = () => {
+    const list = filtered(), tb = el("tbody");
+    list.forEach((w) => tb.append(el("tr", { class: "click", tabindex: "0", onclick: () => go({ v: "work", id: w.id }), onkeydown: (e) => { if (e.key === "Enter") go({ v: "work", id: w.id }); } },
+      el("td", { class: "num", text: dispId(w.id) }), el("td", null, el("b", { text: w.name }), el("div", { class: "hint", text: [w.beat, TREAT[w.treat]].filter(Boolean).join(" · ") })),
+      el("td", { text: w.scheme }), el("td", { text: w.year }), el("td", { class: "n", text: ha(w.result.total) }), el("td", { class: "n", text: fp(w.s12) }),
+      el("td", null, el("span", { class: "chip c-" + w.verdict, text: VERDICT[w.verdict][0] })), el("td", null, el("span", { class: "chip " + STATUS[w.status][1], text: STATUS[w.status][0] })))));
+    body.replaceChildren(list.length ? el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, ["Work ID", "Name of work", "Scheme", "Year", "ha", "Phase 1-2", "FRPIM check", "Status"].map((h, i) => el("th", { class: i === 4 || i === 5 ? "n" : null, text: h })))), tb),
+      el("div", { class: "hint", style: "margin-top:8px", text: list.length + " works · " + ha(sumHa(list)) + " ha" })) : el("div", { class: "empty" }, el("b", { text: "No works match" }), el("span", { text: "Change the filters, or create a proposal." })));
+  };
+  [fs, fv, fsc, fy].forEach((s) => s.addEventListener("change", draw)); q.addEventListener("input", draw);
+  main.append(el("div", { class: "card" }, el("div", { class: "filters" }, q, fs, fv, fsc, fy), body));
+  draw();
+}
+
+/* ---------------- division map ---------------- */
+function mapView(main) {
+  let layer = "p";
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "Map layer" });
+  const legend = el("div", { class: "legend" });
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("h1", { text: "Division map" }), el("p", { text: "All works on the FRPIM maps. Click a work to open its file, or a block for its values." })), seg));
+  const mapDiv = el("div", { id: "bigmap" });
+  main.append(el("div", { class: "card" }, mapDiv, legend));
+  bigmap = L.map(mapDiv, { preferCanvas: true, zoomSnap: 0.25, attributionControl: false });
+  const renderer = L.canvas({ padding: 0.3 });
+  const colour = (b) => { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE; const c = b.p >= 6 ? b.p : layer === "n" ? b.n : layer === "f" ? b.f : b.p; return tbl[c][1]; };
+  const blocks = L.geoJSON({ type: "FeatureCollection", features: BLOCKS.map((b) => ({ type: "Feature", properties: b, geometry: b.geom })) },
+    { renderer, style: (f) => ({ fillColor: colour(f.properties), fillOpacity: 0.85, color: "#fff", weight: 0.4 }),
+      onEachFeature: (f, l) => l.bindPopup(() => { const b = f.properties; return el("div", { style: "font-size:12.5px;line-height:1.5" }, el("b", { text: b.id }), el("br"), PHASE[b.p][0],
+        b.p <= 5 ? [el("br"), "Need " + NEED[b.n][0] + " (RNI " + b.rni.toFixed(3) + ")", el("br"), "Feasibility " + FEAS[b.f][0] + " (RFI " + b.rfi.toFixed(3) + ")", el("br"), RX[b.rx] + (b.smc ? " + SMC" : "")] : null); }) }).addTo(bigmap);
+  L.geoJSON(BOUNDARY, { renderer, interactive: false, style: { fill: false, color: "#1d2a22", weight: 1.5 } }).addTo(bigmap);
+  const stCol = (s) => (s.startsWith("APPROVED") ? "#1a7f37" : s === "DCF" ? "#b86e00" : s === "ACF" || s === "RET_ACF" ? "#1d5fa8" : s === "REJECTED" ? "#b42318" : "#555");
+  Store.all().forEach((w) => {
+    L.geoJSON(w.geom, { style: { color: "#fff", weight: 6, fill: false }, interactive: false }).addTo(bigmap);
+    L.geoJSON(w.geom, { style: { color: stCol(w.status), weight: 3, fillColor: stCol(w.status), fillOpacity: 0.15 } }).bindTooltip(dispId(w.id) + " · " + w.name).on("click", () => go({ v: "work", id: w.id })).addTo(bigmap);
+  });
+  bigmap.fitBounds(blocks.getBounds(), { padding: [10, 10] });
+  L.control.scale({ imperial: false }).addTo(bigmap);
+  const draw = () => { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE;
+    legend.replaceChildren(legendRow(tbl, [1, 2, 3, 4, 5, 6, 7]), el("div", { class: "legend" }, [["Approved", "#1a7f37"], ["With DCF", "#b86e00"], ["With ACF", "#1d5fa8"], ["Draft / returned", "#555"], ["Not approved", "#b42318"]].map(([t, c]) =>
+      el("span", null, el("i", { style: "background:transparent;border:3px solid " + c }), t)))); };
+  [["p", "Map 3 · Priority"], ["n", "Map 1 · Need"], ["f", "Map 2 · Feasibility"]].forEach(([k, t]) => seg.append(el("button", { type: "button", "aria-pressed": String(k === layer), text: t,
+    onclick: (e) => { layer = k; seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget))); blocks.setStyle((f) => ({ fillColor: colour(f.properties) })); draw(); } })));
+  draw();
+}
+
+/* ---------------- new / edit proposal (RFO) ---------------- */
+function editView(main, id) {
+  const w0 = id ? Store.get(id) : null;
+  if (ROLE !== "RFO") { main.append(el("div", { class: "card", text: "Only the RFO prepares proposals." })); return; }
+  if (w0 && !["DRAFT", "RET_RFO"].includes(w0.status)) { main.append(el("div", { class: "card", text: "This work is no longer with the RFO." })); return; }
+  const st = { parsed: w0 ? { features: w0.geom.features, notes: {} } : null, fileName: w0 ? w0.fileName : "", result: w0 ? w0.result : null };
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("h1", { text: w0 ? "Revise " + dispId(w0.id) : "New proposal" }), el("p", { text: "Fill in the work details, upload the treatment KML and check it against FRPIM before submitting it to the ACF." }))));
+  if (w0 && w0.status === "RET_RFO") { const last = (w0.trail || []).filter((t) => t.action.startsWith("Returned")).pop();
+    main.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the ACF. " }), last ? last.note : "")); }
+  const v = (k, d) => (w0 && w0[k] != null ? w0[k] : d);
+  const name = el("input", { id: "p-name", maxlength: "140", value: v("name", ""), placeholder: "e.g. Plantation with SMC, Compt. 12" });
+  const beat = el("input", { id: "p-beat", maxlength: "80", value: v("beat", ""), placeholder: "Beat / compartment" });
+  const scheme = el("select", { id: "p-scheme" }, SCHEMES.map((s) => el("option", { text: s }))); scheme.value = v("scheme", "CAMPA");
+  const year = el("select", { id: "p-year" }, fyList().map((y) => el("option", { text: y }))); year.value = v("year", fyNow());
+  const treat = el("select", { id: "p-treat" }, Object.entries(TREAT).map(([k, t]) => el("option", { value: k, text: t }))); treat.value = v("treat", "PLANT_SMC");
+  const est = el("input", { id: "p-est", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: v("estArea", "") });
+  const cost = el("input", { id: "p-cost", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: v("estCost", "") });
+  const seed = el("input", { id: "p-seed", type: "number", min: "0", step: "1", inputmode: "numeric", value: v("seedlings", "") });
+  const rem = el("textarea", { id: "p-rem", maxlength: "1000" }); rem.value = v("remarks", "");
+  const file = el("input", { type: "file", id: "p-file", hidden: true });
+  const fmsg = el("div", { class: "hint" }, st.fileName ? "Current KML: " + st.fileName : "");
+  const preview = el("div", { class: "grid", style: "gap:14px" });
+  const drop = el("div", { class: "drop", tabindex: "0", role: "button", "aria-label": "Choose the treatment KML", onclick: () => file.click(),
+    onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } } },
+    el("b", { text: st.fileName ? "Replace the treatment KML" : "Upload the treatment KML" }), el("span", { class: "hint", text: "Tap to choose a KML or KMZ from your phone or computer, or drop it here. The boundary must be a polygon." }), file);
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+  file.addEventListener("change", () => { if (file.files[0]) onFile(file.files[0]); file.value = ""; });
+  const msg = el("div", { role: "alert" });
+  const draft = () => ({ name: name.value.trim(), beat: beat.value.trim(), scheme: scheme.value, year: year.value, treat: treat.value, estArea: parseFloat(est.value) || null, estCost: parseFloat(cost.value) || null, seedlings: parseInt(seed.value) || null, remarks: rem.value.trim() });
+  function refresh() {
+    preview.replaceChildren();
+    if (!st.result) return;
+    const vd = verdictOf(st.result, treat.value, parseFloat(est.value) || 0);
+    const fake = Object.assign({ result: st.result, verdict: vd.v }, vd);
+    preview.append(el("h2", { text: "FRPIM check of this KML", style: "font-size:15px" }), maps3({ type: "FeatureCollection", features: st.parsed.features }), findings(fake));
+  }
+  async function onFile(f) {
+    fmsg.className = "hint"; fmsg.textContent = "Reading " + f.name + "…";
+    try {
+      const parsed = await readFile(f);
+      if (!parsed.features.length) throw new Error("No polygon found in " + f.name + ". " + (parsed.notes.points ? parsed.notes.points + " point(s) " : "") + (parsed.notes.lines ? parsed.notes.lines + " open line(s) " : "") + "cannot be measured. Draw the boundary as a polygon and save the KML again.");
+      st.parsed = parsed; st.fileName = f.name; st.result = analyse(parsed.features);
+      const n = []; n.push(parsed.features.length + " polygon(s) read from " + f.name + ", " + st.result.total.toFixed(2) + " ha.");
+      if (parsed.notes.closedLines) n.push(parsed.notes.closedLines + " closed GPS line(s) used as boundary."); if (parsed.notes.points) n.push(parsed.notes.points + " point(s) ignored.");
+      fmsg.className = "okm"; fmsg.textContent = n.join(" ");
+      if (!name.value) name.value = f.name.replace(/\.(kml|kmz|geojson|json)$/i, "");
+      refresh();
+    } catch (e) { fmsg.className = "err"; fmsg.textContent = (e && e.message) || "The file could not be read."; }
+  }
+  treat.addEventListener("change", refresh); est.addEventListener("input", refresh);
+  async function save(submit) {
+    const d = draft();
+    if (!d.name) { msg.className = "err"; msg.textContent = "Enter the name of the work."; name.focus(); return; }
+    if (!st.result) { msg.className = "err"; msg.textContent = "Upload the treatment KML first."; return; }
+    if (submit && !(d.estArea > 0)) { msg.className = "err"; msg.textContent = "Enter the area in the estimate before submitting."; est.focus(); return; }
+    const geom = simplifyFC({ type: "FeatureCollection", features: st.parsed.features.map((f) => ({ type: "Feature", properties: { name: String(f.properties.name || "").slice(0, 80) }, geometry: f.geometry })) });
+    if (!geom) { msg.className = "err"; msg.textContent = "The KML is too detailed to store. Split it into smaller files."; return; }
+    const vd = verdictOf(st.result, d.treat, d.estArea || 0);
+    const w = w0 ? JSON.parse(JSON.stringify(w0)) : { id: nextId(d.year), range: RANGE.name, createdAt: new Date().toISOString(), createdBy: ROLES.RFO.id, trail: [], status: "DRAFT" };
+    Object.assign(w, d, { fileName: st.fileName, geom, result: st.result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, matchPct: vd.matchPct, model: "FRPIM v2.2 (run 19 Nov 2026)" });
+    if (!w0) trail(w, "Draft created", "KML " + st.fileName);
+    if (submit) { trail(w, w.status === "RET_RFO" ? "Revised and resubmitted to ACF" : "Submitted to ACF", "FRPIM check " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2"); w.status = "ACF"; w.submittedAt = new Date().toISOString(); }
+    else if (w0) trail(w, "Draft updated", "");
+    msg.className = "hint"; msg.textContent = "Saving…";
+    try { await Store.put(w); toast(submit ? dispId(w.id) + " submitted to the ACF" : "Draft saved"); go({ v: "work", id: w.id }); }
+    catch (e) { msg.className = "err"; msg.textContent = "Could not save: " + ((e && e.message) || "unknown error"); }
+  }
+  main.append(el("div", { class: "grid g-main" },
+    el("div", { class: "grid" },
+      el("div", { class: "card" }, el("h2", { text: "1 · Treatment KML" }), drop, fmsg, preview),
+    ),
+    el("div", { class: "grid" },
+      el("div", { class: "card" }, el("h2", { text: "2 · Work details" }), el("div", { class: "formgrid" },
+        el("label", { class: "field full" }, "Name of work *", name), el("label", { class: "field" }, "Beat / compartment", beat), el("label", { class: "field" }, "Scheme", scheme),
+        el("label", { class: "field" }, "Work year", year), el("label", { class: "field" }, "Treatment proposed", treat), el("label", { class: "field" }, "Area in the estimate (ha) *", est),
+        el("label", { class: "field" }, "Estimated cost (₹ lakh)", cost), el("label", { class: "field full" }, "Seedlings proposed", seed), el("label", { class: "field full" }, "Remarks", rem))),
+      el("div", { class: "card action" }, el("h2", { text: "3 · Submit" }), el("div", { class: "hint", text: "Submitting sends the work to the ACF for scrutiny. You can save it as a draft first." }),
+        el("div", { class: "btns" }, el("button", { class: "btn big", type: "button", onclick: () => save(true), text: "Submit to ACF" }), el("button", { class: "btn ghost", type: "button", onclick: () => save(false), text: "Save draft" })), msg))));
+  if (st.result) refresh();
+}
+
+/* ---------------- work file ---------------- */
+function stepsBar(w) {
+  const s = w.status, t = w.trail || [];
+  const at = (re) => { const x = t.filter((e) => re.test(e.action)).pop(); return x ? dd(x.at) : ""; };
+  const cell = (cls, title, sub) => el("div", { class: cls }, el("b", { text: title }), el("small", { text: sub }));
+  const done = (x) => x;
+  return el("div", { class: "steps" },
+    cell(s === "DRAFT" ? "now" : s === "RET_RFO" ? "back" : "done", "RFO proposal", s === "DRAFT" ? "Draft" : s === "RET_RFO" ? "Returned for revision" : "Submitted " + at(/Submitted|resubmitted/)),
+    cell(["ACF", "RET_ACF"].includes(s) ? "now" : ["DCF", "APPROVED", "APPROVED_DEV", "REJECTED"].includes(s) ? "done" : "", "ACF scrutiny", ["ACF", "RET_ACF"].includes(s) ? "In progress" : at(/Recommended/) ? "Recommended " + at(/Recommended/) : "Pending"),
+    cell(s === "DCF" ? "now" : ["APPROVED", "APPROVED_DEV"].includes(s) ? "done" : s === "REJECTED" ? "back" : "", "DCF decision", s === "DCF" ? "Awaiting approval" : ["APPROVED", "APPROVED_DEV", "REJECTED"].includes(s) ? STATUS[s][0] + " " + at(/Approved|Not approved/) : "Pending"),
+    cell(["APPROVED", "APPROVED_DEV"].includes(done(s)) ? "done" : "", "Sanctioned for work", ["APPROVED", "APPROVED_DEV"].includes(s) ? "Ready for execution" : "-"));
+}
+function workView(main, id) {
+  const w = Store.get(id);
+  if (!w) { main.append(el("div", { class: "card", text: "This work is not in the register." })); return; }
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "hint num", text: dispId(w.id) + (w.demo ? " · mock-drill example" : "") }), el("h1", { text: w.name }),
+    el("div", { class: "btns", style: "margin-top:6px" }, el("span", { class: "chip " + STATUS[w.status][1], text: STATUS[w.status][0] }), el("span", { class: "chip c-" + w.verdict, text: "FRPIM " + VERDICT[w.verdict][0] }))),
+    el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => saveReport(w), text: "Download report" }), el("button", { class: "btn ghost", type: "button", onclick: () => history.length && go({ v: "works" }), text: "All works" }))));
+  main.append(el("div", { class: "card" }, stepsBar(w)));
+  const left = el("div", { class: "grid" }), right = el("div", { class: "grid" });
+  left.append(el("div", { class: "card" }, el("h2", null, "Treatment KML on the three FRPIM maps", el("small", { text: w.fileName || "" })), maps3(w.geom)));
+  left.append(el("div", { class: "card" }, el("h2", { text: "FRPIM findings" }), findings(w)));
+  const det = el("dl", { class: "kv" });
+  const kv = (k, v) => { if (v != null && v !== "") det.append(el("dt", { text: k }), el("dd", { text: String(v) })); };
+  kv("Range", w.range); kv("Beat / compartment", w.beat); kv("Scheme", w.scheme); kv("Work year", w.year); kv("Treatment proposed", TREAT[w.treat]);
+  kv("Area in estimate", w.estArea ? w.estArea.toFixed(2) + " ha" : "-"); kv("Area in KML", w.result.total.toFixed(2) + " ha");
+  kv("Estimated cost", w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : null); kv("Seedlings", w.seedlings ? w.seedlings.toLocaleString("en-IN") : null);
+  kv("Proposed by", w.createdBy + ", " + dd(w.createdAt)); kv("RFO remarks", w.remarks);
+  right.append(el("div", { class: "card" }, el("h2", { text: "Work details" }), det));
+  if (w.acf) right.append(el("div", { class: "card" }, el("h2", null, "ACF scrutiny", el("small", { text: dd(w.acf.at) })),
+    el("div", { class: "checks" }, CHECKLIST.map((c, i) => el("div", { style: "display:flex;gap:8px;font-size:13px" }, el("span", { style: "color:" + (w.acf.checks[i] ? "var(--ok)" : "var(--bad)"), text: w.acf.checks[i] ? "✓" : "✗" }), c))),
+    w.acf.remarks ? el("div", { class: "banner i", text: w.acf.remarks }) : null));
+  const act = actionBox(w); if (act) right.append(act);
+  const tl = el("div", { class: "timeline" });
+  (w.trail || []).slice().reverse().forEach((t) => tl.append(el("div", null, avatar(t.role), el("div", null, el("b", { text: t.action }), el("small", { text: ROLES[t.role].title + " (" + t.user + ") · " + dt(t.at) }), t.note ? el("q", { text: t.note }) : null))));
+  right.append(el("div", { class: "card" }, el("h2", { text: "File movement" }), tl));
+  main.append(el("div", { class: "grid g-main" }, left, right));
+}
+function actionBox(w) {
+  const msg = el("div", { role: "alert" });
+  const fail = (t) => { msg.className = "err"; msg.textContent = t; };
+  async function commit(status, action, note, extra) {
+    const n = JSON.parse(JSON.stringify(w)); Object.assign(n, extra || {}); n.status = status; trail(n, action, note);
+    try { await Store.put(n); toast(action); go({ v: "work", id: w.id }); } catch (e) { fail("Could not save: " + ((e && e.message) || "unknown error")); }
+  }
+  if (ROLE === "RFO" && ["DRAFT", "RET_RFO"].includes(w.status)) {
+    return el("div", { class: "card action" }, el("h2", { text: w.status === "DRAFT" ? "Draft: finish and submit" : "Returned to you for revision" }),
+      el("div", { class: "hint", text: "Open the proposal to change the details or replace the KML, then submit it to the ACF." }),
+      el("div", { class: "btns" }, el("button", { class: "btn", type: "button", onclick: () => go({ v: "new", id: w.id }), text: w.status === "DRAFT" ? "Open and submit" : "Revise and resubmit" }),
+        w.status === "DRAFT" ? confirmButton("Delete draft", "Delete this draft?", async () => { await Store.remove(w.id); toast("Draft deleted"); go({ v: "dash" }); }) : null));
+  }
+  if (ROLE === "ACF" && ["ACF", "RET_ACF"].includes(w.status)) {
+    const boxes = CHECKLIST.map((c, i) => el("input", { type: "checkbox", id: "chk" + i }));
+    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Scrutiny remarks" : "Scrutiny remarks: justify the recommendation of an " + VERDICT[w.verdict][0] + " proposal, or say what must be revised" });
+    if (w.status === "RET_ACF") { const last = (w.trail || []).filter((t) => t.role === "DCF").pop(); if (last) msg.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the DCF: " }), last.note)); }
+    return el("div", { class: "card action" }, el("h2", { text: "ACF scrutiny" }), msg,
+      el("div", { class: "checks" }, CHECKLIST.map((c, i) => el("label", null, boxes[i], c))), el("label", { class: "field" }, "Remarks", rem),
+      el("div", { class: "btns" },
+        el("button", { class: "btn", type: "button", text: "Recommend to DCF", onclick: () => {
+          const checks = boxes.map((b) => b.checked), r = rem.value.trim();
+          if (!checks.every(Boolean)) return fail("Confirm every item of the scrutiny checklist before recommending, or return the proposal to the RFO.");
+          if (w.verdict !== "g" && r.length < 15) return fail("This proposal is " + VERDICT[w.verdict][0] + " on the FRPIM check. Write why you recommend it (at least 15 characters).");
+          commit("DCF", "Recommended to DCF", r, { acf: { checks, remarks: r, at: new Date().toISOString(), by: ROLES.ACF.id } }); } }),
+        el("button", { class: "btn bad", type: "button", text: "Return to RFO", onclick: () => {
+          const r = rem.value.trim(); if (r.length < 10) return fail("Write what the RFO must revise (at least 10 characters).");
+          commit("RET_RFO", "Returned to RFO", r, { acf: { checks: boxes.map((b) => b.checked), remarks: r, at: new Date().toISOString(), by: ROLES.ACF.id } }); } })));
+  }
+  if (ROLE === "DCF" && w.status === "DCF") {
+    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Remarks (optional)" : "Reason for approving although the FRPIM check is " + VERDICT[w.verdict][0] });
+    const green = w.verdict === "g";
+    return el("div", { class: "card action" }, el("h2", { text: "DCF decision" }),
+      el("div", { class: "hint", text: green ? "The FRPIM check is Green and the ACF has recommended the work." : "The FRPIM check is " + VERDICT[w.verdict][0] + ". Approval is recorded as a deviation from FRPIM with your reason." }),
+      el("label", { class: "field" }, "Remarks", rem), msg,
+      el("div", { class: "btns" },
+        green ? el("button", { class: "btn", type: "button", text: "Approve", onclick: () => commit("APPROVED", "Approved by DCF", rem.value.trim(), { dcf: { decision: "Approved", remarks: rem.value.trim(), at: new Date().toISOString() } }) }) : null,
+        el("button", { class: green ? "btn ghost" : "btn warn", type: "button", text: "Approve with recorded deviation", onclick: () => {
+          const r = rem.value.trim(); if (r.length < 15) return fail("Write the reason for the deviation from FRPIM (at least 15 characters).");
+          commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } }),
+        el("button", { class: "btn bad", type: "button", text: "Return to ACF", onclick: () => { const r = rem.value.trim(); if (r.length < 10) return fail("Write what must be re-examined."); commit("RET_ACF", "Returned to ACF by DCF", r); } }),
+        el("button", { class: "btn bad", type: "button", text: "Not approve", onclick: () => { const r = rem.value.trim(); if (r.length < 10) return fail("Write the reason for not approving."); commit("REJECTED", "Not approved by DCF", r, { dcf: { decision: "Not approved", remarks: r, at: new Date().toISOString() } }); } })));
+  }
+  return null;
+}
+
+/* ---------------- how it works ---------------- */
+function helpView(main) {
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("h1", { text: "How the portal works" }), el("p", { text: "Decision support: the officers decide, FRPIM informs, and every step is recorded." }))));
+  const step = (role, title, body) => el("div", { class: "card" }, el("div", { style: "display:flex;gap:10px;align-items:center" }, avatar(role), el("h2", { text: title })), el("div", { text: body }));
+  main.append(el("div", { class: "grid g3" },
+    step("RFO", "1 · RFO proposes", "Creates the proposal, uploads the treatment KML from phone or computer, sees the FRPIM check on all three maps at once, and submits it to the ACF. Returned works come back to the RFO's list for revision."),
+    step("ACF", "2 · ACF scrutinises", "Reviews the KML on the maps and the FRPIM findings, completes the six-point field checklist, and recommends the work to the DCF or returns it to the RFO. Recommending an Amber or Red work needs a written reason."),
+    step("DCF", "3 · DCF approves", "Takes the final decision: approve, approve with a recorded deviation from FRPIM, return to the ACF, or not approve. Every deviation from the model is documented with the reason.")));
+  main.append(el("div", { class: "grid g2" },
+    el("div", { class: "card" }, el("h2", { text: "The FRPIM check" }), el("div", { class: "list" },
+      el("div", null, el("span", { class: "chip c-g", text: "Green" }), " at least 60 % of the area in Phase 1-2 and no more than 5 % on protected or excluded land."),
+      el("div", null, el("span", { class: "chip c-a", text: "Amber" }), " mixed priority: review in the field before approval."),
+      el("div", null, el("span", { class: "chip c-r", text: "Red" }), " more than 20 % protected or excluded land, more than half in Phase 4-5, or mostly outside the range blocks.")),
+      el("div", { class: "hint", text: "Areas are measured on the 829 FRPIM blocks of 10 ha (model run 19 Nov 2026). The check also compares the proposed treatment with FRPIM's recommendation and the estimate area with the KML area." })),
+    el("div", { class: "card" }, el("h2", { text: "Mock-drill accounts" }), el("table", { class: "t" }, el("tbody", null, Object.entries(ROLES).map(([k, r]) => el("tr", null, el("td", null, avatar(k)), el("td", null, el("b", { text: r.title }), el("div", { class: "hint", text: r.office })), el("td", { class: "num", text: r.id }))))),
+      el("div", { class: "hint", text: "Password for all three: " + DEMO_PASSWORD + ". These accounts show the workflow; they are not a security system." }),
+      el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: loadDemo, text: "Load mock-drill examples" }),
+        Store.all().some((w) => w.demo) ? confirmButton("Remove examples", "Remove all mock-drill examples?", async () => { for (const w of Store.all().filter((x) => x.demo)) await Store.remove(w.id); toast("Examples removed"); go({ v: "help" }); }) : null))));
+}
+
+/* ---------------- exports ---------------- */
+async function exportCSV(list) {
+  const dl = await useCap("downloads"); if (!dl) { toast("Saving files is not available in this view"); return; }
+  const cols = ["Work ID", "Name", "Beat", "Scheme", "Year", "Treatment", "Estimate ha", "KML ha", "Phase 1-2 %", "Phase 4-5 %", "Protected/Excluded %", "Treatment agrees %", "FRPIM check", "Status", "Mean RNI", "Mean RFI", "Cost lakh", "Seedlings", "Proposed on", "Last action", "Last action on"];
+  const q = (v) => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = list.map((w) => { const l = (w.trail || []).slice(-1)[0] || {};
+    return [dispId(w.id), w.name, w.beat, w.scheme, w.year, TREAT[w.treat], w.estArea, w.result.total.toFixed(2), w.s12, w.s45, w.sPE, w.matchPct, VERDICT[w.verdict][0], STATUS[w.status][0], w.result.rni, w.result.rfi, w.estCost, w.seedlings, dd(w.createdAt), l.action, l.at ? dd(l.at) : ""].map(q).join(","); });
+  const csv = "﻿" + cols.join(",") + "\n" + rows.join("\n") + "\n";
+  try { await dl.save({ filename: "FRPIM_works_register_" + new Date().toISOString().slice(0, 10) + ".csv", data: new Blob([csv], { type: "text/csv" }) }); toast("Register saved"); } catch (e) { toast("The file was not saved"); }
+}
+async function saveReport(w) {
+  const dl = await useCap("downloads"); if (!dl) { toast("Saving files is not available in this view"); return; }
+  const r = w.result, vcol = { g: "#1a7f37", a: "#a15c07", r: "#b42318" }[w.verdict];
+  const rows = (tbl, obj, keys) => keys.filter((k) => (obj[k] || 0) > 0).map((k) => "<tr><td><span style=\"display:inline-block;width:11px;height:11px;background:" + (k === "out" ? "#fff" : tbl[k][1]) + ";border:1px solid #999;margin-right:6px\"></span>" + esc(k === "out" ? OUTSIDE[0] : tbl[k][0]) + "</td><td class=n>" + obj[k].toFixed(2) + "</td><td class=n>" + pct(obj[k], r.total).toFixed(1) + " %</td></tr>").join("");
+  const fig = (k, t) => "<figure><figcaption>" + t + "</figcaption>" + mapSVG(w.geom, k) + "</figure>";
+  const html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + esc(dispId(w.id) + " " + w.name) + "</title><style>body{font-family:Arial,sans-serif;color:#16211a;margin:24px auto;max-width:960px;padding:0 16px}h1{font-size:20px;margin:4px 0}h2{font-size:15px;border-bottom:2px solid #17462c;padding-bottom:4px;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:5px 7px;text-align:left}.n{text-align:right}.v{border-left:6px solid " + vcol + ";background:#f5f5f5;padding:8px 12px}.m{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}figure{margin:0}figcaption{font-weight:700;font-size:12px;margin-bottom:4px}svg{width:100%;height:auto;border:1px solid #ccc}.muted{color:#5b6b60;font-size:12px}</style></head><body>" +
+    "<div class=muted>FRPIM Works Portal · " + esc(RANGE.name) + " · report generated " + esc(dt(new Date().toISOString())) + "</div><h1>" + esc(dispId(w.id)) + " · " + esc(w.name) + "</h1>" +
+    "<p><b>Status:</b> " + esc(STATUS[w.status][0]) + " &nbsp; <b>FRPIM check:</b> <span style=\"color:" + vcol + "\">" + esc(VERDICT[w.verdict][0] + " · " + VERDICT[w.verdict][1]) + "</span></p>" +
+    "<h2>Work details</h2><table><tr><th>Beat / compartment</th><td>" + esc(w.beat) + "</td><th>Scheme</th><td>" + esc(w.scheme) + "</td></tr><tr><th>Work year</th><td>" + esc(w.year) + "</td><th>Treatment proposed</th><td>" + esc(TREAT[w.treat]) + "</td></tr><tr><th>Area in estimate</th><td>" + (w.estArea ? w.estArea.toFixed(2) + " ha" : "-") + "</td><th>Area in KML</th><td>" + r.total.toFixed(2) + " ha</td></tr><tr><th>Estimated cost</th><td>" + (w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : "-") + "</td><th>Seedlings</th><td>" + (w.seedlings || "-") + "</td></tr><tr><th>KML file</th><td colspan=3>" + esc(w.fileName) + "</td></tr></table>" +
+    "<h2>Treatment KML on the FRPIM maps</h2><div class=m>" + fig("n", "Map 1 · Restoration need") + fig("f", "Map 2 · Feasibility") + fig("p", "Map 3 · Priority phase") + "</div>" +
+    "<h2>FRPIM findings</h2><div class=v><b>" + esc(VERDICT[w.verdict][1]) + "</b><ul>" + (w.reasons || []).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div>" +
+    "<p>" + fp(w.s12) + " in Phase 1-2 · " + fp(w.sPE) + " protected or excluded · treatment agrees with FRPIM on " + (w.matchPct == null ? "-" : fp(w.matchPct)) + " of plantable area" + (r.rni != null ? " · mean RNI " + r.rni.toFixed(3) + ", RFI " + r.rfi.toFixed(3) : "") + "</p>" +
+    "<table><tr><th>Priority (Map 3)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(PHASE, Object.assign({}, r.byPhase, { out: r.outside }), [1, 2, 3, 4, 5, 6, 7, "out"]) + "</table><br>" +
+    "<table><tr><th>Need (Map 1)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(NEED, r.byNeed, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
+    "<table><tr><th>Feasibility (Map 2)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(FEAS, r.byFeas, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
+    "<table><tr><th>What FRPIM recommends</th><th class=n>ha</th></tr>" + ["S", "B", "A", "P", "X"].filter((k) => r.byRx[k] > 0).map((k) => "<tr><td>" + esc(RX[k]) + "</td><td class=n>" + r.byRx[k].toFixed(2) + "</td></tr>").join("") + (r.smcHa > 0 ? "<tr><td>of which SMC works required</td><td class=n>" + r.smcHa.toFixed(2) + "</td></tr>" : "") + "</table>" +
+    (w.acf ? "<h2>ACF scrutiny</h2><table>" + CHECKLIST.map((c, i) => "<tr><td>" + (w.acf.checks[i] ? "✓" : "✗") + "</td><td>" + esc(c) + "</td></tr>").join("") + "</table><p>" + esc(w.acf.remarks) + "</p>" : "") +
+    "<h2>File movement</h2><table><tr><th>Date</th><th>Officer</th><th>Action</th><th>Remarks</th></tr>" + (w.trail || []).map((t) => "<tr><td>" + esc(dt(t.at)) + "</td><td>" + esc(ROLES[t.role].title) + "</td><td>" + esc(t.action) + "</td><td>" + esc(t.note) + "</td></tr>").join("") + "</table>" +
+    "<p class=muted>FRPIM v2.2 is decision support. The final decision rests with the ACF and the DCF.</p></body></html>";
+  try { await dl.save({ filename: dispId(w.id).replace(/\//g, "-") + "_report.html", data: new Blob([html], { type: "text/html" }) }); toast("Report saved. Open it in a browser to print it."); } catch (e) { toast("The report was not saved"); }
+}
+
+/* ---------------- mock-drill examples ---------------- */
+async function loadDemo() {
+  if (Store.all().some((w) => w.demo)) { toast("The mock-drill examples are already loaded"); return; }
+  const year = fyNow(), now = Date.now(), day = 864e5;
+  const plan = [
+    { stage: "APPROVED", scheme: "CAMPA", est: 17, cost: 9.8, seed: 18700, beat: "Compt. A", ago: [24, 21, 15, 9] },
+    { stage: "DCF", scheme: "State plan", est: 16.5, cost: 8.6, seed: 18150, beat: "Compt. B", ago: [12, 10, 4] },
+    { stage: "ACF", scheme: "CAMPA", est: 20, cost: 7.2, seed: 9900, beat: "Compt. C", ago: [5, 3] },
+    { stage: "RET_RFO", scheme: "MGNREGA", est: 21, cost: 11.4, seed: 23100, beat: "Compt. D", ago: [9, 8, 2] },
+    { stage: "APPROVED_DEV", scheme: "MGNREGA", est: 20, cost: 6.1, seed: 0, beat: "Compt. E", ago: [30, 27, 22, 18] }
+  ];
+  const mk = (role, action, note, d) => ({ at: new Date(now - d * day).toISOString(), role, user: ROLES[role].id, action, note });
+  for (let i = 0; i < SAMPLES.length && i < plan.length; i++) {
+    const s = SAMPLES[i], p = plan[i];
+    const features = [{ type: "Feature", properties: { name: s.name }, geometry: { type: "Polygon", coordinates: [s.coords] } }];
+    const result = analyse(features), vd = verdictOf(result, s.treat, p.est);
+    const pre = RANGE.code + "-" + year + "-", id = pre + String(901 + i);
+    const w = { id, demo: true, range: RANGE.name, name: s.name, beat: p.beat, scheme: p.scheme, year, treat: s.treat, estArea: p.est, estCost: p.cost, seedlings: p.seed || null,
+      remarks: "Mock-drill example.", fileName: "example_" + (i + 1) + ".kml", geom: { type: "FeatureCollection", features }, result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, matchPct: vd.matchPct,
+      createdAt: new Date(now - p.ago[0] * day).toISOString(), createdBy: ROLES.RFO.id, model: "FRPIM v2.2 (run 19 Nov 2026)", trail: [] };
+    w.trail.push(mk("RFO", "Draft created", "KML " + w.fileName, p.ago[0]));
+    w.trail.push(mk("RFO", "Submitted to ACF", "FRPIM check " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2", p.ago[1]));
+    const allOk = CHECKLIST.map(() => true);
+    if (p.stage === "APPROVED" || p.stage === "DCF") {
+      w.acf = { checks: allOk, remarks: "Site inspected. Boundary and area verified; Phase 1-2 land with SMC needed.", at: new Date(now - p.ago[2] * day).toISOString(), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Recommended to DCF", w.acf.remarks, p.ago[2]));
+      if (p.stage === "APPROVED") { w.dcf = { decision: "Approved", remarks: "Approved. Take up SMC before the monsoon.", at: new Date(now - p.ago[3] * day).toISOString() }; w.trail.push(mk("DCF", "Approved by DCF", w.dcf.remarks, p.ago[3])); }
+    }
+    if (p.stage === "RET_RFO") {
+      w.acf = { checks: [true, true, true, false, false, false], remarks: "Most of the KML falls on excluded and protected land. Redraw the boundary on plantable blocks only.", at: new Date(now - p.ago[2] * day).toISOString(), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Returned to RFO", w.acf.remarks, p.ago[2]));
+    }
+    if (p.stage === "APPROVED_DEV") {
+      w.acf = { checks: allOk, remarks: "Low FRPIM priority, but SMC here protects the catchment of the village tank downstream.", at: new Date(now - p.ago[2] * day).toISOString(), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Recommended to DCF", w.acf.remarks, p.ago[2]));
+      w.dcf = { decision: "Approved with recorded deviation", remarks: "Approved as catchment treatment for the village tank; deviation from FRPIM priority recorded.", at: new Date(now - p.ago[3] * day).toISOString() };
+      w.trail.push(mk("DCF", "Approved by DCF with recorded deviation", w.dcf.remarks, p.ago[3]));
+    }
+    w.status = p.stage; w.updatedAt = w.trail[w.trail.length - 1].at;
+    await Store.put(w);
+  }
+  toast("Mock-drill examples loaded"); go({ v: "dash" });
+}
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  ROLE = ss.get("frpim_role"); if (ROLE && !ROLES[ROLE]) ROLE = null;
+  render();
+  Store.on(() => { if (ROLE && !["new"].includes(VIEW.v) && !(VIEW.v === "work" && document.activeElement && /TEXTAREA|INPUT/.test(document.activeElement.tagName)) && VIEW.v !== "map") render(); });
+  try { await loadBlocks(); } catch (e) { $("#app").prepend(el("div", { class: "banner r gut", text: "The FRPIM blocks could not be loaded. Reload the page." })); }
+  await Store.init();
+  render();
+}
+window.addEventListener("resize", () => { if (!ROLE) drawContours(); });
+if (window.L && window.turf) boot(); else window.addEventListener("load", () => { if (window.L && window.turf) boot(); else $("#app").textContent = "The map libraries could not be loaded. Check the internet connection and reload."; });
+</script>
