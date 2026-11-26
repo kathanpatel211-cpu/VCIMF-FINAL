@@ -39,6 +39,9 @@ var SETTINGS = {
   // re-run only some ranges: their short codes, e.g. ['RPO', 'POS']. Empty [] = all ranges (normal RUN 1).
   // With codes here, RUN 1 creates only those range tasks (no QC, anchor or constraint-map tasks again).
   ONLY_RANGES: [],
+  // true = run RUN 2 now with the ranges whose tables are ready (outputs are tagged '_partial'; classes and
+  // phases are then relative to those ranges only). Set back to false for the final all-range RUN 2.
+  RUN2_WITH_AVAILABLE: false,
   ID_PREFIX: 'SBK_',
   CRS: 'EPSG:32643',               // UTM 43N (checked automatically against the division)
   ASSET_ROOT: 'projects/khedbrahma-range/assets/',
@@ -2593,7 +2596,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 5 (re-run selected ranges)');
+print('Script: FRPIM v2.2 division, build 6 (partial RUN 2 option)');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -2610,6 +2613,20 @@ ids.forEach(function (id) {
     if (STEP !== 'AUTO') { runFrpimStep(STEP); return; }
     if (have.length === 0) { runFrpimStep('LAYERS'); return; }
     if ((SETTINGS.ONLY_RANGES || []).length) { runFrpimStep('LAYERS'); return; }
+    if (missing.length > 0 && SETTINGS.RUN2_WITH_AVAILABLE) {
+      // partial RUN 2: score only the ranges whose tables exist; separate names so the final run is not blocked
+      ASSETS.RAW_PARTS = SETTINGS.RANGES.map(function (r, i) { return ASSETS.RAW_PARTS[i]; })
+        .filter(function (id) { return found[id]; });
+      ASSETS.FINAL = ASSETS.FINAL + '_partial_' + have.map(function (r) { return r.code; }).join('');
+      SETTINGS.RANGE_NAME = SETTINGS.RANGE_NAME + '_partial_' + have.length + 'ranges';
+      SETTINGS.DIVISION_NAME = SETTINGS.DIVISION_NAME + ' (' + have.length + ' of ' + SETTINGS.RANGES.length + ' ranges: ' +
+                               have.map(function (r) { return r.name; }).join(', ') + ')';
+      print('PARTIAL RUN 2 with ' + have.length + ' ranges: ' + have.map(function (r) { return r.name; }).join(', ') +
+            '. Not included: ' + missing.map(function (r) { return r.name; }).join(', ') + '.');
+      print('Classes and phases are relative to these ranges only. Repeat RUN 2 with all ranges when the rest are ready.');
+      runFrpimStep('MAP');
+      return;
+    }
     if (missing.length > 0) {
       print('WAIT: range tables saved for ' + have.map(function (r) { return r.name; }).join(', ') +
             '; still missing: ' + missing.map(function (r) { return r.name; }).join(', ') + '.');
