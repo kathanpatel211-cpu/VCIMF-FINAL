@@ -1,0 +1,1081 @@
+<title>VanDrishti</title>
+<link rel="artifact-thumbnail" href="thumb.jpg">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700&display=swap">
+<style>
+/*LEAFLET_CSS*/
+/* Layout: VanDrishti. A night-forest login with the range rising in 3D; inside, a glass top bar, a dashboard hero with the live 3D range, tilting KPI tiles, and work files laid out as map panel + scrutiny column. */
+:root {
+  --bg: #f1f5f1; --bg-2: #e6eee7; --surface: #ffffff; --surface-2: #eef3ee; --glass: rgba(255,255,255,.72);
+  --ink: #12201a; --muted: #586a5f; --line: #d3ddd5; --line-2: #bfcdc3;
+  --forest: #0f3d2a; --canopy: #1d6b47; --moss: #3e8f62; --ochre: #d48a0a; --ochre-ink: #2b1b00; --ochre-soft: #fbefd6;
+  --ok: #17803a; --ok-soft: #e0f2e5; --warn: #a65c00; --warn-soft: #fcecd2; --bad: #b4261c; --bad-soft: #fbe2df; --info: #1f62ad; --info-soft: #e1ecf9;
+  --mapbg: #e7ede8; --shadow: 0 1px 2px rgba(15,61,42,.06), 0 8px 24px -12px rgba(15,61,42,.18);
+  --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-deva: "Noto Sans Devanagari", "Nirmala UI", "Mangal", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1511; --bg-2: #0f1d17; --surface: #132019; --surface-2: #1a2a22; --glass: rgba(16,29,23,.72);
+  --ink: #e4eee7; --muted: #95aa9c; --line: #23362b; --line-2: #2f4639;
+  --forest: #0a2a1d; --canopy: #2f9a66; --moss: #5fc18a; --ochre: #f0a52a; --ochre-ink: #2b1b00; --ochre-soft: #33260f;
+  --ok: #5fcb84; --ok-soft: #12301e; --warn: #f0a94e; --warn-soft: #36270f; --bad: #f2786a; --bad-soft: #3a1915; --info: #82b6ef; --info-soft: #14253a;
+  --mapbg: #15211b; --shadow: 0 1px 0 rgba(255,255,255,.03), 0 10px 30px -14px rgba(0,0,0,.6); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0b1511; --bg-2: #0f1d17; --surface: #132019; --surface-2: #1a2a22; --glass: rgba(16,29,23,.72);
+  --ink: #e4eee7; --muted: #95aa9c; --line: #23362b; --line-2: #2f4639;
+  --forest: #0a2a1d; --canopy: #2f9a66; --moss: #5fc18a; --ochre: #f0a52a; --ochre-ink: #2b1b00; --ochre-soft: #33260f;
+  --ok: #5fcb84; --ok-soft: #12301e; --warn: #f0a94e; --warn-soft: #36270f; --bad: #f2786a; --bad-soft: #3a1915; --info: #82b6ef; --info-soft: #14253a;
+  --mapbg: #15211b; --shadow: 0 1px 0 rgba(255,255,255,.03), 0 10px 30px -14px rgba(0,0,0,.6); color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { background: radial-gradient(1200px 600px at 85% -10%, var(--bg-2), transparent 60%), var(--bg); background-attachment: fixed; color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.gut { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; text-wrap: balance; font-family: var(--font-display); letter-spacing: -0.01em; }
+:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
+@keyframes rise { from { transform: translateY(10px); } to { transform: none; } }
+@keyframes sheen { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(212,138,10,.45); } 50% { box-shadow: 0 0 0 6px rgba(212,138,10,0); } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.rise > * { animation: rise .55s cubic-bezier(.2,.7,.2,1) both; }
+.rise > *:nth-child(2) { animation-delay: .05s; } .rise > *:nth-child(3) { animation-delay: .1s; } .rise > *:nth-child(4) { animation-delay: .15s; }
+.rise > *:nth-child(5) { animation-delay: .2s; } .rise > *:nth-child(6) { animation-delay: .25s; } .rise > *:nth-child(n+7) { animation-delay: .3s; }
+
+/* ---------------- login: a committed night-forest scene in both themes ---------------- */
+.login { position: relative; min-height: 100vh; min-height: 100dvh; overflow: hidden; color: #eaf4ed;
+  background: radial-gradient(900px 500px at 20% 10%, #1b5a3c 0%, transparent 60%), radial-gradient(900px 600px at 90% 110%, #4a3208 0%, transparent 55%), #07130d; }
+.login #terrain3d { position: absolute; inset: 0; }
+.login #terrain3d canvas { display: block; }
+.login .veil { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7,19,13,.94) 0%, rgba(7,19,13,.78) 30%, rgba(7,19,13,.12) 55%, rgba(7,19,13,.1) 66%, rgba(7,19,13,.7) 100%); pointer-events: none; }
+@media (min-width: 901px) { .login #terrain3d { left: 26%; right: -6%; } }
+.login .inner { position: relative; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 440px); gap: 32px; align-items: center; padding-block: 36px; pointer-events: none; }
+.login .inner > * { pointer-events: auto; }
+@media (max-width: 900px) { .login .inner { grid-template-columns: minmax(0, 1fr); align-items: start; } .login .veil { background: linear-gradient(180deg, rgba(7,19,13,.55), rgba(7,19,13,.9) 60%); } }
+.brandblock { display: grid; gap: 18px; align-self: stretch; align-content: space-between; }
+.wordmark { display: flex; gap: 14px; align-items: center; }
+.wordmark .logo { width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center; background: linear-gradient(140deg, #2f9a66, #0f3d2a); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 10px 30px -10px rgba(47,154,102,.8); }
+.wordmark b { font-family: var(--font-display); font-size: 26px; font-weight: 800; letter-spacing: -0.02em; display: block; line-height: 1; }
+.wordmark .deva { font-family: var(--font-deva); font-size: 14px; color: #f0c56b; display: block; margin-top: 4px; }
+.hero h1 { font-size: clamp(34px, 5.2vw, 68px); font-weight: 800; line-height: 1.02; letter-spacing: -0.035em; max-width: 12ch; }
+.hero h1 em { font-style: normal; background: linear-gradient(100deg, #f6c46a, #f0a52a 40%, #9be3b6 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p { max-width: 50ch; color: #c5d8cb; font-size: 15.5px; margin: 14px 0 0; }
+.hero .org { display: inline-flex; gap: 10px; align-items: center; font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase; color: #9fc9ad; margin-bottom: 14px; }
+.hero .org::before { content: ""; width: 26px; height: 2px; background: #f0a52a; }
+.flow3 { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 22px; }
+.flow3 span { display: inline-flex; gap: 8px; align-items: center; padding: 7px 12px 7px 7px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); font-size: 13px; backdrop-filter: blur(6px); }
+.flow3 i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 10px; font-weight: 800; color: #fff; }
+.flow3 .arrow { color: #f0a52a; }
+.statsrow { display: flex; flex-wrap: wrap; gap: 26px; font-size: 12.5px; color: #9fc9ad; }
+.statsrow b { display: block; font-family: var(--font-num); font-weight: 500; font-size: 22px; color: #eaf4ed; }
+.legend3d { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11.5px; color: #b9cfc0; }
+.legend3d span { display: inline-flex; gap: 6px; align-items: center; }
+.legend3d i { width: 10px; height: 10px; border-radius: 2px; }
+.signin { background: rgba(10,26,18,.62); border: 1px solid rgba(255,255,255,.12); border-radius: 20px; padding: 26px; display: grid; gap: 14px; backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.08); }
+.signin h2 { font-size: 22px; }
+.signin .hint { color: #a9c3b2; font-size: 12.5px; }
+.rolecards { display: grid; gap: 8px; }
+.rolecard { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; align-items: center; text-align: left; padding: 11px 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(255,255,255,.04); cursor: pointer; color: #eaf4ed; transition: transform .2s, border-color .2s, background .2s; }
+.rolecard:hover { transform: translateY(-1px); border-color: rgba(240,165,42,.55); }
+.rolecard[aria-pressed="true"] { border-color: #f0a52a; background: rgba(240,165,42,.10); box-shadow: 0 0 0 3px rgba(240,165,42,.15); }
+.rolecard .av { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.rolecard b { display: block; font-size: 14px; }
+.rolecard small { color: #a9c3b2; font-size: 12px; display: block; }
+.rolecard code { font-family: var(--font-num); font-size: 11.5px; color: #f0c56b; }
+.signin .field { color: #a9c3b2; }
+.signin .field input { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); color: #eaf4ed; }
+.signin .err { color: #ff9b8f; }
+.go { border: 0; border-radius: 12px; padding: 13px 18px; font-weight: 700; font-size: 15px; cursor: pointer; color: var(--ochre-ink);
+  background: linear-gradient(100deg, #f6c46a, #f0a52a 50%, #f6c46a) 0 0 / 200% 100%; animation: sheen 6s linear infinite; box-shadow: 0 10px 30px -12px rgba(240,165,42,.8); }
+.tagline { font-family: var(--font-display); font-weight: 600; letter-spacing: .02em; color: #f0c56b; font-size: 14px; }
+
+/* ---------------- shared form bits ---------------- */
+.field { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field input, .field select, .field textarea { font-weight: 400; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 11px; width: 100%; min-width: 0; transition: border-color .15s, box-shadow .15s; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--canopy); box-shadow: 0 0 0 3px color-mix(in srgb, var(--canopy) 20%, transparent); outline: none; }
+.field textarea { min-height: 80px; resize: vertical; }
+.hint { font-size: 12.5px; color: var(--muted); }
+.err { color: var(--bad); font-size: 13px; }
+.okm { color: var(--ok); font-size: 13px; }
+
+/* ---------------- app shell ---------------- */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 1000; background: var(--glass); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 1001; }
+.top .bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; padding-block: 10px; max-width: 1400px; margin: 0 auto; }
+.brand { display: flex; gap: 11px; align-items: center; min-width: 0; }
+.brand .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(140deg, #2f9a66, #0f3d2a); flex: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.brand b { font-family: var(--font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.02em; display: block; line-height: 1.1; }
+.brand small { color: var(--muted); font-size: 11.5px; display: block; }
+.brand .deva { font-family: var(--font-deva); color: var(--ochre); font-weight: 700; font-size: 12px; margin-left: 6px; }
+.navwrap { display: flex; gap: 4px; align-items: center; overflow-x: auto; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; position: relative; max-width: 100%; }
+.navwrap button { background: transparent; border: 0; color: var(--muted); padding: 7px 12px; cursor: pointer; font-weight: 600; font-size: 13px; border-radius: 9px; white-space: nowrap; position: relative; z-index: 1; transition: color .2s; }
+.navwrap button[aria-current="page"] { color: var(--ink); }
+.navwrap .pill { position: absolute; top: 4px; bottom: 4px; border-radius: 9px; background: var(--surface); box-shadow: var(--shadow); transition: left .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1); z-index: 0; }
+.navwrap .count { background: var(--ochre); color: var(--ochre-ink); border-radius: 999px; padding: 0 7px; font-size: 11px; margin-left: 6px; font-weight: 700; animation: pulse 2.4s infinite; }
+.who { display: flex; gap: 10px; align-items: center; }
+.who .av { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 11.5px; color: #fff; }
+.who b { display: block; font-size: 13px; }
+.who small { color: var(--muted); font-size: 11.5px; }
+.ghostbtn { background: transparent; border: 1px solid var(--line-2); color: var(--ink); border-radius: 9px; padding: 7px 11px; cursor: pointer; font-size: 13px; }
+main { padding-block: 20px 40px; display: grid; gap: 18px; max-width: 1400px; margin: 0 auto; }
+.pagehead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; justify-content: space-between; }
+.pagehead h1 { font-size: 26px; font-weight: 800; }
+.pagehead p { margin: 4px 0 0; color: var(--muted); }
+.eyebrow { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ochre); font-weight: 700; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.card > h2 { font-size: 15.5px; font-weight: 700; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.card > h2 small { font-family: var(--font-ui); font-weight: 500; color: var(--muted); font-size: 12.5px; letter-spacing: 0; }
+.grid { display: grid; gap: 18px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g-main { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1000px) { .g2, .g3, .g-main { grid-template-columns: minmax(0, 1fr); } }
+
+/* dashboard hero */
+.herocard { position: relative; overflow: hidden; border-radius: 22px; color: #eaf4ed; min-height: 300px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  background: radial-gradient(700px 400px at 80% 20%, #1d5a3c, transparent 60%), radial-gradient(500px 300px at 10% 120%, #4a3208, transparent 60%), #08160f; box-shadow: 0 30px 60px -35px rgba(8,22,15,.9); }
+@media (max-width: 900px) { .herocard { grid-template-columns: minmax(0, 1fr); } }
+.herocard .txt { padding: 26px; display: grid; gap: 14px; align-content: center; position: relative; z-index: 1; }
+.herocard h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.1; }
+.herocard p { margin: 0; color: #b9cfc0; }
+.herocard .scene { position: relative; min-height: 280px; }
+.herocard .scene > div { position: absolute; inset: 0; }
+.herocard .seg3 { position: absolute; right: 14px; top: 14px; z-index: 2; }
+.herocard .legend3d { position: absolute; left: 16px; bottom: 12px; z-index: 2; }
+.herocard .tip3d { position: absolute; z-index: 3; pointer-events: none; background: rgba(5,15,10,.85); border: 1px solid rgba(255,255,255,.15); color: #eaf4ed; border-radius: 8px; padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+.btn { border: 1px solid transparent; background: var(--canopy); color: #fff; border-radius: 11px; padding: 10px 16px; font-weight: 700; font-size: 13.5px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; transition: transform .15s, box-shadow .2s, background .2s; box-shadow: 0 8px 20px -12px var(--canopy); }
+.btn:hover { transform: translateY(-1px); }
+.btn.gold { background: linear-gradient(100deg, #f6c46a, #f0a52a); color: var(--ochre-ink); box-shadow: 0 10px 24px -12px rgba(240,165,42,.9); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); box-shadow: none; }
+.btn.glass { background: rgba(255,255,255,.08); color: #eaf4ed; border-color: rgba(255,255,255,.18); box-shadow: none; }
+.btn.warn { background: var(--warn); color: #fff; }
+.btn.bad { background: transparent; border-color: var(--bad); color: var(--bad); box-shadow: none; }
+.btn.big { padding: 12px 20px; font-size: 14.5px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--surface); padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 11px; cursor: pointer; font-size: 12.5px; border-radius: 8px; color: var(--muted); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--canopy); color: #fff; }
+.seg.dark { background: rgba(5,15,10,.6); border-color: rgba(255,255,255,.14); backdrop-filter: blur(8px); }
+.seg.dark button { color: #b9cfc0; }
+.seg.dark button[aria-pressed="true"] { background: #f0a52a; color: var(--ochre-ink); }
+
+/* KPI tiles with 3D tilt */
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; perspective: 900px; }
+@media (max-width: 1150px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 6px; box-shadow: var(--shadow); transform-style: preserve-3d; transition: transform .18s ease-out, box-shadow .2s; overflow: hidden; min-width: 0; }
+.kpi::after { content: ""; position: absolute; inset: 0; background: radial-gradient(300px 120px at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--ochre) 14%, transparent), transparent 70%); pointer-events: none; opacity: 0; transition: opacity .2s; }
+.kpi:hover::after { opacity: 1; }
+.kpi span { font-size: 11.5px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.kpi b { font-family: var(--font-num); font-size: 28px; font-weight: 500; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.kpi small { font-size: 12px; color: var(--muted); }
+.kpi.hl { background: linear-gradient(160deg, var(--ochre-soft), var(--surface)); border-color: color-mix(in srgb, var(--ochre) 55%, transparent); }
+.kpi .ring { position: absolute; right: 12px; top: 12px; width: 46px; height: 46px; }
+.kpi .ring circle { fill: none; stroke-width: 6; }
+.kpi .ring .tr { stroke: var(--surface-2); }
+.kpi .ring .fg { stroke: var(--ok); stroke-linecap: round; transition: stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1); }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pipe button { text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 14px; padding: 12px 14px; display: grid; gap: 3px; cursor: pointer; position: relative; overflow: hidden; transition: transform .2s, border-color .2s; color: var(--ink); }
+.pipe button:hover { transform: translateY(-2px); border-color: var(--canopy); }
+.pipe b { font-family: var(--font-num); font-size: 26px; font-weight: 500; }
+.pipe span { font-size: 12.5px; font-weight: 700; }
+.pipe small { color: var(--muted); font-size: 12px; }
+.pipe .bar { height: 4px; border-radius: 2px; margin-top: 6px; transform-origin: left; animation: grow .9s cubic-bezier(.2,.8,.2,1) both; }
+
+/* charts */
+.hbars { display: grid; gap: 10px; }
+.hbar { display: grid; grid-template-columns: minmax(90px, 150px) minmax(0, 1fr) 76px; gap: 10px; align-items: center; font-size: 13px; }
+.hbar .tr { height: 12px; background: var(--surface-2); border-radius: 6px; overflow: hidden; display: flex; }
+.hbar .tr div { height: 100%; transform-origin: left; animation: grow .9s cubic-bezier(.2,.8,.2,1) both; }
+.hbar .v { text-align: right; font-family: var(--font-num); font-size: 12.5px; }
+.stack { display: flex; height: 22px; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); }
+.stack div { height: 100%; transform-origin: left; animation: grow .9s cubic-bezier(.2,.8,.2,1) both; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 5px; align-items: center; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+
+/* lists */
+.list { display: grid; gap: 10px; }
+.item { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 14px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 12px 0; background: var(--surface); cursor: pointer; text-align: left; width: 100%; color: var(--ink); transition: transform .2s, border-color .2s, box-shadow .2s; }
+.item:hover { transform: translateX(3px); border-color: var(--canopy); box-shadow: var(--shadow); }
+.item .st { align-self: stretch; border-radius: 14px 0 0 14px; }
+.item .t { font-weight: 700; overflow-wrap: anywhere; font-family: var(--font-display); font-size: 14.5px; }
+.item .m { font-size: 12.5px; color: var(--muted); }
+.item .r { display: grid; gap: 5px; justify-items: end; }
+.empty { border: 1px dashed var(--line-2); border-radius: 16px; padding: 26px; text-align: center; color: var(--muted); display: grid; gap: 8px; justify-items: center; }
+.empty b { color: var(--ink); font-family: var(--font-display); font-size: 16px; }
+.feed { display: grid; gap: 12px; }
+.feed > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; font-size: 13px; }
+.av { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 10.5px; color: #fff; }
+.feed small { color: var(--muted); display: block; }
+.feed a { color: var(--canopy); font-weight: 600; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.c-g { background: var(--ok-soft); color: var(--ok); } .c-a { background: var(--warn-soft); color: var(--warn); } .c-r { background: var(--bad-soft); color: var(--bad); }
+.c-i { background: var(--info-soft); color: var(--info); } .c-s { background: var(--surface-2); color: var(--muted); } .c-x { background: var(--ochre-soft); color: var(--warn); }
+
+/* tables */
+.tw { overflow-x: auto; }
+table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.t th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--line); padding: 7px 8px; white-space: nowrap; }
+table.t td { border-bottom: 1px solid var(--line); padding: 8px; vertical-align: middle; }
+table.t td.n, table.t th.n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+table.t tr.click { cursor: pointer; transition: background .15s; }
+table.t tr.click:hover td { background: var(--surface-2); }
+table.t i.sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 7px; border: 1px solid rgba(0,0,0,.15); vertical-align: -1px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters select, .filters input { border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 10px; background: var(--surface); min-width: 0; color: var(--ink); }
+.filters input { flex: 1 1 220px; }
+
+/* work file */
+.track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; position: relative; }
+.track > div { display: grid; justify-items: center; text-align: center; gap: 6px; position: relative; padding: 0 6px; font-size: 12.5px; }
+.track > div::before { content: ""; position: absolute; top: 17px; left: -50%; right: 50%; height: 3px; background: var(--line); z-index: 0; }
+.track > div:first-child::before { display: none; }
+.track > div.done::before, .track > div.now::before { background: var(--ok); }
+.track .dot { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); border: 2px solid var(--line-2); font-weight: 800; font-size: 11px; z-index: 1; color: var(--muted); }
+.track .done .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.track .now .dot { background: var(--ochre); border-color: var(--ochre); color: var(--ochre-ink); animation: pulse 2s infinite; }
+.track .back .dot { background: var(--bad); border-color: var(--bad); color: #fff; }
+.track b { font-size: 13px; }
+.track small { color: var(--muted); }
+@media (max-width: 560px) { .track small { display: none; } }
+.maps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; perspective: 1000px; }
+@media (max-width: 760px) { .maps3 { grid-template-columns: minmax(0, 1fr); } }
+.maps3 figure { margin: 0; display: grid; gap: 6px; align-content: start; }
+.maps3 figcaption { font-size: 12.5px; font-weight: 700; font-family: var(--font-display); }
+.maps3 .mapbox { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s; transform-origin: center bottom; }
+.maps3 figure:hover .mapbox { transform: rotateX(14deg) translateY(-4px) scale(1.02); box-shadow: 0 24px 30px -18px rgba(0,0,0,.45); }
+.maps3 svg { width: 100%; height: auto; display: block; }
+.maps3 .legend { font-size: 11px; }
+.verdict { border-radius: 14px; padding: 14px 16px; border: 1px solid; display: grid; gap: 4px; position: relative; overflow: hidden; }
+.verdict::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
+.verdict.g { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 35%, transparent); } .verdict.g::before { background: var(--ok); }
+.verdict.a { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); } .verdict.a::before { background: var(--warn); }
+.verdict.r { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 35%, transparent); } .verdict.r::before { background: var(--bad); }
+.verdict b { font-size: 16px; font-family: var(--font-display); }
+.verdict.g b { color: var(--ok); } .verdict.a b { color: var(--warn); } .verdict.r b { color: var(--bad); }
+.verdict ul { margin: 2px 0 0; padding-left: 18px; font-size: 13px; }
+.mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 560px) { .mini { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mini div { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.mini b { font-family: var(--font-num); font-size: 19px; font-weight: 500; }
+.mini span { font-size: 11.5px; color: var(--muted); }
+dl.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 14px; margin: 0; font-size: 13.5px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+.timeline { display: grid; }
+.timeline > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding-bottom: 16px; position: relative; font-size: 13px; }
+.timeline > div::after { content: ""; position: absolute; left: 16px; top: 36px; bottom: 2px; width: 2px; background: linear-gradient(var(--line-2), transparent); }
+.timeline > div:last-child::after { display: none; }
+.timeline .av { z-index: 1; }
+.timeline small { color: var(--muted); display: block; }
+.timeline q { display: block; margin-top: 5px; background: var(--surface-2); padding: 7px 10px; border-radius: 9px; quotes: none; }
+.action { border: 1.5px solid color-mix(in srgb, var(--ochre) 60%, transparent); background: linear-gradient(170deg, var(--ochre-soft), var(--surface) 70%); }
+.checks { display: grid; gap: 8px; }
+.checks label { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; cursor: pointer; }
+.checks input { margin-top: 2px; width: 17px; height: 17px; accent-color: var(--canopy); flex: none; }
+.checkrow { display: flex; gap: 9px; font-size: 13px; align-items: flex-start; }
+.checkrow .ic { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none; margin-top: 1px; }
+.checkrow .ic.y { background: var(--ok-soft); color: var(--ok); } .checkrow .ic.n { background: var(--bad-soft); color: var(--bad); }
+.opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.opts label { display: inline-flex; gap: 7px; align-items: center; border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--ink); font-weight: 500; transition: background .15s, border-color .15s; }
+.opts label:has(input:checked) { background: color-mix(in srgb, var(--canopy) 14%, transparent); border-color: var(--canopy); }
+.opts input { accent-color: var(--canopy); margin: 0; }
+.subcard { border: 1px solid var(--line); border-radius: 13px; padding: 14px; display: grid; gap: 12px; background: var(--surface-2); }
+.subcard h3 { font-size: 13.5px; }
+.drop { border: 2px dashed var(--line-2); border-radius: 16px; padding: 28px; text-align: center; display: grid; gap: 8px; justify-items: center; background: var(--surface-2); cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+.drop:hover { transform: translateY(-1px); border-color: var(--canopy); }
+.drop.over { border-color: var(--canopy); background: color-mix(in srgb, var(--canopy) 10%, var(--surface-2)); }
+.drop b { font-size: 16px; font-family: var(--font-display); }
+.drop .ico { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(140deg, #2f9a66, #0f3d2a); }
+.formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.formgrid .full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .formgrid { grid-template-columns: minmax(0, 1fr); } }
+.banner { border-radius: 12px; padding: 11px 14px; font-size: 13.5px; }
+.banner.r { background: var(--bad-soft); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }
+.banner.i { background: var(--info-soft); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
+.banner.a { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+#bigmap, #big3d { height: min(72vh, 700px); min-height: 400px; border: 1px solid var(--line); border-radius: 16px; background: var(--mapbg); overflow: hidden; position: relative; }
+#big3d { background: radial-gradient(700px 400px at 70% 10%, #1d5a3c, transparent 60%), #08160f; }
+.leaflet-container { background: var(--mapbg); font-family: var(--font-ui); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 12px; font-size: 13.5px; z-index: 2000; box-shadow: 0 10px 30px rgba(0,0,0,.25); max-width: calc(100vw - 32px); }
+.foot { color: var(--muted); font-size: 12px; text-align: center; padding-block: 6px 26px; }
+.foot b { font-family: var(--font-display); color: var(--ink); }
+details > summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="app" aria-live="polite"></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   VanDrishti: FRPIM Works Portal, Sabarkantha Forest Division.
+   RFO proposes and certifies the site (incl. SMC suitability) -> ACF
+   scrutinises and remarks -> DCF approves. Every KML is checked
+   against FRPIM Maps 1-3. Decision support: officers decide.
+   ===================================================================== */
+const APP = { name: "VanDrishti", deva: "वनदृष्टि", sub: "FRPIM Works Portal", org: "Sabarkantha Forest Division", tagline: "Right land. Right treatment. Right order." };
+const RANGE = { code: "KB", name: "Khedbrahma Range" };
+const ROLES = {
+  RFO: { id: "rfo.khedbrahma", title: "Range Forest Officer", office: "Khedbrahma Range", colour: "#2f8f5b", can: "Proposes works, uploads KML, certifies the site and SMC" },
+  ACF: { id: "acf.khedbrahma", title: "Assistant Conservator of Forests", office: "Khedbrahma Sub-division", colour: "#2f6fbf", can: "Scrutinises, remarks and recommends to the DCF" },
+  DCF: { id: "dcf.sabarkantha", title: "Deputy Conservator of Forests", office: "Sabarkantha Forest Division", colour: "#c4720a", can: "Final approval authority" }
+};
+const DEMO_PASSWORD = "demo@123";
+const STATUS = {
+  DRAFT: ["Draft", "c-s"], ACF: ["With ACF for scrutiny", "c-i"], RET_RFO: ["Returned to RFO", "c-r"], DCF: ["With DCF for approval", "c-x"],
+  RET_ACF: ["Returned to ACF", "c-r"], APPROVED: ["Approved", "c-g"], APPROVED_DEV: ["Approved with recorded deviation", "c-g"], REJECTED: ["Not approved", "c-r"]
+};
+const INBOX = { RFO: ["DRAFT", "RET_RFO"], ACF: ["ACF", "RET_ACF"], DCF: ["DCF"] };
+const PHASE = { 1: ["Phase 1", "#a50026"], 2: ["Phase 2", "#f46d43"], 3: ["Phase 3", "#fdae61"], 4: ["Phase 4", "#fee08b"], 5: ["Phase 5", "#ffffbf"], 6: ["Protected (C1)", "#1a9850"], 7: ["Excluded (C2-C7)", "#bdbdbd"] };
+const NEED = { 1: ["Very low", "#ffffcc"], 2: ["Low", "#fed976"], 3: ["Moderate", "#fd8d3c"], 4: ["High", "#e31a1c"], 5: ["Very high", "#800026"], 6: PHASE[6], 7: PHASE[7] };
+const FEAS = { 1: ["Very low", "#8c510a"], 2: ["Low", "#d8b365"], 3: ["Moderate", "#c7eae5"], 4: ["High", "#5ab4ac"], 5: ["Very high", "#2166ac"], 6: PHASE[6], 7: PHASE[7] };
+const OUTSIDE = ["Outside range blocks", "#ffffff"];
+const RX = { S: "SMC + drought-hardy planting", B: "Blank-area plantation", A: "ANR + gap planting", P: "Protect dense forest", X: "Not plantable" };
+const SG = { D: "Drought-hardy (khair, ber, desi babul, guggal, hingor)", M: "Medium (teak, dhavdo, timru, khakhro, neem, sadad)", W: "Moist / deep (mahudo, bamboo, jambu, karanj, amla)" };
+const TREAT = { PLANT_SMC: "Plantation with SMC", BLANK: "Blank-area plantation", ANR: "ANR / gap planting", SMC: "Soil-moisture conservation only", OTHER: "Fire protection / other" };
+const TREAT_MATCH = { PLANT_SMC: ["S", "B"], BLANK: ["B", "S"], ANR: ["A"], SMC: ["S"], OTHER: null };
+const SCHEMES = ["CAMPA", "State plan", "MGNREGA", "Nagar Van", "Other"];
+const VERDICT = { g: ["Green", "Matches FRPIM priority"], a: ["Amber", "Partly matches: review before approval"], r: ["Red", "Does not match: justify or revise"] };
+/* RFO field certification (submitted with the proposal) */
+const RFO_CHECKS = [
+  "Site visited and treatment boundary walked with GPS",
+  "Area in the estimate agrees with the KML area",
+  "No encroachment, FRA claim or legal dispute on the site",
+  "Protected dense forest and excluded land kept out of the boundary",
+  "Species chosen suit the soil and moisture of the site"
+];
+const SMC_SUIT = ["Suitable", "Partly suitable", "Not needed", "Not suitable"];
+const SMC_WORKS = ["Continuous contour trenches (CCT)", "Staggered trenches", "Pits with saucers", "Gully plugs / loose boulder checks", "Earthen bunds", "Percolation pits / farm ponds"];
+const SOIL_DEPTH = ["Shallow (< 30 cm)", "Medium (30-60 cm)", "Deep (> 60 cm)"];
+const WATER = ["Tank / check dam within 1 km", "Well or borewell", "Tanker only", "Rain-fed only"];
+/* ACF additional scrutiny */
+const ACF_CHECKS = ["RFO field certification and SMC assessment reviewed", "Cost estimate checked against approved rates and norms", "Scheme guidelines and convergence checked"];
+const LEGACY_CHECKS = ["Site visited and treatment boundary verified on the ground", "Area in the estimate agrees with the KML area", "No encroachment, FRA claim or other legal issue on the site",
+  "Proposed treatment and species suit the site", "SMC works and water availability checked", "Protected or excluded land kept out of the estimate"];
+const SAMPLES = /*SAMPLES*/[];
+
+/*@@KEEP_A@@*/
+
+/* ---------------- 3D range model (three.js) ---------------- */
+const T3D = { proj: null };
+function proj3d() {
+  if (T3D.proj) return T3D.proj;
+  const [x0, y0, x1, y1] = turf.bbox(BOUNDARY), lon0 = (x0 + x1) / 2, lat0 = (y0 + y1) / 2, k = Math.cos(lat0 * Math.PI / 180);
+  const span = Math.max((x1 - x0) * k * 111320, (y1 - y0) * 110540), s = 100 / span;
+  T3D.proj = (lon, lat) => [(lon - lon0) * k * 111320 * s, (lat - lat0) * 110540 * s];
+  return T3D.proj;
+}
+function heightOf(b, layer) {
+  if (b.p === 6) return 2.4; if (b.p === 7) return 0.25;
+  const v = layer === "n" ? b.n : layer === "f" ? b.f : 6 - b.p;
+  return 0.35 + v * 0.75;
+}
+function colourOf3d(b, layer) { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE; return tbl[b.p >= 6 ? b.p : layer === "n" ? b.n : layer === "f" ? b.f : b.p][1]; }
+function webglOK() { try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl"))); } catch (e) { return false; } }
+function makeTerrain(host, opts) {
+  if (!window.THREE || !webglOK() || !BLOCKS.length) return null;
+  const o = Object.assign({ layer: "p", works: [], interactive: false, zoom: false, rotate: true, onWork: null, tip: null, dist: 118, elev: 0.82, hs: 1 }, opts || {});
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const P = proj3d();
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  host.append(renderer.domElement);
+  renderer.domElement.style.touchAction = o.interactive ? "none" : "pan-y";
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.5, 2000);
+  scene.add(new THREE.HemisphereLight(0xdff5e6, 0x1a1206, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff1d6, 1.6); sun.position.set(-60, 120, 80); scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x9fd8ff, 0.35); fill.position.set(80, 40, -60); scene.add(fill);
+  const root = new THREE.Group(); root.rotation.x = -Math.PI / 2; scene.add(root);
+  // ground plate
+  const plate = new THREE.Mesh(new THREE.CircleGeometry(78, 64), new THREE.MeshBasicMaterial({ color: 0x0d2419, transparent: true, opacity: 0.55 }));
+  plate.position.z = -0.05; root.add(plate);
+  const grid = new THREE.PolarGridHelper(78, 12, 6, 64, 0x2f5a44, 0x1d3a2b); grid.rotation.x = Math.PI / 2; grid.position.z = -0.02; root.add(grid);
+  const mats = new Map();
+  const mat = (hex) => { if (!mats.has(hex)) mats.set(hex, new THREE.MeshStandardMaterial({ color: hex, roughness: 0.78, metalness: 0.05 })); return mats.get(hex); };
+  const shapesOf = (geom) => {
+    const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates, out = [];
+    for (const poly of polys) {
+      const sh = new THREE.Shape(poly[0].map((c) => new THREE.Vector2(...P(c[0], c[1]))));
+      for (let i = 1; i < poly.length; i++) sh.holes.push(new THREE.Path(poly[i].map((c) => new THREE.Vector2(...P(c[0], c[1])))));
+      out.push(sh);
+    }
+    return out;
+  };
+  const meshes = [];
+  for (const b of BLOCKS) {
+    const g = new THREE.ExtrudeGeometry(shapesOf(b.geom), { depth: 1, bevelEnabled: false, curveSegments: 1 });
+    const m = new THREE.Mesh(g, mat(colourOf3d(b, o.layer)));
+    const h = heightOf(b, o.layer) * o.hs; m.scale.z = reduce ? h : 0.01; m.userData = { b, h };
+    root.add(m); meshes.push(m);
+  }
+  const workObjs = [];
+  const stCol = (s) => (s.startsWith("APPROVED") ? 0x34c26b : s === "DCF" ? 0xf0a52a : s === "ACF" || s === "RET_ACF" ? 0x5aa2ff : s === "REJECTED" ? 0xff5a4a : 0xdedede);
+  function setWorks(list) {
+    workObjs.forEach((x) => { root.remove(x); x.traverse((c) => { if (c.geometry) c.geometry.dispose(); }); }); workObjs.length = 0;
+    for (const w of list || []) {
+      if (!w.geom) continue;
+      const feats = w.geom.type === "FeatureCollection" ? w.geom.features : [w.geom];
+      const grp = new THREE.Group(); grp.userData = { w };
+      const col = stCol(w.status);
+      for (const f of feats) {
+        const g = f.geometry || f; if (!g || !/Polygon/.test(g.type)) continue;
+        const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shapesOf(g), { depth: 0.35, bevelEnabled: false }), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75 }));
+        slab.position.z = 6.4; slab.userData = { w }; grp.add(slab);
+        const ring = (g.type === "Polygon" ? g.coordinates[0] : g.coordinates[0][0]).map((c) => new THREE.Vector3(...P(c[0], c[1]), 6.8));
+        grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring), new THREE.LineBasicMaterial({ color: 0xffffff })));
+        const c0 = turf.centroid(f.geometry ? f : { type: "Feature", geometry: g }).geometry.coordinates, [cx, cy] = P(c0[0], c0[1]);
+        grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(cx, cy, 0), new THREE.Vector3(cx, cy, 6.4)]), new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.8 })));
+      }
+      root.add(grp); workObjs.push(grp);
+    }
+  }
+  setWorks(o.works);
+  let layer = o.layer, az = -0.6, el = o.elev, dist = o.dist, t0 = performance.now(), anim = reduce ? 1 : 0, raf = 0, alive = true, dragging = false, lx = 0, ly = 0, idle = 0;
+  function setLayer(k) {
+    layer = k;
+    for (const m of meshes) { m.material = mat(colourOf3d(m.userData.b, k)); m.userData.from = m.scale.z; m.userData.h = heightOf(m.userData.b, k) * o.hs; }
+    anim = reduce ? 1 : 0; t0 = performance.now(); if (reduce) meshes.forEach((m) => { m.scale.z = m.userData.h; });
+  }
+  meshes.forEach((m) => { m.userData.from = m.scale.z; });
+  function size() { const w = host.clientWidth || 600, h = host.clientHeight || 400; renderer.setSize(w, h, false); renderer.domElement.style.width = w + "px"; renderer.domElement.style.height = h + "px"; camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  const ro = new ResizeObserver(size); ro.observe(host); size();
+  function frame(now) {
+    if (!alive) return;
+    raf = requestAnimationFrame(frame);
+    if (document.hidden) return;
+    if (anim < 1) { anim = Math.min(1, (now - t0) / 1100); const e = 1 - Math.pow(1 - anim, 3);
+      for (let i = 0; i < meshes.length; i++) { const m = meshes[i], d = Math.min(1, Math.max(0, e * 1.25 - (i % 60) / 240)); m.scale.z = m.userData.from + (m.userData.h - m.userData.from) * (1 - Math.pow(1 - d, 3)); } }
+    if (o.rotate && !reduce && !dragging && now - idle > 2500) az += 0.0018;
+    camera.position.set(Math.sin(az) * Math.cos(el) * dist, Math.sin(el) * dist, Math.cos(az) * Math.cos(el) * dist);
+    camera.lookAt(0, 0, 0);
+    workObjs.forEach((g, i) => { g.children.forEach((c) => { if (c.type === "Mesh") c.position.z = 6.4 + Math.sin(now / 600 + i) * 0.35; }); });
+    renderer.render(scene, camera);
+  }
+  raf = requestAnimationFrame(frame);
+  const cv = renderer.domElement;
+  cv.addEventListener("pointerdown", (e) => { dragging = true; lx = e.clientX; ly = e.clientY; if (o.interactive) cv.setPointerCapture(e.pointerId); });
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+  function pick(e) {
+    const r = cv.getBoundingClientRect(); ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    const wh = ray.intersectObjects(workObjs, true).find((h) => h.object.userData && h.object.userData.w);
+    if (wh) return { w: wh.object.userData.w };
+    const bh = ray.intersectObjects(meshes, false)[0];
+    return bh ? { b: bh.object.userData.b } : null;
+  }
+  cv.addEventListener("pointermove", (e) => {
+    if (dragging && (o.interactive || e.pointerType === "mouse")) { az -= (e.clientX - lx) * 0.006; el = Math.min(1.35, Math.max(0.28, el + (e.clientY - ly) * 0.004)); lx = e.clientX; ly = e.clientY; idle = performance.now(); return; }
+    if (!o.tip) return;
+    const h = pick(e), r = host.getBoundingClientRect();
+    if (!h) { o.tip.hidden = true; cv.style.cursor = "grab"; return; }
+    o.tip.hidden = false; o.tip.style.left = (e.clientX - r.left + 14) + "px"; o.tip.style.top = (e.clientY - r.top + 10) + "px";
+    if (h.w) { o.tip.textContent = dispId(h.w.id) + " · " + h.w.name + " · " + STATUS[h.w.status][0]; cv.style.cursor = "pointer"; }
+    else { const b = h.b; o.tip.textContent = b.id + " · " + PHASE[b.p][0] + (b.p <= 5 ? " · RNI " + b.rni.toFixed(2) + " · RFI " + b.rfi.toFixed(2) : ""); cv.style.cursor = "grab"; }
+  });
+  const end = () => { dragging = false; idle = performance.now(); };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end); cv.addEventListener("pointerleave", () => { end(); if (o.tip) o.tip.hidden = true; });
+  cv.addEventListener("click", (e) => { if (!o.onWork) return; const h = pick(e); if (h && h.w) o.onWork(h.w); });
+  if (o.zoom) cv.addEventListener("wheel", (e) => { e.preventDefault(); dist = Math.min(220, Math.max(40, dist * (1 + Math.sign(e.deltaY) * 0.08))); idle = performance.now(); }, { passive: false });
+  return {
+    setLayer, setWorks,
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); meshes.forEach((m) => m.geometry.dispose()); mats.forEach((m) => m.dispose()); setWorks([]); renderer.dispose(); cv.remove(); }
+  };
+}
+function legend3d(layer) {
+  const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE, keys = layer === "p" ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5];
+  return el("div", { class: "legend3d" }, keys.map((k) => el("span", null, el("i", { style: "background:" + tbl[k][1] }), (layer === "p" ? "" : layer === "n" ? "Need " : "Feas. ") + tbl[k][0])));
+}
+function seg3(onPick, dark, initial) {
+  const s = el("div", { class: "seg" + (dark ? " dark" : ""), role: "group", "aria-label": "FRPIM layer" });
+  [["p", "Priority"], ["n", "Need"], ["f", "Feasibility"]].forEach(([k, t]) => s.append(el("button", { type: "button", "aria-pressed": String(k === (initial || "p")), text: t,
+    onclick: (e) => { s.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget))); onPick(k); } })));
+  return s;
+}
+
+/* ---------------- session and routing ---------------- */
+let ROLE = null, VIEW = { v: "dash" }, bigmap = null, SCENES = [], ANIMATE = true;
+function killScenes() { SCENES.forEach((s) => s && s.destroy()); SCENES = []; if (bigmap) { bigmap.remove(); bigmap = null; } }
+function go(v) { VIEW = v; ANIMATE = true; render(); window.scrollTo(0, 0); }
+function trail(w, action, note) { (w.trail = w.trail || []).push({ at: new Date().toISOString(), role: ROLE, user: ROLES[ROLE].id, action, note: note || "" }); w.updatedAt = new Date().toISOString(); }
+function inboxOf(role) { return Store.all().filter((w) => INBOX[role].includes(w.status)); }
+function logoMark(size) { return svgEl('<svg viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true"><path d="M4 17c3.5-6 7.5-9 12-9s8.5 3 12 9c-3.5 6-7.5 9-12 9S7.5 23 4 17z" fill="none" stroke="#eaf4ed" stroke-width="2"/><path d="M16 23c-3.2 0-5-2.7-5-6 0-3.6 2.6-6.4 7.5-7-.4 4.6-2.2 7.4-2.5 13z" fill="#f0a52a"/><path d="M16 23c.3-3.3 1.3-5.8 3.2-7.6" stroke="#0f3d2a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>'); }
+
+function render() {
+  killScenes();
+  const app = $("#app"); app.replaceChildren();
+  if (!ROLE) { app.append(loginView()); mountLogin3d(); ANIMATE = false; return; }
+  app.append(shell());
+  const main = el("main", { class: "gut" + (ANIMATE ? " rise" : "") }); app.append(main);
+  if (!Store.ready || !BLOCKS.length) { main.append(el("div", { class: "card" }, el("b", { text: "Loading the FRPIM blocks and the register…" }))); return; }
+  const v = VIEW.v;
+  if (v === "dash") dashView(main); else if (v === "inbox") inboxView(main); else if (v === "works") worksView(main);
+  else if (v === "map") mapView(main); else if (v === "new") editView(main, VIEW.id); else if (v === "work") workView(main, VIEW.id); else if (v === "help") helpView(main);
+  app.append(el("div", { class: "foot gut" }, el("b", { text: APP.name }), " · " + APP.sub + " · " + APP.org + " · FRPIM v2.2 model run 19 Nov 2026 · " + (Store.mode === "db" ? "shared register" : "register kept in this browser") + " · decision support: the final decision rests with the ACF and the DCF"));
+  placePill(); wireTilt(main);
+  if (ANIMATE) countUp(main);
+  ANIMATE = false;
+}
+function placePill() {
+  const nav = $(".navwrap"); if (!nav) return; const pill = nav.querySelector(".pill"), cur = nav.querySelector('[aria-current="page"]');
+  if (!cur) { pill.style.width = "0px"; return; }
+  pill.style.left = cur.offsetLeft + "px"; pill.style.width = cur.offsetWidth + "px";
+}
+function wireTilt(root) {
+  if (window.matchMedia && (window.matchMedia("(prefers-reduced-motion: reduce)").matches || window.matchMedia("(pointer: coarse)").matches)) return;
+  root.querySelectorAll(".kpi").forEach((k) => {
+    k.addEventListener("pointermove", (e) => { const r = k.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      k.style.transform = "rotateX(" + ((0.5 - y) * 10).toFixed(2) + "deg) rotateY(" + ((x - 0.5) * 12).toFixed(2) + "deg) translateZ(6px)"; k.style.setProperty("--mx", x * 100 + "%"); k.style.setProperty("--my", y * 100 + "%"); });
+    k.addEventListener("pointerleave", () => { k.style.transform = ""; });
+  });
+}
+function countUp(root) {
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  root.querySelectorAll("[data-count]").forEach((n) => {
+    const target = parseFloat(n.dataset.count), dec = parseInt(n.dataset.dec || "0"), suf = n.dataset.suf || "", t0 = performance.now();
+    if (!isFinite(target)) return;
+    const step = (t) => { const p = Math.min(1, (t - t0) / 900), e = 1 - Math.pow(1 - p, 3); n.textContent = (target * e).toFixed(dec) + suf; if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+
+/* ---------------- login ---------------- */
+function loginView() {
+  let pick = "RFO";
+  const idIn = el("input", { id: "lg-id", autocomplete: "username", value: ROLES.RFO.id });
+  const pwIn = el("input", { id: "lg-pw", type: "password", autocomplete: "current-password", value: DEMO_PASSWORD });
+  const msg = el("div", { class: "err", role: "alert" });
+  const cards = el("div", { class: "rolecards" });
+  const setPick = (r) => { pick = r; idIn.value = ROLES[r].id; pwIn.value = DEMO_PASSWORD; cards.querySelectorAll(".rolecard").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.role === r))); };
+  for (const r of ["RFO", "ACF", "DCF"]) cards.append(el("button", { type: "button", class: "rolecard", "data-role": r, "aria-pressed": String(r === pick), onclick: () => setPick(r) },
+    el("div", { class: "av", style: "background:linear-gradient(140deg," + ROLES[r].colour + ",#0a1f15)", text: r }),
+    el("div", null, el("b", { text: ROLES[r].title }), el("small", { text: ROLES[r].office }), el("code", { text: ROLES[r].id }))));
+  const form = el("form", { class: "signin", onsubmit: (e) => {
+    e.preventDefault(); const id = idIn.value.trim().toLowerCase(), r = Object.keys(ROLES).find((k) => ROLES[k].id === id);
+    if (!r || pwIn.value !== DEMO_PASSWORD) { msg.textContent = "User ID or password is not correct."; return; }
+    ROLE = r; ss.set("frpim_role", r); go({ v: "dash" }); } },
+    el("div", { class: "tagline", text: APP.tagline }), el("h2", { text: "Sign in to " + APP.name }),
+    el("div", { class: "hint", text: "Choose your office. Mock-drill accounts; the password for all three is " + DEMO_PASSWORD + "." }),
+    cards, el("label", { class: "field" }, "User ID", idIn), el("label", { class: "field" }, "Password", pwIn), msg, el("button", { class: "go", type: "submit", text: "Sign in  →" }));
+  const legendHost = el("div");
+  const sceneHost = el("div", { id: "terrain3d", "aria-hidden": "true" });
+  const view = el("div", { class: "login" }, sceneHost, el("div", { class: "veil" }),
+    el("div", { class: "inner gut" },
+      el("div", { class: "brandblock" },
+        el("div", { class: "wordmark" }, el("div", { class: "logo" }, logoMark(30)), el("div", null, el("b", { text: APP.name }), el("span", { class: "deva", text: APP.deva + " · " + APP.sub }))),
+        el("div", { class: "hero" }, el("div", { class: "org", text: APP.org }),
+          el("h1", null, "Right land. Right treatment. ", el("em", { text: "Right order." })),
+          el("p", { text: "Every restoration work in " + RANGE.name + " is checked against the FRPIM need, feasibility and priority maps before a single pit is dug. The RFO proposes and certifies the site, the ACF scrutinises, the DCF approves." }),
+          el("div", { class: "flow3" }, el("span", null, el("i", { style: "background:" + ROLES.RFO.colour, text: "RFO" }), "Proposes + certifies"), el("b", { class: "arrow", text: "→" }),
+            el("span", null, el("i", { style: "background:" + ROLES.ACF.colour, text: "ACF" }), "Scrutinises"), el("b", { class: "arrow", text: "→" }),
+            el("span", null, el("i", { style: "background:" + ROLES.DCF.colour, text: "DCF" }), "Approves"))),
+        el("div", { style: "display:grid;gap:12px" },
+          el("div", { class: "statsrow" }, el("div", null, el("b", { text: "829" }), "blocks of 10 ha"), el("div", null, el("b", { text: "6,247" }), "ha modelled"), el("div", null, el("b", { text: "22" }), "satellite indicators"), el("div", null, el("b", { text: "3" }), "decision maps")),
+          legendHost, el("div", { class: "legend3d", text: "The range in 3D: block height shows priority. Drag to turn it." }))),
+      form));
+  view._legendHost = legendHost;
+  LOGIN_LEGEND = legendHost; legendHost.append(legend3d("p"));
+  return view;
+}
+let LOGIN_LEGEND = null;
+function mountLogin3d() {
+  const host = $("#terrain3d"); if (!host || !BLOCKS.length) return;
+  const narrow = window.innerWidth < 900;
+  const s = makeTerrain(host, { layer: "p", works: Store.all(), rotate: true, interactive: false, dist: narrow ? 150 : 104, elev: 0.66, hs: 0.55 });
+  if (s) SCENES.push(s);
+}
+
+/* ---------------- shell ---------------- */
+function shell() {
+  const R = ROLES[ROLE], n = inboxOf(ROLE).length;
+  const nav = [["dash", "Dashboard"], ["inbox", ROLE === "RFO" ? "My drafts & returns" : "Inbox"], ["works", "All works"], ["map", "Range map"]];
+  if (ROLE === "RFO") nav.splice(1, 0, ["new", "New proposal"]);
+  nav.push(["help", "How it works"]);
+  const cur = VIEW.v === "work" ? null : VIEW.v;
+  return el("header", { class: "top" },
+    el("div", { class: "bar gut" },
+      el("div", { class: "brand" }, el("div", { class: "logo" }, logoMark(24)), el("div", null, el("b", null, APP.name, el("span", { class: "deva", text: APP.deva })), el("small", { text: APP.sub + " · " + APP.org }))),
+      el("nav", { class: "navwrap", "aria-label": "Main" }, el("span", { class: "pill", "aria-hidden": "true" }), nav.map(([k, t]) => el("button", { type: "button", "aria-current": cur === k ? "page" : null,
+        onclick: () => go(k === "new" ? { v: "new" } : { v: k }) }, t, k === "inbox" && n ? el("span", { class: "count", text: String(n) }) : null))),
+      el("div", { class: "who" }, el("div", { class: "av", style: "background:linear-gradient(140deg," + R.colour + ",#0a1f15)", text: ROLE }), el("div", null, el("b", { text: R.title }), el("small", { text: R.id })),
+        el("button", { class: "ghostbtn", type: "button", onclick: () => { ROLE = null; ss.set("frpim_role", null); go({ v: "dash" }); }, text: "Sign out" }))));
+}
+
+/* ---------------- dashboard ---------------- */
+function sumHa(list) { return list.reduce((s, w) => s + (w.result ? w.result.total : 0), 0); }
+function kpiTile(label, value, dec, suf, sub, hl, extra) {
+  return el("div", { class: "kpi" + (hl ? " hl" : "") }, el("span", { text: label }), el("b", { "data-count": String(value), "data-dec": String(dec), "data-suf": suf, text: (+value).toFixed(dec) + suf }), el("small", { text: sub }), extra || null);
+}
+function ring(p) {
+  const c = 2 * Math.PI * 19, off = c * (1 - Math.max(0, Math.min(100, p)) / 100);
+  const s = svgEl('<svg class="ring" viewBox="0 0 46 46" aria-hidden="true"><circle class="tr" cx="23" cy="23" r="19"/><circle class="fg" cx="23" cy="23" r="19" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + c.toFixed(1) + '" transform="rotate(-90 23 23)"/></svg>');
+  requestAnimationFrame(() => requestAnimationFrame(() => { s.querySelector(".fg").setAttribute("stroke-dashoffset", off.toFixed(1)); }));
+  return s;
+}
+function dashView(main) {
+  const all = Store.all(), R = ROLES[ROLE], mine = inboxOf(ROLE);
+  const approved = all.filter((w) => w.status === "APPROVED" || w.status === "APPROVED_DEV");
+  const apHa = sumHa(approved), apP12 = approved.reduce((s, w) => s + (w.result.byPhase[1] || 0) + (w.result.byPhase[2] || 0), 0), align = approved.length ? pct(apP12, apHa) : 0;
+  // hero with the live 3D range
+  const tip = el("div", { class: "tip3d", hidden: true });
+  const sceneHost = el("div");
+  const legendBox = el("div", { class: "legend3d" }, legend3d("p"));
+  let scene = null;
+  const hero = el("section", { class: "herocard" },
+    el("div", { class: "txt" }, el("div", { class: "eyebrow", text: R.office + " · FY " + fyNow() }), el("h1", { text: "Welcome, " + R.title }),
+      el("p", { text: mine.length ? mine.length + " work" + (mine.length > 1 ? "s are" : " is") + " waiting for your action." : "Nothing is waiting for you right now." }),
+      el("p", { text: "The works float above the range in 3D, coloured by their stage. Hover for details, click one to open its file." }),
+      el("div", { class: "btns" }, ROLE === "RFO" ? el("button", { class: "btn gold big", type: "button", onclick: () => go({ v: "new" }), text: "+ New proposal" }) : null,
+        el("button", { class: "btn glass big", type: "button", onclick: () => go({ v: "inbox" }), text: (ROLE === "RFO" ? "My drafts & returns" : "Open inbox") + (mine.length ? " (" + mine.length + ")" : "") }))),
+    el("div", { class: "scene" }, sceneHost, el("div", { class: "seg3" }, seg3((k) => { scene && scene.setLayer(k); legendBox.replaceChildren(legend3d(k)); }, true)), legendBox, tip));
+  main.append(hero);
+  requestAnimationFrame(() => { scene = makeTerrain(sceneHost, { layer: "p", works: all, tip, onWork: (w) => go({ v: "work", id: w.id }), dist: 104, elev: 0.78 });
+    if (scene) SCENES.push(scene); else sceneHost.append(el("div", { style: "display:grid;place-items:center;height:100%;color:#b9cfc0", text: "3D view needs WebGL; the rest of the portal works without it." })); });
+  if (!all.length) {
+    main.append(el("div", { class: "card" }, el("div", { class: "empty" }, el("b", { text: "No works in the register yet" }),
+      el("span", { text: ROLE === "RFO" ? "Create a proposal and upload its treatment KML, or load the mock-drill set to see every stage of the workflow." : "The RFO's proposals will appear here. For the mock drill, load the example set to see every stage." }),
+      el("div", { class: "btns" }, ROLE === "RFO" ? el("button", { class: "btn", type: "button", onclick: () => go({ v: "new" }), text: "New proposal" }) : null,
+        el("button", { class: "btn ghost", type: "button", onclick: loadDemo, text: "Load mock-drill examples" })))));
+    return;
+  }
+  main.append(el("div", { class: "kpis" },
+    kpiTile("Pending with you", mine.length, 0, "", ROLE === "RFO" ? "drafts and returned works" : "awaiting your action", mine.length > 0),
+    kpiTile("Works proposed", all.length, 0, "", ha(sumHa(all)) + " ha in all"),
+    kpiTile("Approved area", apHa, 1, " ha", approved.length + " works approved"),
+    kpiTile("FRPIM alignment", align, 0, " %", "of approved area in Phase 1-2", false, ring(align)),
+    kpiTile("Green checks", all.filter((w) => w.verdict === "g").length, 0, "", "of " + all.length + " treatment maps")));
+  const stages = [["Draft / returned", ["DRAFT", "RET_RFO"], "#8a978e"], ["With ACF", ["ACF", "RET_ACF"], ROLES.ACF.colour], ["With DCF", ["DCF"], ROLES.DCF.colour], ["Approved", ["APPROVED", "APPROVED_DEV"], "#17803a"], ["Not approved", ["REJECTED"], "#b4261c"]];
+  const pipe = el("div", { class: "pipe" });
+  stages.forEach(([t, sts, col], i) => { const l = all.filter((w) => sts.includes(w.status));
+    pipe.append(el("button", { type: "button", onclick: () => go({ v: "works", status: sts.join(",") }) }, el("span", { text: t }), el("b", { "data-count": String(l.length), text: String(l.length) }), el("small", { text: ha(sumHa(l)) + " ha" }), el("div", { class: "bar", style: "background:" + col + ";animation-delay:" + i * 0.08 + "s" }))); });
+  main.append(el("div", { class: "card" }, el("h2", null, "Approval pipeline", el("small", { text: "click a stage to see its works" })), pipe));
+  const g = el("div", { class: "grid g2" });
+  const vb = el("div", { class: "hbars" }), maxV = Math.max(1, ...["g", "a", "r"].map((v) => sumHa(all.filter((w) => w.verdict === v))));
+  [["g", "var(--ok)"], ["a", "var(--warn)"], ["r", "var(--bad)"]].forEach(([v, c], i) => { const l = all.filter((w) => w.verdict === v), h = sumHa(l);
+    vb.append(el("div", { class: "hbar" }, el("span", { text: VERDICT[v][0] + " (" + l.length + ")" }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(h, maxV) + "%;background:" + c + ";animation-delay:" + i * 0.1 + "s" })), el("span", { class: "v", text: ha(h) + " ha" }))); });
+  g.append(el("div", { class: "card" }, el("h2", null, "Proposed area by FRPIM check", el("small", { text: "all works" })), vb,
+    el("div", { class: "hint", text: "Green: at least 60 % in Phase 1-2 and no more than 5 % on protected or excluded land. Red: mostly low priority, protected or excluded land." })));
+  const mix = (list) => { const o = {}; let t = 0; list.forEach((w) => { for (const k in w.result.byPhase) { o[k] = (o[k] || 0) + w.result.byPhase[k]; t += w.result.byPhase[k]; } o.out = (o.out || 0) + w.result.outside; t += w.result.outside; }); return [o, t]; };
+  const bar = (label, list) => { const [o, t] = mix(list); return el("div", { style: "display:grid;gap:5px" }, el("div", { class: "hint", text: label + " · " + ha(t) + " ha" }),
+    el("div", { class: "stack" }, [1, 2, 3, 4, 5, 6, 7].map((k) => (o[k] > 0 ? el("div", { style: "width:" + pct(o[k], t) + "%;background:" + PHASE[k][1], title: PHASE[k][0] + " " + ha(o[k]) + " ha" }) : null)),
+      o.out > 0 ? el("div", { style: "width:" + pct(o.out, t) + "%;background:repeating-linear-gradient(45deg,#999 0 2px,transparent 2px 6px)" }) : null)); };
+  g.append(el("div", { class: "card" }, el("h2", null, "Where the works fall on Map 3", el("small", { text: "share of area by priority phase" })),
+    bar("All proposed works", all), approved.length ? bar("Approved works", approved) : el("div", { class: "hint", text: "No approved works yet." }), legendRow(PHASE, [1, 2, 3, 4, 5, 6, 7])));
+  const sb = el("div", { class: "hbars" }), maxS = Math.max(1, ...SCHEMES.map((s) => sumHa(all.filter((w) => w.scheme === s))));
+  SCHEMES.forEach((s) => { const l = all.filter((w) => w.scheme === s); if (!l.length) return; const h = sumHa(l), a = sumHa(l.filter((w) => w.status.startsWith("APPROVED")));
+    sb.append(el("div", { class: "hbar" }, el("span", { text: s }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(a, maxS) + "%;background:var(--ok)" }), el("div", { style: "width:" + pct(h - a, maxS) + "%;background:var(--line-2)" })), el("span", { class: "v", text: ha(h) + " ha" }))); });
+  g.append(el("div", { class: "card" }, el("h2", null, "Area by scheme", el("small", { text: "green part approved" })), sb));
+  const ev = []; all.forEach((w) => (w.trail || []).forEach((t) => ev.push([t, w])));
+  ev.sort((a, b) => b[0].at.localeCompare(a[0].at));
+  const feed = el("div", { class: "feed" });
+  ev.slice(0, 7).forEach(([t, w]) => feed.append(el("div", null, avatar(t.role), el("div", null, el("b", { text: t.action }), " · ", el("a", { href: "#", onclick: (e) => { e.preventDefault(); go({ v: "work", id: w.id }); }, text: dispId(w.id) }), el("small", { text: w.name + " · " + dt(t.at) })))));
+  g.append(el("div", { class: "card" }, el("h2", null, "Recent activity"), feed));
+  main.append(g);
+  if (mine.length) main.append(el("div", { class: "card" }, el("h2", null, ROLE === "RFO" ? "Waiting for you" : "Your inbox", el("small", { text: mine.length + " works" })), workList(mine.slice(0, 5))));
+  if (all.some((w) => w.demo)) main.append(el("div", { class: "card" }, el("h2", { text: "Mock-drill data" }), el("div", { class: "hint", text: "Works marked as examples were loaded for the mock drill. Remove them before real use; real works are numbered separately." }),
+    el("div", { class: "btns" }, confirmButton("Remove mock-drill examples", "Remove all example works from the register?", async () => { for (const w of Store.all().filter((x) => x.demo)) await Store.remove(w.id); toast("Examples removed"); go({ v: "dash" }); }))));
+}
+function avatar(role, cls) { return el("div", { class: cls || "av", style: "background:linear-gradient(140deg," + ROLES[role].colour + ",#0a1f15)", text: role }); }
+
+/*@@KEEP_B@@*/
+
+/* ---------------- range map: 2D or 3D ---------------- */
+function mapView(main) {
+  let layer = "p", mode = VIEW.mode || "3d";
+  const legend = el("div", { class: "legend" });
+  const modeSeg = el("div", { class: "seg", role: "group", "aria-label": "View" });
+  [["3d", "3D view"], ["2d", "Map view"]].forEach(([k, t]) => modeSeg.append(el("button", { type: "button", "aria-pressed": String(k === mode), text: t, onclick: () => go({ v: "map", mode: k }) })));
+  let scene = null, blocksLayer = null;
+  const layerSeg = seg3((k) => { layer = k; if (scene) scene.setLayer(k); if (blocksLayer) blocksLayer.setStyle((f) => ({ fillColor: colour(f.properties) })); draw(); });
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: RANGE.name }), el("h1", { text: "Range map" }), el("p", { text: mode === "3d" ? "Drag to turn, scroll to zoom. Floating slabs are works, coloured by stage; click one to open it." : "All works on the FRPIM maps. Click a work to open its file, or a block for its values." })),
+    el("div", { class: "btns" }, modeSeg, layerSeg)));
+  const colour = (b) => colourOf3d(b, layer);
+  const draw = () => { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE;
+    legend.replaceChildren(legendRow(tbl, layer === "p" ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5]),
+      el("div", { class: "legend" }, [["Approved", "#34c26b"], ["With DCF", "#f0a52a"], ["With ACF", "#5aa2ff"], ["Draft / returned", "#9aa69e"], ["Not approved", "#ff5a4a"]].map(([t, c]) => el("span", null, el("i", { style: "background:" + c }), t)))); };
+  if (mode === "3d") {
+    const host = el("div", { id: "big3d" }), tip = el("div", { class: "tip3d", hidden: true, style: "position:absolute;z-index:3;pointer-events:none;background:rgba(5,15,10,.85);border:1px solid rgba(255,255,255,.15);color:#eaf4ed;border-radius:8px;padding:6px 9px;font-size:12px;white-space:nowrap" });
+    host.append(tip);
+    main.append(el("div", { class: "card" }, host, legend));
+    requestAnimationFrame(() => { scene = makeTerrain(host, { layer, works: Store.all(), interactive: true, zoom: true, tip, onWork: (w) => go({ v: "work", id: w.id }), dist: 112, elev: 0.75 });
+      if (scene) SCENES.push(scene); else go({ v: "map", mode: "2d" }); });
+  } else {
+    const mapDiv = el("div", { id: "bigmap" });
+    main.append(el("div", { class: "card" }, mapDiv, legend));
+    bigmap = L.map(mapDiv, { preferCanvas: true, zoomSnap: 0.25, attributionControl: false });
+    const renderer = L.canvas({ padding: 0.3 });
+    blocksLayer = L.geoJSON({ type: "FeatureCollection", features: BLOCKS.map((b) => ({ type: "Feature", properties: b, geometry: b.geom })) },
+      { renderer, style: (f) => ({ fillColor: colour(f.properties), fillOpacity: 0.88, color: "#fff", weight: 0.4 }),
+        onEachFeature: (f, l) => l.bindPopup(() => { const b = f.properties; return el("div", { style: "font-size:12.5px;line-height:1.5" }, el("b", { text: b.id }), el("br"), PHASE[b.p][0],
+          b.p <= 5 ? [el("br"), "Need " + NEED[b.n][0] + " (RNI " + b.rni.toFixed(3) + ")", el("br"), "Feasibility " + FEAS[b.f][0] + " (RFI " + b.rfi.toFixed(3) + ")", el("br"), RX[b.rx] + (b.smc ? " + SMC" : "")] : null); }) }).addTo(bigmap);
+    L.geoJSON(BOUNDARY, { renderer, interactive: false, style: { fill: false, color: "#1d2a22", weight: 1.5 } }).addTo(bigmap);
+    const stCol = (s) => (s.startsWith("APPROVED") ? "#17803a" : s === "DCF" ? "#c4720a" : s === "ACF" || s === "RET_ACF" ? "#2f6fbf" : s === "REJECTED" ? "#b4261c" : "#555");
+    Store.all().forEach((w) => {
+      L.geoJSON(w.geom, { style: { color: "#fff", weight: 6, fill: false }, interactive: false }).addTo(bigmap);
+      L.geoJSON(w.geom, { style: { color: stCol(w.status), weight: 3, fillColor: stCol(w.status), fillOpacity: 0.18 } }).bindTooltip(dispId(w.id) + " · " + w.name).on("click", () => go({ v: "work", id: w.id })).addTo(bigmap);
+    });
+    bigmap.fitBounds(blocksLayer.getBounds(), { padding: [10, 10] });
+    L.control.scale({ imperial: false }).addTo(bigmap);
+  }
+  draw();
+}
+
+/* ---------------- new / edit proposal (RFO) ---------------- */
+function radioGroup(name, options, value) {
+  return el("div", { class: "opts", role: "radiogroup" }, options.map((o) => el("label", null, el("input", { type: "radio", name, value: o, checked: o === value ? true : null }), o)));
+}
+function checkGroup(name, options, values) {
+  return el("div", { class: "opts" }, options.map((o) => el("label", null, el("input", { type: "checkbox", name, value: o, checked: (values || []).includes(o) ? true : null }), o)));
+}
+const radioVal = (root, name) => { const x = root.querySelector('input[name="' + name + '"]:checked'); return x ? x.value : ""; };
+const checkVals = (root, name) => Array.from(root.querySelectorAll('input[name="' + name + '"]:checked')).map((x) => x.value);
+function editView(main, id) {
+  const w0 = id ? Store.get(id) : null;
+  if (ROLE !== "RFO") { main.append(el("div", { class: "card", text: "Only the RFO prepares proposals." })); return; }
+  if (w0 && !["DRAFT", "RET_RFO"].includes(w0.status)) { main.append(el("div", { class: "card", text: "This work is no longer with the RFO." })); return; }
+  const st = { parsed: w0 ? { features: w0.geom.features, notes: {} } : null, fileName: w0 ? w0.fileName : "", result: w0 ? w0.result : null };
+  const c0 = (w0 && w0.rfoCert) || {};
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: "RFO · " + RANGE.name }), el("h1", { text: w0 ? "Revise " + dispId(w0.id) : "New proposal" }),
+    el("p", { text: "Upload the treatment KML, fill in the work details, certify the site and SMC suitability, then submit to the ACF." }))));
+  if (w0 && w0.status === "RET_RFO") { const last = (w0.trail || []).filter((t) => t.action.startsWith("Returned")).pop();
+    main.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the ACF. " }), last ? last.note : "")); }
+  const v = (k, d) => (w0 && w0[k] != null ? w0[k] : d);
+  const name = el("input", { id: "p-name", maxlength: "140", value: v("name", ""), placeholder: "e.g. Plantation with SMC, Compt. 12" });
+  const beat = el("input", { id: "p-beat", maxlength: "80", value: v("beat", ""), placeholder: "Beat / compartment" });
+  const scheme = el("select", { id: "p-scheme" }, SCHEMES.map((s) => el("option", { text: s }))); scheme.value = v("scheme", "CAMPA");
+  const year = el("select", { id: "p-year" }, fyList().map((y) => el("option", { text: y }))); year.value = v("year", fyNow());
+  const treat = el("select", { id: "p-treat" }, Object.entries(TREAT).map(([k, t]) => el("option", { value: k, text: t }))); treat.value = v("treat", "PLANT_SMC");
+  const est = el("input", { id: "p-est", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: v("estArea", "") });
+  const cost = el("input", { id: "p-cost", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: v("estCost", "") });
+  const seed = el("input", { id: "p-seed", type: "number", min: "0", step: "1", inputmode: "numeric", value: v("seedlings", "") });
+  const rem = el("textarea", { id: "p-rem", maxlength: "1000" }); rem.value = v("remarks", "");
+  // RFO certification
+  const certBoxes = RFO_CHECKS.map((c, i) => el("input", { type: "checkbox", id: "rc" + i, checked: c0.checks && c0.checks[i] ? true : null }));
+  const cert = el("div", { class: "grid", style: "gap:14px" },
+    el("div", { class: "checks" }, RFO_CHECKS.map((c, i) => el("label", null, certBoxes[i], c))),
+    el("div", { class: "subcard" }, el("h3", { text: "SMC suitability (assessed by the RFO in the field)" }),
+      el("div", { class: "field" }, "Is the site suitable for SMC works?", radioGroup("smcSuit", SMC_SUIT, c0.smcSuit)),
+      el("div", { class: "field" }, "SMC works proposed", checkGroup("smcWorks", SMC_WORKS, c0.smcWorks)),
+      el("div", { class: "field" }, "Soil depth observed", radioGroup("soilDepth", SOIL_DEPTH, c0.soilDepth)),
+      el("div", { class: "field" }, "Water for watering seedlings", radioGroup("water", WATER, c0.water)),
+      el("label", { class: "field" }, "Field observations", el("textarea", { id: "rc-note", maxlength: "800", placeholder: "Slope, gullies, rock, existing rootstock, grazing pressure, anything the ACF should know" }, c0.note || ""))));
+  const smcHint = el("div", { class: "banner a", hidden: true });
+  const file = el("input", { type: "file", id: "p-file", hidden: true });
+  const fmsg = el("div", { class: "hint" }, st.fileName ? "Current KML: " + st.fileName : "");
+  const preview = el("div", { class: "grid", style: "gap:14px" });
+  const drop = el("div", { class: "drop", tabindex: "0", role: "button", "aria-label": "Choose the treatment KML", onclick: () => file.click(),
+    onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } } },
+    el("div", { class: "ico" }, svgEl('<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="#f0a52a" stroke-width="2" fill="none" stroke-linecap="round"/></svg>')),
+    el("b", { text: st.fileName ? "Replace the treatment KML" : "Upload the treatment KML" }), el("span", { class: "hint", text: "Tap to choose a KML or KMZ from your phone or computer, or drop it here. The boundary must be a polygon." }), file);
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+  file.addEventListener("change", () => { if (file.files[0]) onFile(file.files[0]); file.value = ""; });
+  const msg = el("div", { role: "alert" });
+  function smcCompare() {
+    if (!st.result) { smcHint.hidden = true; return; }
+    const s = radioVal(cert, "smcSuit"), frp = pct(st.result.smcHa, st.result.retained || 1);
+    if ((s === "Not needed" || s === "Not suitable") && frp >= 50) { smcHint.hidden = false; smcHint.textContent = "FRPIM finds SMC needed on " + fp(frp) + " of the plantable area, but the field assessment says “" + s + "”. Explain the difference in the field observations."; }
+    else if (s === "Suitable" && frp < 20 && st.result.retained > 0) { smcHint.hidden = false; smcHint.textContent = "FRPIM finds SMC needed on only " + fp(frp) + " of the plantable area. Say why SMC is proposed in the field observations."; }
+    else smcHint.hidden = true;
+  }
+  cert.addEventListener("change", smcCompare);
+  function refresh() {
+    preview.replaceChildren();
+    if (!st.result) return;
+    const vd = verdictOf(st.result, treat.value, parseFloat(est.value) || 0);
+    preview.append(el("h2", { text: "FRPIM check of this KML", style: "font-size:15px" }), maps3({ type: "FeatureCollection", features: st.parsed.features }), findings(Object.assign({ result: st.result, verdict: vd.v }, vd)));
+    smcCompare();
+  }
+  async function onFile(f) {
+    fmsg.className = "hint"; fmsg.textContent = "Reading " + f.name + "…";
+    try {
+      const parsed = await readFile(f);
+      if (!parsed.features.length) throw new Error("No polygon found in " + f.name + ". " + (parsed.notes.points ? parsed.notes.points + " point(s) " : "") + (parsed.notes.lines ? parsed.notes.lines + " open line(s) " : "") + "cannot be measured. Draw the boundary as a polygon and save the KML again.");
+      st.parsed = parsed; st.fileName = f.name; st.result = analyse(parsed.features);
+      const n = [parsed.features.length + " polygon(s) read from " + f.name + ", " + st.result.total.toFixed(2) + " ha."];
+      if (parsed.notes.closedLines) n.push(parsed.notes.closedLines + " closed GPS line(s) used as boundary."); if (parsed.notes.points) n.push(parsed.notes.points + " point(s) ignored.");
+      fmsg.className = "okm"; fmsg.textContent = n.join(" ");
+      if (!name.value) name.value = f.name.replace(/\.(kml|kmz|geojson|json)$/i, "");
+      if (!est.value) est.value = st.result.total.toFixed(2);
+      refresh();
+    } catch (e) { fmsg.className = "err"; fmsg.textContent = (e && e.message) || "The file could not be read."; }
+  }
+  treat.addEventListener("change", refresh); est.addEventListener("input", refresh);
+  const certData = () => ({ checks: certBoxes.map((b) => b.checked), smcSuit: radioVal(cert, "smcSuit"), smcWorks: checkVals(cert, "smcWorks"), soilDepth: radioVal(cert, "soilDepth"),
+    water: radioVal(cert, "water"), note: cert.querySelector("#rc-note").value.trim(), at: new Date().toISOString(), by: ROLES.RFO.id });
+  async function save(submit) {
+    const d = { name: name.value.trim(), beat: beat.value.trim(), scheme: scheme.value, year: year.value, treat: treat.value, estArea: parseFloat(est.value) || null, estCost: parseFloat(cost.value) || null, seedlings: parseInt(seed.value) || null, remarks: rem.value.trim() };
+    const fail = (t, focus) => { msg.className = "err"; msg.textContent = t; if (focus) focus.focus(); };
+    if (!d.name) return fail("Enter the name of the work.", name);
+    if (!st.result) return fail("Upload the treatment KML first.");
+    const c = certData();
+    if (submit) {
+      if (!(d.estArea > 0)) return fail("Enter the area in the estimate before submitting.", est);
+      if (!c.checks.every(Boolean)) return fail("Certify every item of the field certification before submitting.");
+      if (!c.smcSuit) return fail("Record the SMC suitability of the site.");
+      if ((c.smcSuit === "Suitable" || c.smcSuit === "Partly suitable") && !c.smcWorks.length) return fail("Tick the SMC works proposed.");
+      if (!c.soilDepth) return fail("Record the soil depth observed.");
+      if (!smcHint.hidden && c.note.length < 15) return fail("Your SMC assessment differs from FRPIM. Explain it in the field observations (at least 15 characters).");
+    }
+    const geom = simplifyFC({ type: "FeatureCollection", features: st.parsed.features.map((f) => ({ type: "Feature", properties: { name: String(f.properties.name || "").slice(0, 80) }, geometry: f.geometry })) });
+    if (!geom) return fail("The KML is too detailed to store. Split it into smaller files.");
+    const vd = verdictOf(st.result, d.treat, d.estArea || 0);
+    const w = w0 ? JSON.parse(JSON.stringify(w0)) : { id: nextId(d.year), range: RANGE.name, createdAt: new Date().toISOString(), createdBy: ROLES.RFO.id, trail: [], status: "DRAFT" };
+    Object.assign(w, d, { fileName: st.fileName, geom, result: st.result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, matchPct: vd.matchPct, rfoCert: c, model: "FRPIM v2.2 (run 19 Nov 2026)" });
+    if (!w0) trail(w, "Draft created", "KML " + st.fileName);
+    if (submit) { trail(w, w.status === "RET_RFO" ? "Revised, certified and resubmitted to ACF" : "Certified and submitted to ACF", "FRPIM " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2 · SMC: " + c.smcSuit + (c.smcWorks.length ? " (" + c.smcWorks.join(", ") + ")" : "")); w.status = "ACF"; w.submittedAt = new Date().toISOString(); }
+    else if (w0) trail(w, "Draft updated", "");
+    msg.className = "hint"; msg.textContent = "Saving…";
+    try { await Store.put(w); toast(submit ? dispId(w.id) + " submitted to the ACF" : "Draft saved"); go({ v: "work", id: w.id }); }
+    catch (e) { fail("Could not save: " + ((e && e.message) || "unknown error")); }
+  }
+  main.append(el("div", { class: "grid g-main" },
+    el("div", { class: "grid" }, el("div", { class: "card" }, el("h2", { text: "1 · Treatment KML and FRPIM check" }), drop, fmsg, preview)),
+    el("div", { class: "grid" },
+      el("div", { class: "card" }, el("h2", { text: "2 · Work details" }), el("div", { class: "formgrid" },
+        el("label", { class: "field full" }, "Name of work *", name), el("label", { class: "field" }, "Beat / compartment", beat), el("label", { class: "field" }, "Scheme", scheme),
+        el("label", { class: "field" }, "Work year", year), el("label", { class: "field" }, "Treatment proposed", treat), el("label", { class: "field" }, "Area in the estimate (ha) *", est),
+        el("label", { class: "field" }, "Estimated cost (₹ lakh)", cost), el("label", { class: "field full" }, "Seedlings proposed", seed), el("label", { class: "field full" }, "Remarks", rem))),
+      el("div", { class: "card" }, el("h2", null, "3 · Field certification by RFO", el("small", { text: "required to submit" })), cert, smcHint),
+      el("div", { class: "card action" }, el("h2", { text: "4 · Submit" }), el("div", { class: "hint", text: "By submitting, the RFO certifies the site and the SMC assessment. The work goes to the ACF for scrutiny. You can save a draft first." }),
+        el("div", { class: "btns" }, el("button", { class: "btn gold big", type: "button", onclick: () => save(true), text: "Certify and submit to ACF" }), el("button", { class: "btn ghost", type: "button", onclick: () => save(false), text: "Save draft" })), msg))));
+  if (st.result) refresh();
+}
+
+/* ---------------- work file ---------------- */
+function trackBar(w) {
+  const s = w.status, t = w.trail || [];
+  const at = (re) => { const x = t.filter((e) => re.test(e.action)).pop(); return x ? dd(x.at) : ""; };
+  const node = (cls, label, title, sub) => el("div", { class: cls }, el("div", { class: "dot", text: label }), el("b", { text: title }), el("small", { text: sub }));
+  const post = ["DCF", "APPROVED", "APPROVED_DEV", "REJECTED"];
+  return el("div", { class: "track" },
+    node(s === "DRAFT" ? "now" : s === "RET_RFO" ? "back" : "done", "RFO", "Proposal + certification", s === "DRAFT" ? "Draft" : s === "RET_RFO" ? "Returned for revision" : "Submitted " + at(/submitted|resubmitted/i)),
+    node(["ACF", "RET_ACF"].includes(s) ? "now" : post.includes(s) ? "done" : "", "ACF", "Scrutiny", ["ACF", "RET_ACF"].includes(s) ? "In progress" : at(/Recommended/) ? "Recommended " + at(/Recommended/) : "Pending"),
+    node(s === "DCF" ? "now" : ["APPROVED", "APPROVED_DEV"].includes(s) ? "done" : s === "REJECTED" ? "back" : "", "DCF", "Decision", s === "DCF" ? "Awaiting approval" : ["APPROVED", "APPROVED_DEV", "REJECTED"].includes(s) ? STATUS[s][0] + " " + at(/Approved|Not approved/) : "Pending"),
+    node(["APPROVED", "APPROVED_DEV"].includes(s) ? "done" : "", "✓", "Sanctioned", ["APPROVED", "APPROVED_DEV"].includes(s) ? "Ready for execution" : "-"));
+}
+const checkRow = (ok, text) => el("div", { class: "checkrow" }, el("span", { class: "ic " + (ok ? "y" : "n"), text: ok ? "✓" : "✗" }), el("span", { text }));
+function rfoCertCard(w) {
+  const c = w.rfoCert;
+  if (!c) return el("div", { class: "card" }, el("h2", { text: "RFO field certification" }), el("div", { class: "hint", text: w.status === "DRAFT" ? "Completed by the RFO when the work is submitted." : "Not recorded (submitted before field certification was added)." }));
+  const frp = w.result && w.result.retained ? pct(w.result.smcHa, w.result.retained) : null;
+  const diff = frp != null && (((c.smcSuit === "Not needed" || c.smcSuit === "Not suitable") && frp >= 50) || (c.smcSuit === "Suitable" && frp < 20));
+  return el("div", { class: "card" }, el("h2", null, "RFO field certification", el("small", { text: dd(c.at) })),
+    el("div", { class: "checks" }, RFO_CHECKS.map((t, i) => checkRow(!!(c.checks && c.checks[i]), t))),
+    el("div", { class: "subcard" }, el("h3", { text: "SMC suitability" }),
+      el("dl", { class: "kv" }, el("dt", { text: "Assessment" }), el("dd", null, el("b", { text: c.smcSuit || "-" })),
+        el("dt", { text: "Works proposed" }), el("dd", { text: (c.smcWorks || []).join(", ") || "-" }),
+        el("dt", { text: "Soil depth" }), el("dd", { text: c.soilDepth || "-" }), el("dt", { text: "Water" }), el("dd", { text: c.water || "-" }),
+        el("dt", { text: "FRPIM view" }), el("dd", { text: frp == null ? "-" : "SMC needed on " + fp(frp) + " of the plantable area" })),
+      diff ? el("div", { class: "banner a", text: "The field assessment differs from FRPIM. The ACF should check the RFO's explanation." }) : null,
+      c.note ? el("div", { class: "banner i", text: c.note }) : null));
+}
+function acfCard(w) {
+  const a = w.acf; if (!a) return null;
+  const legacy = a.checks && a.checks.length === LEGACY_CHECKS.length, list = legacy ? LEGACY_CHECKS : ACF_CHECKS;
+  return el("div", { class: "card" }, el("h2", null, "ACF scrutiny", el("small", { text: dd(a.at) })),
+    el("div", { class: "checks" }, list.map((t, i) => checkRow(!!(a.checks && a.checks[i]), t)), a.inspected ? checkRow(true, "Joint / sample site inspection by ACF" + (a.inspectedOn ? " on " + dd(a.inspectedOn) : "")) : null),
+    a.remarks ? el("div", { class: "banner i" }, el("b", { text: "ACF remarks: " }), a.remarks) : null);
+}
+function workView(main, id) {
+  const w = Store.get(id);
+  if (!w) { main.append(el("div", { class: "card", text: "This work is not in the register." })); return; }
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow num", text: dispId(w.id) + (w.demo ? " · mock-drill example" : "") }), el("h1", { text: w.name }),
+    el("div", { class: "btns", style: "margin-top:8px" }, el("span", { class: "chip " + STATUS[w.status][1], text: STATUS[w.status][0] }), el("span", { class: "chip c-" + w.verdict, text: "FRPIM " + VERDICT[w.verdict][0] }), el("span", { class: "chip c-s", text: ha(w.result.total) + " ha" }))),
+    el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => saveReport(w), text: "Download report" }), el("button", { class: "btn ghost", type: "button", onclick: () => go({ v: "works" }), text: "All works" }))));
+  main.append(el("div", { class: "card" }, trackBar(w)));
+  const left = el("div", { class: "grid" }), right = el("div", { class: "grid" });
+  left.append(el("div", { class: "card" }, el("h2", null, "Treatment KML on the three FRPIM maps", el("small", { text: w.fileName || "" })), maps3(w.geom)));
+  left.append(el("div", { class: "card" }, el("h2", { text: "FRPIM findings" }), findings(w)));
+  const det = el("dl", { class: "kv" });
+  const kv = (k, v) => { if (v != null && v !== "") det.append(el("dt", { text: k }), el("dd", { text: String(v) })); };
+  kv("Range", w.range); kv("Beat / compartment", w.beat); kv("Scheme", w.scheme); kv("Work year", w.year); kv("Treatment proposed", TREAT[w.treat]);
+  kv("Area in estimate", w.estArea ? w.estArea.toFixed(2) + " ha" : "-"); kv("Area in KML", w.result.total.toFixed(2) + " ha");
+  kv("Estimated cost", w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : null); kv("Seedlings", w.seedlings ? w.seedlings.toLocaleString("en-IN") : null);
+  kv("Proposed by", w.createdBy + ", " + dd(w.createdAt)); kv("RFO remarks", w.remarks);
+  const act = actionBox(w); if (act) right.append(act);
+  right.append(el("div", { class: "card" }, el("h2", { text: "Work details" }), det));
+  right.append(rfoCertCard(w));
+  const ac = acfCard(w); if (ac) right.append(ac);
+  if (w.dcf) right.append(el("div", { class: "card" }, el("h2", null, "DCF decision", el("small", { text: dd(w.dcf.at) })), el("div", null, el("span", { class: "chip " + (w.dcf.decision.startsWith("Approved") ? "c-g" : "c-r"), text: w.dcf.decision })), w.dcf.remarks ? el("div", { class: "banner i", text: w.dcf.remarks }) : null));
+  const tl = el("div", { class: "timeline" });
+  (w.trail || []).slice().reverse().forEach((t) => tl.append(el("div", null, avatar(t.role), el("div", null, el("b", { text: t.action }), el("small", { text: ROLES[t.role].title + " (" + t.user + ") · " + dt(t.at) }), t.note ? el("q", { text: t.note }) : null))));
+  right.append(el("div", { class: "card" }, el("h2", { text: "File movement" }), tl));
+  main.append(el("div", { class: "grid g-main" }, left, right));
+}
+function actionBox(w) {
+  const msg = el("div", { role: "alert" });
+  const fail = (t) => { msg.className = "err"; msg.textContent = t; };
+  async function commit(status, action, note, extra) {
+    const n = JSON.parse(JSON.stringify(w)); Object.assign(n, extra || {}); n.status = status; trail(n, action, note);
+    try { await Store.put(n); toast(action); go({ v: "work", id: w.id }); } catch (e) { fail("Could not save: " + ((e && e.message) || "unknown error")); }
+  }
+  if (ROLE === "RFO" && ["DRAFT", "RET_RFO"].includes(w.status)) {
+    return el("div", { class: "card action" }, el("h2", { text: w.status === "DRAFT" ? "Draft: certify and submit" : "Returned to you for revision" }),
+      el("div", { class: "hint", text: "Open the proposal to change the details, replace the KML or update the field certification, then submit it to the ACF." }),
+      el("div", { class: "btns" }, el("button", { class: "btn gold", type: "button", onclick: () => go({ v: "new", id: w.id }), text: w.status === "DRAFT" ? "Open and submit" : "Revise and resubmit" }),
+        w.status === "DRAFT" ? confirmButton("Delete draft", "Delete this draft?", async () => { await Store.remove(w.id); toast("Draft deleted"); go({ v: "dash" }); }) : null));
+  }
+  if (ROLE === "ACF" && ["ACF", "RET_ACF"].includes(w.status)) {
+    const boxes = ACF_CHECKS.map((c, i) => el("input", { type: "checkbox", id: "ac" + i }));
+    const insp = el("input", { type: "checkbox", id: "ac-insp" }), inspOn = el("input", { type: "date", id: "ac-insp-on", style: "max-width:180px" });
+    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Scrutiny remarks on the proposal and the RFO's certification" : "Scrutiny remarks: why you recommend an " + VERDICT[w.verdict][0] + " proposal, or what the RFO must revise" });
+    const box = el("div", { class: "card action" }, el("h2", { text: "ACF scrutiny" }));
+    if (w.status === "RET_ACF") { const last = (w.trail || []).filter((t) => t.role === "DCF").pop(); if (last) box.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the DCF: " }), last.note)); }
+    box.append(el("div", { class: "hint", text: "The RFO has certified the site and SMC suitability (below). Review it, add your scrutiny and remarks." }),
+      el("div", { class: "checks" }, ACF_CHECKS.map((c, i) => el("label", null, boxes[i], c)), el("label", null, insp, "Joint / sample site inspection done by ACF (optional)")),
+      el("label", { class: "field" }, "Date of inspection", inspOn), el("label", { class: "field" }, "ACF remarks *", rem), msg,
+      el("div", { class: "btns" },
+        el("button", { class: "btn gold", type: "button", text: "Recommend to DCF", onclick: () => {
+          const checks = boxes.map((b) => b.checked), r = rem.value.trim();
+          if (!w.rfoCert && !checks[0]) return fail("Review the proposal before recommending it.");
+          if (!checks.every(Boolean)) return fail("Complete the three scrutiny checks before recommending, or return the proposal to the RFO.");
+          if (r.length < 15) return fail("Write your scrutiny remarks (at least 15 characters).");
+          if (w.verdict !== "g" && r.length < 30) return fail("This proposal is " + VERDICT[w.verdict][0] + " on the FRPIM check. Give the justification for recommending it (at least 30 characters).");
+          commit("DCF", "Recommended to DCF", r, { acf: { checks, inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: r, at: new Date().toISOString(), by: ROLES.ACF.id } }); } }),
+        el("button", { class: "btn bad", type: "button", text: "Return to RFO", onclick: () => {
+          const r = rem.value.trim(); if (r.length < 10) return fail("Write what the RFO must revise (at least 10 characters).");
+          commit("RET_RFO", "Returned to RFO", r, { acf: { checks: boxes.map((b) => b.checked), inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: r, at: new Date().toISOString(), by: ROLES.ACF.id } }); } })));
+    return box;
+  }
+  if (ROLE === "DCF" && w.status === "DCF") {
+    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Remarks (optional)" : "Reason for approving although the FRPIM check is " + VERDICT[w.verdict][0] });
+    const green = w.verdict === "g";
+    return el("div", { class: "card action" }, el("h2", { text: "DCF decision" }),
+      el("div", { class: "hint", text: (green ? "FRPIM check Green" : "FRPIM check " + VERDICT[w.verdict][0] + ": approval is recorded as a deviation with your reason") + ". RFO certification and ACF scrutiny are below." }),
+      el("label", { class: "field" }, "Remarks", rem), msg,
+      el("div", { class: "btns" },
+        green ? el("button", { class: "btn gold", type: "button", text: "Approve", onclick: () => commit("APPROVED", "Approved by DCF", rem.value.trim(), { dcf: { decision: "Approved", remarks: rem.value.trim(), at: new Date().toISOString() } }) }) : null,
+        el("button", { class: green ? "btn ghost" : "btn warn", type: "button", text: "Approve with recorded deviation", onclick: () => {
+          const r = rem.value.trim(); if (r.length < 15) return fail("Write the reason for the deviation from FRPIM (at least 15 characters).");
+          commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } }),
+        el("button", { class: "btn bad", type: "button", text: "Return to ACF", onclick: () => { const r = rem.value.trim(); if (r.length < 10) return fail("Write what must be re-examined."); commit("RET_ACF", "Returned to ACF by DCF", r); } }),
+        el("button", { class: "btn bad", type: "button", text: "Not approve", onclick: () => { const r = rem.value.trim(); if (r.length < 10) return fail("Write the reason for not approving."); commit("REJECTED", "Not approved by DCF", r, { dcf: { decision: "Not approved", remarks: r, at: new Date().toISOString() } }); } })));
+  }
+  return null;
+}
+
+/* ---------------- how it works ---------------- */
+function helpView(main) {
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: APP.tagline }), el("h1", { text: "How " + APP.name + " works" }), el("p", { text: "Decision support: the officers decide, FRPIM informs, and every step is on record." }))));
+  const step = (role, title, body) => el("div", { class: "card" }, el("div", { style: "display:flex;gap:10px;align-items:center" }, avatar(role), el("h2", { text: title })), el("div", { text: body }));
+  main.append(el("div", { class: "grid g3" },
+    step("RFO", "1 · RFO proposes and certifies", "Uploads the treatment KML, sees the FRPIM check on all three maps, and certifies the site: boundary walked, area, legal status, species, and the SMC suitability (works proposed, soil depth, water). Where the field assessment differs from FRPIM, the RFO explains why."),
+    step("ACF", "2 · ACF scrutinises", "Reviews the RFO's certification and the FRPIM findings, checks the estimate and scheme guidelines, may inspect the site, and records remarks. Recommends to the DCF or returns to the RFO. Amber or Red proposals need a written justification."),
+    step("DCF", "3 · DCF approves", "Takes the final decision: approve, approve with a recorded deviation from FRPIM, return to the ACF, or not approve. Every deviation is documented with the reason.")));
+  main.append(el("div", { class: "grid g2" },
+    el("div", { class: "card" }, el("h2", { text: "The FRPIM check" }), el("div", { class: "list" },
+      el("div", null, el("span", { class: "chip c-g", text: "Green" }), " at least 60 % of the area in Phase 1-2 and no more than 5 % on protected or excluded land."),
+      el("div", null, el("span", { class: "chip c-a", text: "Amber" }), " mixed priority: review in the field before approval."),
+      el("div", null, el("span", { class: "chip c-r", text: "Red" }), " more than 20 % protected or excluded land, more than half in Phase 4-5, or mostly outside the range blocks.")),
+      el("div", { class: "hint", text: "Areas are measured on the 829 FRPIM blocks of 10 ha (model run 19 Nov 2026). The check also compares the proposed treatment with FRPIM's recommendation, the estimate area with the KML area, and the RFO's SMC assessment with FRPIM's SMC need." })),
+    el("div", { class: "card" }, el("h2", { text: "Mock-drill accounts" }), el("table", { class: "t" }, el("tbody", null, Object.entries(ROLES).map(([k, r]) => el("tr", null, el("td", null, avatar(k)), el("td", null, el("b", { text: r.title }), el("div", { class: "hint", text: r.office })), el("td", { class: "num", text: r.id }))))),
+      el("div", { class: "hint", text: "Password for all three: " + DEMO_PASSWORD + ". These accounts demonstrate the workflow; they are not a security system." }),
+      el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: loadDemo, text: "Load mock-drill examples" }),
+        Store.all().some((w) => w.demo) ? confirmButton("Remove examples", "Remove all mock-drill examples?", async () => { for (const w of Store.all().filter((x) => x.demo)) await Store.remove(w.id); toast("Examples removed"); go({ v: "help" }); }) : null))));
+}
+
+/*@@KEEP_C@@*/
+async function saveReport(w) {
+  const dl = await useCap("downloads"); if (!dl) { toast("Saving files is not available in this view"); return; }
+  const r = w.result, vcol = { g: "#17803a", a: "#a65c00", r: "#b4261c" }[w.verdict], c = w.rfoCert, a = w.acf;
+  const rows = (tbl, obj, keys) => keys.filter((k) => (obj[k] || 0) > 0).map((k) => "<tr><td><span style=\"display:inline-block;width:11px;height:11px;background:" + (k === "out" ? "#fff" : tbl[k][1]) + ";border:1px solid #999;margin-right:6px\"></span>" + esc(k === "out" ? OUTSIDE[0] : tbl[k][0]) + "</td><td class=n>" + obj[k].toFixed(2) + "</td><td class=n>" + pct(obj[k], r.total).toFixed(1) + " %</td></tr>").join("");
+  const fig = (k, t) => "<figure><figcaption>" + t + "</figcaption>" + mapSVG(w.geom, k) + "</figure>";
+  const ck = (ok, t) => "<tr><td style=\"width:24px;color:" + (ok ? "#17803a" : "#b4261c") + "\">" + (ok ? "✓" : "✗") + "</td><td>" + esc(t) + "</td></tr>";
+  const html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + esc(dispId(w.id) + " " + w.name) + "</title><style>body{font-family:Arial,sans-serif;color:#12201a;margin:24px auto;max-width:960px;padding:0 16px}h1{font-size:21px;margin:4px 0}h2{font-size:15px;border-bottom:2px solid #0f3d2a;padding-bottom:4px;margin-top:24px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:5px 7px;text-align:left}.n{text-align:right}.v{border-left:6px solid " + vcol + ";background:#f5f5f5;padding:8px 12px}.m{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}figure{margin:0}figcaption{font-weight:700;font-size:12px;margin-bottom:4px}svg{width:100%;height:auto;border:1px solid #ccc}.muted{color:#586a5f;font-size:12px}.brand{font-weight:800;color:#0f3d2a}</style></head><body>" +
+    "<div class=muted><span class=brand>" + APP.name + "</span> · " + APP.sub + " · " + esc(APP.org) + " · report generated " + esc(dt(new Date().toISOString())) + "</div><h1>" + esc(dispId(w.id)) + " · " + esc(w.name) + "</h1>" +
+    "<p><b>Status:</b> " + esc(STATUS[w.status][0]) + " &nbsp; <b>FRPIM check:</b> <span style=\"color:" + vcol + "\">" + esc(VERDICT[w.verdict][0] + " · " + VERDICT[w.verdict][1]) + "</span></p>" +
+    "<h2>Work details</h2><table><tr><th>Range</th><td>" + esc(w.range) + "</td><th>Beat / compartment</th><td>" + esc(w.beat) + "</td></tr><tr><th>Scheme</th><td>" + esc(w.scheme) + "</td><th>Work year</th><td>" + esc(w.year) + "</td></tr><tr><th>Treatment proposed</th><td>" + esc(TREAT[w.treat]) + "</td><th>KML file</th><td>" + esc(w.fileName) + "</td></tr><tr><th>Area in estimate</th><td>" + (w.estArea ? w.estArea.toFixed(2) + " ha" : "-") + "</td><th>Area in KML</th><td>" + r.total.toFixed(2) + " ha</td></tr><tr><th>Estimated cost</th><td>" + (w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : "-") + "</td><th>Seedlings</th><td>" + (w.seedlings || "-") + "</td></tr></table>" +
+    "<h2>Treatment KML on the FRPIM maps</h2><div class=m>" + fig("n", "Map 1 · Restoration need") + fig("f", "Map 2 · Feasibility") + fig("p", "Map 3 · Priority phase") + "</div>" +
+    "<h2>FRPIM findings</h2><div class=v><b>" + esc(VERDICT[w.verdict][1]) + "</b><ul>" + (w.reasons || []).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div>" +
+    "<p>" + fp(w.s12) + " in Phase 1-2 · " + fp(w.sPE) + " protected or excluded · treatment agrees with FRPIM on " + (w.matchPct == null ? "-" : fp(w.matchPct)) + " of plantable area" + (r.rni != null ? " · mean RNI " + r.rni.toFixed(3) + ", RFI " + r.rfi.toFixed(3) : "") + "</p>" +
+    "<table><tr><th>Priority (Map 3)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(PHASE, Object.assign({}, r.byPhase, { out: r.outside }), [1, 2, 3, 4, 5, 6, 7, "out"]) + "</table><br>" +
+    "<table><tr><th>Need (Map 1)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(NEED, r.byNeed, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
+    "<table><tr><th>Feasibility (Map 2)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(FEAS, r.byFeas, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
+    "<table><tr><th>What FRPIM recommends</th><th class=n>ha</th></tr>" + ["S", "B", "A", "P", "X"].filter((k) => r.byRx[k] > 0).map((k) => "<tr><td>" + esc(RX[k]) + "</td><td class=n>" + r.byRx[k].toFixed(2) + "</td></tr>").join("") + (r.smcHa > 0 ? "<tr><td>of which SMC works required</td><td class=n>" + r.smcHa.toFixed(2) + "</td></tr>" : "") + "</table>" +
+    (c ? "<h2>RFO field certification (" + esc(dd(c.at)) + ")</h2><table>" + RFO_CHECKS.map((t, i) => ck(c.checks && c.checks[i], t)).join("") + "</table><br><table><tr><th>SMC suitability</th><td>" + esc(c.smcSuit) + "</td></tr><tr><th>SMC works proposed</th><td>" + esc((c.smcWorks || []).join(", ")) + "</td></tr><tr><th>Soil depth</th><td>" + esc(c.soilDepth) + "</td></tr><tr><th>Water</th><td>" + esc(c.water) + "</td></tr><tr><th>Field observations</th><td>" + esc(c.note) + "</td></tr></table>" : "") +
+    (a ? "<h2>ACF scrutiny (" + esc(dd(a.at)) + ")</h2><table>" + (a.checks && a.checks.length === LEGACY_CHECKS.length ? LEGACY_CHECKS : ACF_CHECKS).map((t, i) => ck(a.checks && a.checks[i], t)).join("") + (a.inspected ? ck(true, "Joint / sample site inspection by ACF" + (a.inspectedOn ? " on " + dd(a.inspectedOn) : "")) : "") + "</table><p><b>ACF remarks:</b> " + esc(a.remarks) + "</p>" : "") +
+    (w.dcf ? "<h2>DCF decision</h2><p><b>" + esc(w.dcf.decision) + "</b> (" + esc(dd(w.dcf.at)) + ")<br>" + esc(w.dcf.remarks) + "</p>" : "") +
+    "<h2>File movement</h2><table><tr><th>Date</th><th>Officer</th><th>Action</th><th>Remarks</th></tr>" + (w.trail || []).map((t) => "<tr><td>" + esc(dt(t.at)) + "</td><td>" + esc(ROLES[t.role].title) + "</td><td>" + esc(t.action) + "</td><td>" + esc(t.note) + "</td></tr>").join("") + "</table>" +
+    "<p class=muted>FRPIM v2.2 is decision support. The final decision rests with the ACF and the DCF.</p></body></html>";
+  try { await dl.save({ filename: dispId(w.id).replace(/\//g, "-") + "_report.html", data: new Blob([html], { type: "text/html" }) }); toast("Report saved. Open it in a browser to print it."); } catch (e) { toast("The report was not saved"); }
+}
+
+/* ---------------- mock-drill examples ---------------- */
+async function loadDemo() {
+  if (Store.all().some((w) => w.demo)) { toast("The mock-drill examples are already loaded"); return; }
+  const year = fyNow(), now = Date.now(), day = 864e5;
+  const plan = [
+    { stage: "APPROVED", scheme: "CAMPA", est: 17, cost: 9.8, seed: 18700, beat: "Compt. A", ago: [24, 21, 15, 9], smc: ["Suitable", ["Continuous contour trenches (CCT)", "Pits with saucers"], "Medium (30-60 cm)", "Tank / check dam within 1 km"] },
+    { stage: "DCF", scheme: "State plan", est: 16.5, cost: 8.6, seed: 18150, beat: "Compt. B", ago: [12, 10, 4], smc: ["Partly suitable", ["Staggered trenches", "Gully plugs / loose boulder checks"], "Medium (30-60 cm)", "Well or borewell"] },
+    { stage: "ACF", scheme: "CAMPA", est: 20, cost: 7.2, seed: 9900, beat: "Compt. C", ago: [5, 3], smc: ["Suitable", ["Pits with saucers"], "Shallow (< 30 cm)", "Tanker only"] },
+    { stage: "RET_RFO", scheme: "MGNREGA", est: 21, cost: 11.4, seed: 23100, beat: "Compt. D", ago: [9, 8, 2], smc: ["Partly suitable", ["Earthen bunds"], "Shallow (< 30 cm)", "Rain-fed only"] },
+    { stage: "APPROVED_DEV", scheme: "MGNREGA", est: 20, cost: 6.1, seed: 0, beat: "Compt. E", ago: [30, 27, 22, 18], smc: ["Suitable", ["Continuous contour trenches (CCT)", "Gully plugs / loose boulder checks", "Percolation pits / farm ponds"], "Deep (> 60 cm)", "Tank / check dam within 1 km"] }
+  ];
+  const mk = (role, action, note, d) => ({ at: new Date(now - d * day).toISOString(), role, user: ROLES[role].id, action, note });
+  const iso = (d) => new Date(now - d * day).toISOString();
+  for (let i = 0; i < SAMPLES.length && i < plan.length; i++) {
+    const s = SAMPLES[i], p = plan[i];
+    const features = [{ type: "Feature", properties: { name: s.name }, geometry: { type: "Polygon", coordinates: [s.coords] } }];
+    const result = analyse(features), vd = verdictOf(result, s.treat, p.est);
+    const id = RANGE.code + "-" + year + "-" + String(901 + i);
+    const w = { id, demo: true, range: RANGE.name, name: s.name, beat: p.beat, scheme: p.scheme, year, treat: s.treat, estArea: p.est, estCost: p.cost, seedlings: p.seed || null,
+      remarks: "Mock-drill example.", fileName: "example_" + (i + 1) + ".kml", geom: { type: "FeatureCollection", features }, result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, matchPct: vd.matchPct,
+      createdAt: iso(p.ago[0]), createdBy: ROLES.RFO.id, model: "FRPIM v2.2 (run 19 Nov 2026)", trail: [],
+      rfoCert: { checks: RFO_CHECKS.map(() => true), smcSuit: p.smc[0], smcWorks: p.smc[1], soilDepth: p.smc[2], water: p.smc[3], note: i === 4 ? "Gullies feeding the village tank; SMC will cut silt inflow." : "Boundary walked with GPS on the date of inspection.", at: iso(p.ago[1]), by: ROLES.RFO.id } };
+    w.trail.push(mk("RFO", "Draft created", "KML " + w.fileName, p.ago[0]));
+    w.trail.push(mk("RFO", "Certified and submitted to ACF", "FRPIM " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2 · SMC: " + p.smc[0] + " (" + p.smc[1].join(", ") + ")", p.ago[1]));
+    const ok = ACF_CHECKS.map(() => true);
+    if (p.stage === "APPROVED" || p.stage === "DCF") {
+      w.acf = { checks: ok, inspected: i === 0, inspectedOn: i === 0 ? iso(p.ago[2] + 1) : null, remarks: "RFO certification checked. Phase 1-2 land; SMC works and rates in order.", at: iso(p.ago[2]), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Recommended to DCF", w.acf.remarks, p.ago[2]));
+      if (p.stage === "APPROVED") { w.dcf = { decision: "Approved", remarks: "Approved. Take up SMC before the monsoon.", at: iso(p.ago[3]) }; w.trail.push(mk("DCF", "Approved by DCF", w.dcf.remarks, p.ago[3])); }
+    }
+    if (p.stage === "RET_RFO") {
+      w.acf = { checks: [true, false, false], inspected: true, inspectedOn: iso(p.ago[2] + 1), remarks: "Most of the KML falls on excluded and protected land. Redraw the boundary on plantable blocks only.", at: iso(p.ago[2]), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Returned to RFO", w.acf.remarks, p.ago[2]));
+    }
+    if (p.stage === "APPROVED_DEV") {
+      w.acf = { checks: ok, inspected: true, inspectedOn: iso(p.ago[2] + 1), remarks: "Low FRPIM priority, but SMC here protects the catchment of the village tank downstream. RFO's SMC assessment confirmed at site.", at: iso(p.ago[2]), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Recommended to DCF", w.acf.remarks, p.ago[2]));
+      w.dcf = { decision: "Approved with recorded deviation", remarks: "Approved as catchment treatment for the village tank; deviation from FRPIM priority recorded.", at: iso(p.ago[3]) };
+      w.trail.push(mk("DCF", "Approved by DCF with recorded deviation", w.dcf.remarks, p.ago[3]));
+    }
+    w.status = p.stage; w.updatedAt = w.trail[w.trail.length - 1].at;
+    await Store.put(w);
+  }
+  toast("Mock-drill examples loaded"); go({ v: "dash" });
+}
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  ROLE = ss.get("frpim_role"); if (ROLE && !ROLES[ROLE]) ROLE = null;
+  try { await loadBlocks(); } catch (e) { /* shown below */ }
+  render();
+  Store.on(() => { if (!ROLE) return; const typing = document.activeElement && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName);
+    if (VIEW.v === "new" || VIEW.v === "map" || typing) return; render(); });
+  await Store.init();
+  if (!BLOCKS.length) { $("#app").prepend(el("div", { class: "banner r gut", text: "The FRPIM blocks could not be loaded. Reload the page." })); return; }
+  render();
+}
+window.addEventListener("resize", () => placePill());
+if (window.L && window.turf) boot(); else window.addEventListener("load", () => { if (window.L && window.turf) boot(); else $("#app").textContent = "The map libraries could not be loaded. Check the internet connection and reload."; });
+</script>
