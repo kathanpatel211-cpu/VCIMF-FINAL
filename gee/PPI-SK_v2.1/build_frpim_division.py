@@ -121,7 +121,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 3 (grid edge fix)');
+print('Script: FRPIM v2.2 division, build 4 (light Console, per-range counts)');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -194,6 +194,13 @@ var grid = ee.FeatureCollection(CFG.RANGES.map(function (r) { return gridFor(r.n
 '''
 r1 = r1[:i] + GRID + r1[j:]
 r1 = edit(r1, [
+    ("print('Blocks in grid (>= ' + CFG.MIN_BLOCK_HA + ' ha):', N_GRID);",
+     "print('Blocks per range are counted inside the export tasks (a division-size grid is too large for the Console).');"),
+    ("    n_blocks_grid: N_GRID,", "    n_blocks_grid: blocksIn.size(),        // blocks in this range's grid; RUN 2 adds the ranges"),
+    ("if (CFG.SHOW_MAP) {",
+     "Map.centerObject(AOI, 9);\nMap.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Division forest boundary');\n"
+     "print('Map: the division forest boundary is shown. Parameter previews are off for a division-size run (they exceed the Console memory); the export tasks are not affected.');\n"
+     "if (CFG.SHOW_MAP) {"),
     ("  utm: LIB.utmCrs(AOI)\n};", "  utm: LIB.utmCrs(AOI),\n  ranges: AOI_FC.aggregate_array(CFG.RANGE_FIELD).distinct().sort(),\n  n_range_field: AOI_FC.filter(ee.Filter.notNull([CFG.RANGE_FIELD])).size()\n};"),
     ("  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);",
      "  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);\n"
@@ -258,7 +265,7 @@ cfg01 = """  var CFG = {
     LOCAL_BUFFER_KM: SETTINGS.LOCAL_BUFFER_KM, LOCAL_ANCHOR_SCALE: SETTINGS.LOCAL_ANCHOR_SCALE,
     CS_THRESHOLD: SETTINGS.CS_THRESHOLD, D2_MONTHS: SETTINGS.D2_MONTHS,
     A3_MASK_TREES: SETTINGS.A3_MASK_TREES, REASON_MIN_FRAC: 0.01, TILE_SCALE: SETTINGS.TILE_SCALE,
-    RAW_PREFIX: ASSETS.RAW_PREFIX, QC01_ASSET: ASSETS.QC01, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, SHOW_MAP: true
+    RAW_PREFIX: ASSETS.RAW_PREFIX, QC01_ASSET: ASSETS.QC01, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, SHOW_MAP: false
   };
 """
 
@@ -293,6 +300,8 @@ r2 = edit(r2, [
 
   /* ---- Section 13.4: area statement in hectares (every class on every map) ---- */"""),
     ("  Map.centerObject(AOI, 12);", "  Map.centerObject(AOI, 9);"),
+    ("var nGrid = ee.Number(ee.Feature(raw.first()).get('n_blocks_grid'));",
+     "var nGrid = ee.Number(raw.distinct('range').aggregate_sum('n_blocks_grid'));   // division = sum of the range grids"),
     ("ui.Label('Forest Restoration Priority — ' + CFG.RANGE_NAME + ' Range',", "ui.Label('Forest Restoration Priority — ' + CFG.DIVISION_NAME,"),
 ], 'RUN 2')
 

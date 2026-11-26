@@ -806,7 +806,7 @@ function stepLayers() {
     LOCAL_BUFFER_KM: SETTINGS.LOCAL_BUFFER_KM, LOCAL_ANCHOR_SCALE: SETTINGS.LOCAL_ANCHOR_SCALE,
     CS_THRESHOLD: SETTINGS.CS_THRESHOLD, D2_MONTHS: SETTINGS.D2_MONTHS,
     A3_MASK_TREES: SETTINGS.A3_MASK_TREES, REASON_MIN_FRAC: 0.01, TILE_SCALE: SETTINGS.TILE_SCALE,
-    RAW_PREFIX: ASSETS.RAW_PREFIX, QC01_ASSET: ASSETS.QC01, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, SHOW_MAP: true
+    RAW_PREFIX: ASSETS.RAW_PREFIX, QC01_ASSET: ASSETS.QC01, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, SHOW_MAP: false
   };
   /* ======================================================================
    *  FRPIM v2.2 — RANGE LAYERS (build steps 3-17)
@@ -944,7 +944,7 @@ function stepLayers() {
   }
   var grid = ee.FeatureCollection(CFG.RANGES.map(function (r) { return gridFor(r.name); })).flatten();
   var N_GRID = grid.size();
-  print('Blocks in grid (>= ' + CFG.MIN_BLOCK_HA + ' ha):', N_GRID);
+  print('Blocks per range are counted inside the export tasks (a division-size grid is too large for the Console).');
 
   /* ---------- Anchors (Section 8, FF-09) ---------- */
   var ANCH, ANCHOR_ID;
@@ -1150,7 +1150,7 @@ function stepLayers() {
       division_name: CFG.DIVISION_NAME,
       run_date: RUN_DATE,
       work_crs: CRS,
-      n_blocks_grid: N_GRID,
+      n_blocks_grid: blocksIn.size(),        // blocks in this range's grid; RUN 2 adds the ranges
       cs_threshold: CFG.CS_THRESHOLD,
       d2_window: CFG.D2_MONTHS.join('-'),
       beat_field: BEAT_FIELD === null ? 'none' : BEAT_FIELD
@@ -1237,6 +1237,9 @@ function stepLayers() {
   print('====================================================================');
 
   /* ---------- Map preview (tiles are computed on demand) ---------- */
+  Map.centerObject(AOI, 9);
+  Map.addLayer(ee.Image().byte().paint(AOI_FC, 1, 2), {palette: ['black']}, 'Division forest boundary');
+  print('Map: the division forest boundary is shown. Parameter previews are off for a division-size run (they exceed the Console memory); the export tasks are not affected.');
   if (CFG.SHOW_MAP) {
     Map.centerObject(AOI, 10);
     // Layers are computed on fixed 10-30 m grids; zooming out further than level 10 would ask
@@ -2351,7 +2354,7 @@ function stepMap() {
   var shareOK = QUANT ? phaseOK.and(inRange(ncShares, 0.15, 0.25)).and(inRange(fcShares, 0.15, 0.25)) : phaseOK;
   function pctList(l) { return ee.List(l).map(function (x) { return ee.Number(x).multiply(100).format('%.1f'); }).join('/'); }
   var dMC = MEAN_FULL.subtract(MEAN_HALF).abs();
-  var nGrid = ee.Number(ee.Feature(raw.first()).get('n_blocks_grid'));
+  var nGrid = ee.Number(raw.distinct('range').aggregate_sum('n_blocks_grid'));   // division = sum of the range grids
   var FIRE_GAP_TEXT = ee.Feature(raw.first()).get('fire_source_gap');
   var gapPresent = raw.filter(ee.Filter.notNull(['fire_source_gap'])).size().eq(N_ALL);
   // FF-25: every G5 block is still in a phase (1-5) and given a planting intervention (3-11)
@@ -2584,7 +2587,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 3 (grid edge fix)');
+print('Script: FRPIM v2.2 division, build 4 (light Console, per-range counts)');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
