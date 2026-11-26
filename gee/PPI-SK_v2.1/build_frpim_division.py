@@ -121,6 +121,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
+print('Script: FRPIM v2.2 division, build 3 (grid edge fix)');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -170,16 +171,12 @@ function gridFor(rangeName) {
       return b.set('ov__', b.geometry().intersection(cell, 1).area(1));
     });
     var inter = local.geometry().intersection(cell, 1);
-    // a placeholder row keeps the lists non-empty for edge cells that touch no forest polygon;
-    // such cells get range 'NONE', zero area, and are dropped by the minimum-area filter below
+    // the forest polygon covering most of the cell gives the block its range and beat. A placeholder
+    // (overlap -1, range NONE) answers for edge cells that touch no polygon; they have zero area and
+    // are dropped by the minimum-area filter below.
     var none = ee.Feature(null, {ov__: -1}).set(CFG.RANGE_FIELD, 'NONE').set(CFG.BEAT_FIELD, '');
-    var withNone = local.merge(ee.FeatureCollection([none]));
-    var groups = ee.List(withNone.reduceColumns(ee.Reducer.sum().group({groupField: 1, groupName: 'r'}),
-                                                ['ov__', CFG.RANGE_FIELD]).get('groups'));
-    var sums = groups.map(function (g) { return ee.Dictionary(g).get('sum'); });
-    var best = ee.Dictionary(groups.get(sums.indexOf(sums.reduce(ee.Reducer.max()))));
-    var rng = toStr(best.get('r'), 'NONE');
-    var top = ee.Feature(withNone.filter(ee.Filter.eq(CFG.RANGE_FIELD, best.get('r'))).sort('ov__', false).first());
+    var top = ee.Feature(local.merge(ee.FeatureCollection([none])).sort('ov__', false).first());
+    var rng = toStr(top.get(CFG.RANGE_FIELD), 'NONE');
     var beat = toStr(top.get(CFG.BEAT_FIELD), 'Unassigned');
     beat = ee.String(ee.Algorithms.If(beat.length().eq(0), 'Unassigned', beat));
     var a = inter.area(1).divide(1e4), full = cell.area(1).divide(1e4);
