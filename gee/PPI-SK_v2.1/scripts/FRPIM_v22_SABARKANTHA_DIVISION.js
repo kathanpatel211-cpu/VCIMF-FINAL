@@ -2586,7 +2586,7 @@ function runFrpimStep(n) {
     VALIDATE: 'Validation report (V1, V2). Tasks -> RUN.'
   };
   print('==================================================================');
-  print('FRPIM v2.2 | ' + SETTINGS.DIVISION_NAME + ' (' + SETTINGS.RANGES.length + ' ranges) | ' + names[n]);
+  print('FRPIM v2.2 | ' + SETTINGS.DIVISION_NAME + (SETTINGS.DIVISION_NAME.indexOf(' of ') > 0 ? '' : ' (' + SETTINGS.RANGES.length + ' ranges)') + ' | ' + names[n]);
   print('==================================================================');
   if (n === 'LAYERS') { stepLayers(); }
   else if (n === 'MAP') { stepMap(); }
@@ -2596,7 +2596,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 6 (partial RUN 2 option)');
+print('Script: FRPIM v2.2 division, build 7 (asset: ' + SETTINGS.AOI_ASSET + ')');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {

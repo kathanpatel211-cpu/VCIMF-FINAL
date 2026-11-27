@@ -117,7 +117,7 @@ function runFrpimStep(n) {
     VALIDATE: 'Validation report (V1, V2). Tasks -> RUN.'
   };
   print('==================================================================');
-  print('FRPIM v2.2 | ' + SETTINGS.DIVISION_NAME + ' (' + SETTINGS.RANGES.length + ' ranges) | ' + names[n]);
+  print('FRPIM v2.2 | ' + SETTINGS.DIVISION_NAME + (SETTINGS.DIVISION_NAME.indexOf(' of ') > 0 ? '' : ' (' + SETTINGS.RANGES.length + ' ranges)') + ' | ' + names[n]);
   print('==================================================================');
   if (n === 'LAYERS') { stepLayers(); }
   else if (n === 'MAP') { stepMap(); }
@@ -127,7 +127,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 6 (partial RUN 2 option)');
+print('Script: FRPIM v2.2 division, build 7 (asset: ' + SETTINGS.AOI_ASSET + ')');
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -364,5 +364,15 @@ out += fn('stepLayers', '', cfg01, r1, 'RUN 1 — DIVISION LAYERS -> ONE RAW BLO
 out += fn('stepMap', '', cfg02, r2, 'RUN 2 — NEED x FEASIBILITY FOR THE WHOLE DIVISION, MONTE CARLO, QC, MAPS')
 out += fn('stepValidate', '', cfg03, val, 'VALIDATION (Section 15, optional)')
 out += DISPATCH
-pathlib.Path('scripts/FRPIM_v22_SABARKANTHA_DIVISION.js').write_text(out)
-print('scripts/FRPIM_v22_SABARKANTHA_DIVISION.js', out.count('\n'), 'lines')
+import sys
+target = 'scripts/FRPIM_v22_SABARKANTHA_DIVISION.js'
+if len(sys.argv) >= 3:
+    # another Earth Engine project: python build_frpim_division.py AOI_ASSET ASSET_ROOT [OUTFILE]
+    aoi, root = sys.argv[1], sys.argv[2].rstrip('/') + '/'
+    for x, y in (("  AOI_ASSET: 'projects/khedbrahma-range/assets/Sbk_division',", "  AOI_ASSET: '" + aoi + "',"),
+                 ("  ASSET_ROOT: 'projects/khedbrahma-range/assets/',", "  ASSET_ROOT: '" + root + "',")):
+        assert out.count(x) == 1, x
+        out = out.replace(x, y)
+    target = sys.argv[3] if len(sys.argv) > 3 else target
+pathlib.Path(target).write_text(out)
+print(target, out.count('\n'), 'lines')
