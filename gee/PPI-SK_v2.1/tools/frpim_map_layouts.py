@@ -82,6 +82,9 @@ MAPS = {
     },
 }
 TAIL_LABELS = ["Protected", "Excluded"]
+# area settings (defaults = Khedbrahma Range); main() overrides them from --place / --prefix / --range-field / --note
+OPT = {"place": "Khedbrahma Range, Sabarkantha Forest Division, Gujarat", "prefix": "Khedbrahma", "range_field": None,
+       "note": "Model and maps: FRPIM v2.2 in Google Earth Engine"}
 TAIL_DESCR = ["Dense forest, canopy >= 40 % (C1)", "Water, drains, rock, built-up, cropland, slope > 45 %"]
 
 
@@ -119,12 +122,26 @@ def dms(v, pos, neg):
     return f"{d}°{m:02d}′{hemi}"
 
 
+def outer(g, smooth):
+    """Outer rings only (no internal openings), optionally smoothed by smooth metres: a clean outline at large extents."""
+    if smooth:
+        g = g.buffer(smooth).buffer(-smooth)
+    polys = [g] if g.geom_type == "Polygon" else [q for q in getattr(g, "geoms", []) if q.geom_type == "Polygon"]
+    return unary_union([shapely.geometry.Polygon(q.exterior) for q in polys if not q.is_empty])
+
+
 def load(path):
     data = json.load(open(path))
     to_utm = Transformer.from_crs("EPSG:4326", "EPSG:32643", always_xy=True).transform
     blocks = []
     for f in data["features"]:
-        g = shapely.transform(shape(f["geometry"]), lambda xy: __import__('numpy').column_stack(to_utm(xy[:, 0], xy[:, 1])))
+        g = shape(f["geometry"])
+        if g.geom_type == "GeometryCollection":            # keep only the polygon parts of mixed geometries
+            parts = [x for x in g.geoms if x.geom_type in ("Polygon", "MultiPolygon")]
+            g = unary_union(parts) if parts else None
+        if g is None or g.is_empty:
+            continue
+        g = shapely.transform(g, lambda xy: __import__('numpy').column_stack(to_utm(xy[:, 0], xy[:, 1])))
         blocks.append((g, f["properties"]))
     return blocks
 
@@ -157,7 +174,7 @@ def draw_layout(blocks, key, meta, out_dir):
 
     # ---- header
     fig.text(0.030, 0.950, f"{cfg['number']}  |  {cfg['title']}", fontsize=24, fontweight="bold", color=INK, va="center")
-    fig.text(0.030, 0.912, f"Khedbrahma Range, Sabarkantha Forest Division, Gujarat   ·   {cfg['subtitle']}",
+    fig.text(0.030, 0.912, f"{OPT['place']}   ·   {cfg['subtitle']}",
              fontsize=13, color=MUTED, va="center")
     fig.text(0.970, 0.950, "FRPIM v2.2", fontsize=13, fontweight="bold", color=INK, ha="right", va="center")
     fig.text(0.970, 0.915, "Forest Restoration Priority and\nIntervention Model", fontsize=9.5, color=MUTED,
@@ -179,10 +196,26 @@ def draw_layout(blocks, key, meta, out_dir):
     ax.set_ylim(cy - half_h, cy + half_h)
     ax.set_aspect("equal")
 
+    lw = 0.35 if len(blocks) < 2000 else 0.12
     for g, p in blocks:
         c = int(p[field])
-        ax.add_patch(geom_to_patch(g, facecolor=colors[c - 1], edgecolor="#ffffff", linewidth=0.35, zorder=2))
-    ax.add_patch(geom_to_patch(union, facecolor="none", edgecolor=INK, linewidth=1.6, zorder=4))
+        ax.add_patch(geom_to_patch(g, facecolor=colors[c - 1], edgecolor="#ffffff", linewidth=lw, zorder=2))
+    if OPT["range_field"]:                                  # range boundaries and names
+        import matplotlib.patheffects as pe
+        groups = {}
+        for g, p in blocks:
+            groups.setdefault(p.get(OPT["range_field"]) or "", []).append(g)
+        for name, gs in sorted(groups.items()):
+            ru = outer(unary_union(gs), 150)
+            ax.add_patch(geom_to_patch(ru, facecolor="none", edgecolor="#1f2a24", linewidth=1.1, linestyle=(0, (5, 2)), zorder=5))
+            big = max(ru.geoms, key=lambda q: q.area) if ru.geom_type == "MultiPolygon" else ru
+            pt = big.representative_point()
+            ax.text(pt.x, pt.y, name, fontsize=11, fontweight="bold", color=INK, ha="center", va="center", zorder=8,
+                    path_effects=[pe.withStroke(linewidth=3.5, foreground="white")])
+    if len(blocks) >= 2000:          # large area: outer forest edge only, thinner
+        ax.add_patch(geom_to_patch(outer(union, 60), facecolor="none", edgecolor=INK, linewidth=0.8, zorder=4))
+    else:
+        ax.add_patch(geom_to_patch(union, facecolor="none", edgecolor=INK, linewidth=1.6, zorder=4))
 
     # graticule (lat/long) with degree-minute labels
     to_ll = Transformer.from_crs("EPSG:32643", "EPSG:4326", always_xy=True).transform
@@ -315,7 +348,7 @@ def draw_layout(blocks, key, meta, out_dir):
     # about this map
     fig.add_artist(plt.Line2D([lx, rx], [y + 0.012, y + 0.012], color=RULE, lw=0.8))
     fig.text(lx, y, "About this map", fontsize=10.5, fontweight="bold", color=INK, va="top")
-    method = ("Class breaks are the 20th, 40th, 60th and 80th percentiles (quintiles) of the 690 retained blocks, "
+    method = (f"Class breaks are the 20th, 40th, 60th and 80th percentiles (quintiles) of the {meta.get('n_retained', 690):,} retained blocks, "
               "so each class holds about 20 % of them."
               if meta.get("class_method") == "quantile" else "Class breaks are equal 0.2 intervals.")
     body = cfg["explain"] + (" " + method if cfg["breaks"] else "")
@@ -339,14 +372,14 @@ def draw_layout(blocks, key, meta, out_dir):
 
     # ---- footer
     fig.add_artist(plt.Line2D([0.030, 0.970], [0.055, 0.055], color=RULE, lw=0.8))
-    fig.text(0.030, 0.035, "Model and maps: FRPIM v2.2 in Google Earth Engine (run " + str(meta.get("run_date", "-")) +
+    fig.text(0.030, 0.035, OPT["note"] + " (run " + str(meta.get("run_date", "-")) +
              "). Area figures are true hectares measured on the block polygons. Rights, encroachment and legal "
              "status are verified by field staff before any block enters an estimate.", fontsize=8, color=MUTED, va="center")
     # guard: the right panel must end above the footer rule
     assert y > 0.062, f"right panel overflows into the footer (y={y:.3f})"
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    base = out_dir / f"FRPIM_v2.2_Khedbrahma_{cfg['file']}"
+    base = out_dir / f"FRPIM_v2.2_{OPT['prefix']}_{cfg['file']}"
     fig.savefig(str(base) + ".png", dpi=300, facecolor=PAPER)
     fig.savefig(str(base) + ".pdf", facecolor=PAPER)
     plt.close(fig)
@@ -354,10 +387,15 @@ def draw_layout(blocks, key, meta, out_dir):
 
 
 def main():
-    src, out = Path(sys.argv[1]), Path(sys.argv[2])
+    args = sys.argv[1:]
+    for k in ("place", "prefix", "range-field", "note"):
+        if "--" + k in args:
+            i = args.index("--" + k); OPT[k.replace("-", "_")] = args[i + 1]; del args[i:i + 2]
+    src, out = Path(args[0]), Path(args[1])
     blocks = load(src)
     retained = [p for _, p in blocks if int(p["excluded"]) == 0]
     meta = {k: retained[0].get(k) for k in ("rni_breaks", "rfi_breaks", "class_method", "anchor_id", "run_date")}
+    meta["n_retained"] = len(retained)
     for key in ("need", "feas", "phase"):
         base, stats = draw_layout(blocks, key, meta, out)
         print(base.name, {c: (s["n"], round(s["gross"], 1), round(s["net"], 1)) for c, s in stats.items()})

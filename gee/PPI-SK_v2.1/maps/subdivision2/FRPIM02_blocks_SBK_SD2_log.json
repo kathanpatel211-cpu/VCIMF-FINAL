@@ -1,0 +1,274 @@
+{
+ "n_all": 5089,
+ "n_excluded": 1265,
+ "n_matrix": 3824,
+ "weights": {
+  "N1": 20.833333333333332,
+  "N2": 16.071428571428573,
+  "N3": 16.071428571428573,
+  "N4": 16.071428571428573,
+  "N5": 10.714285714285714,
+  "N6": 10.714285714285714,
+  "N7": 5.357142857142857,
+  "N8": 4.166666666666667,
+  "F1": 15,
+  "F2": 10,
+  "F3": 5,
+  "F4": 5,
+  "F5": 10.610526315789473,
+  "F6": 6.189473684210527,
+  "F7": 0,
+  "F8": 18.200000000000003,
+  "F9": 0,
+  "F10": 8,
+  "F11": 7,
+  "F12": 3,
+  "F13": 0,
+  "F14": 12.0
+ },
+ "cv_guard": "F7 CV=0.0105 -> 6.00 pts shared in group S | F9 CV=0.0005 -> 4.83 pts shared in group S | F13 CV=0.0269 -> 7.00 pts shared in group R",
+ "collinearity": [
+  "FF-14 N1|N8 rho=-0.766: merged at the higher weight (25.00 pts)",
+  "FF-14 F1|F5 rho=0.799: different feasibility groups \u2014 REVIEW",
+  "FF-14 F1|F6 rho=0.753: different feasibility groups \u2014 REVIEW",
+  "FF-14 F5|F6 rho=0.851: merged at the higher weight (16.80 pts)",
+  "FF-14 VIF(F5)=5.82 > 5: REVIEW",
+  "FF-14 VIF(F6)=6.73 > 5: REVIEW"
+ ],
+ "exponents": [
+  0.325,
+  0.325
+ ],
+ "rni_breaks": [
+  0.4758674421180837,
+  0.5177584463415517,
+  0.5535254656674067,
+  0.5974516863955649
+ ],
+ "rfi_breaks": [
+  0.4918600061673826,
+  0.5342026489563851,
+  0.5621992473292149,
+  0.5919223693496063
+ ],
+ "stability_mean_full": 0.41260617154811713,
+ "stability_mean_half": 0.412668410041841,
+ "range_x_phase": [
+  {
+   "range": "Poshina",
+   "phase_code": 1,
+   "phase": "PHASE_1",
+   "blocks": 125,
+   "gross_ha": 1040.59,
+   "net_ha": 992.8
+  },
+  {
+   "range": "Poshina",
+   "phase_code": 2,
+   "phase": "PHASE_2",
+   "blocks": 434,
+   "gross_ha": 3666.45,
+   "net_ha": 3413.3
+  },
+  {
+   "range": "Poshina",
+   "phase_code": 3,
+   "phase": "PHASE_3",
+   "blocks": 252,
+   "gross_ha": 1978.15,
+   "net_ha": 1811.82
+  },
+  {
+   "range": "Poshina",
+   "phase_code": 4,
+   "phase": "PHASE_4",
+   "blocks": 231,
+   "gross_ha": 1831.38,
+   "net_ha": 1684.97
+  },
+  {
+   "range": "Poshina",
+   "phase_code": 5,
+   "phase": "PHASE_5",
+   "blocks": 203,
+   "gross_ha": 1668.58,
+   "net_ha": 1535.73
+  },
+  {
+   "range": "Poshina",
+   "phase_code": 6,
+   "phase": "PROTECTED",
+   "blocks": 145,
+   "gross_ha": 1305.21,
+   "net_ha": 0.0
+  },
+  {
+   "range": "Poshina",
+   "phase_code": 7,
+   "phase": "EXCLUDED",
+   "blocks": 292,
+   "gross_ha": 2097.09,
+   "net_ha": 0.0
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 1,
+   "phase": "PHASE_1",
+   "blocks": 277,
+   "gross_ha": 2164.52,
+   "net_ha": 2101.21
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 2,
+   "phase": "PHASE_2",
+   "blocks": 269,
+   "gross_ha": 2132.56,
+   "net_ha": 2062.71
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 3,
+   "phase": "PHASE_3",
+   "blocks": 206,
+   "gross_ha": 1602.77,
+   "net_ha": 1546.43
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 4,
+   "phase": "PHASE_4",
+   "blocks": 160,
+   "gross_ha": 1215.29,
+   "net_ha": 1171.8
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 5,
+   "phase": "PHASE_5",
+   "blocks": 100,
+   "gross_ha": 780.29,
+   "net_ha": 732.3
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 6,
+   "phase": "PROTECTED",
+   "blocks": 201,
+   "gross_ha": 1733.89,
+   "net_ha": 0.0
+  },
+  {
+   "range": "Rdf Khedbrahma",
+   "phase_code": 7,
+   "phase": "EXCLUDED",
+   "blocks": 162,
+   "gross_ha": 858.96,
+   "net_ha": 0.0
+  },
+  {
+   "range": "Rdf Poshina",
+   "phase_code": 1,
+   "phase": "PHASE_1",
+   "blocks": 94,
+   "gross_ha": 703.12,
+   "net_ha": 682.4
+  },
+  {
+   "range": "Rdf Poshina",
+   "phase_code": 2,
+   "phase": "PHASE_2",
+   "blocks": 229,
+   "gross_ha": 1833.41,
+   "net_ha": 1738.56
+  },
+  {
+   "range": "Rdf Poshina",
+   "phase_code": 3,
+   "phase": "PHASE_3",
+   "blocks": 243,
+   "gross_ha": 1840.58,
+   "net_ha": 1766.07
+  },
+  {
+   "range": "Rdf Poshina",
+   "phase_code": 4,
+   "phase": "PHASE_4",
+   "blocks": 256,
+   "gross_ha": 1852.25,
+   "net_ha": 1758.26
+  },
+  {
+   "range": "Rdf Poshina",
+   "phase_code": 5,
+   "phase": "PHASE_5",
+   "blocks": 168,
+   "gross_ha": 1112.87,
+   "net_ha": 1028.99
+  },
+  {
+   "range": "Rdf Poshina",
+   "phase_code": 7,
+   "phase": "EXCLUDED",
+   "blocks": 136,
+   "gross_ha": 720.46,
+   "net_ha": 0.0
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 1,
+   "phase": "PHASE_1",
+   "blocks": 42,
+   "gross_ha": 259.36,
+   "net_ha": 247.21
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 2,
+   "phase": "PHASE_2",
+   "blocks": 100,
+   "gross_ha": 729.58,
+   "net_ha": 679.09
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 3,
+   "phase": "PHASE_3",
+   "blocks": 71,
+   "gross_ha": 486.39,
+   "net_ha": 449.53
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 4,
+   "phase": "PHASE_4",
+   "blocks": 108,
+   "gross_ha": 739.7,
+   "net_ha": 690.77
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 5,
+   "phase": "PHASE_5",
+   "blocks": 256,
+   "gross_ha": 1983.74,
+   "net_ha": 1837.48
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 6,
+   "phase": "PROTECTED",
+   "blocks": 116,
+   "gross_ha": 936.89,
+   "net_ha": 0.0
+  },
+  {
+   "range": "Vadali",
+   "phase_code": 7,
+   "phase": "EXCLUDED",
+   "blocks": 213,
+   "gross_ha": 1414.69,
+   "net_ha": 0.0
+  }
+ ]
+}
