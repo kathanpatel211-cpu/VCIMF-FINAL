@@ -1290,7 +1290,7 @@ function stepLayers() {
  * ###################################################################### */
 function stepMap() {
   var CFG = {
-    STAGE: SETTINGS.__stage || 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS,
+    STAGE: SETTINGS.__stage || 'SCORE', PUBLISH_NOW: false, CRS: SETTINGS.CRS,   // maps come from the saved final table
     PREP_ONLY: !!SETTINGS.__prep, NEED_PREPARED: !!SETTINGS.__needPrepared, NEED_STATS: !!SETTINGS.__needStats, USE_PREPARED: !!SETTINGS.__prepared, PREPARED_ID: ASSETS.PREPARED, PREP_STATS_ID: ASSETS.PREP_STATS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
     RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     AOI_ASSET: SETTINGS.AOI_ASSET, RAW_PARTS: ASSETS.RAW_PARTS, QC01_ASSET: ASSETS.QC01, FINAL_ASSET: ASSETS.FINAL,
@@ -2479,7 +2479,12 @@ function stepMap() {
     print('====================================================================');
     return;
   }
-  print("NEXT: Tasks tab -> RUN ALL. Then set STAGE = 'PUBLISH' for maps and files.");
+  print('====================================================================');
+  print('SCORING RUN done (no live maps at this size, to keep the page responsive).');
+  print('NEXT: Tasks tab -> RUN FRPIM02_final_to_asset (and the CSV tables). When it shows a tick,');
+  print('press Run again: the three maps appear from the saved final table, with the map, GeoJSON,');
+  print('shapefile, field-check list and Range x Phase exports.');
+  print('====================================================================');
 
   });   // end collinearity callback
   });   // end statistics callback
@@ -2621,7 +2626,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01, ASSETS.PREPARED, ASSETS.PREP_STATS, ASSETS.FINAL]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 11 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
+print('Script: FRPIM v2.2 division, build 12 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
