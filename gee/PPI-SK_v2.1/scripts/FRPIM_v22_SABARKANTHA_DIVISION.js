@@ -77,6 +77,8 @@ var ASSETS = {
 };
 ASSETS.RAW_PARTS = SETTINGS.RANGES.map(function (r) { return ASSETS.RAW_PREFIX + r.code; });
 ASSETS.RAW = ASSETS.RAW_PARTS[0];
+ASSETS.PREPARED = SETTINGS.ASSET_ROOT + 'FRPIM_v22_prepared_blocks_' + SETTINGS.RANGE_NAME;   // RUN 2a output
+ASSETS.PREP_STATS = SETTINGS.ASSET_ROOT + 'FRPIM_v22_prep_nullshare_' + SETTINGS.RANGE_NAME;
 var ANCHORS = {id: 'NOT_SET'};
 
 /* ======================================================================
@@ -1288,7 +1290,8 @@ function stepLayers() {
  * ###################################################################### */
 function stepMap() {
   var CFG = {
-    STAGE: 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
+    STAGE: SETTINGS.__stage || 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS,
+    PREP_ONLY: !!SETTINGS.__prep, USE_PREPARED: !!SETTINGS.__prepared, PREPARED_ID: ASSETS.PREPARED, PREP_STATS_ID: ASSETS.PREP_STATS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
     RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     AOI_ASSET: SETTINGS.AOI_ASSET, RAW_PARTS: ASSETS.RAW_PARTS, QC01_ASSET: ASSETS.QC01, FINAL_ASSET: ASSETS.FINAL,
     V21_ASSET: ASSETS.V21, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, EXPECTED_ANCHOR_ID: null,
@@ -1791,7 +1794,8 @@ function stepMap() {
 
   // Spec rev. 1: C8 is replaced by flag G5 grassland_option, which never excludes a block. A raw table made
   // before rev. 1 stores the identical rule as excluded_c8; it is converted here, so RUN 1 need not be repeated.
-  var raw = ee.FeatureCollection(CFG.RAW_PARTS.map(function (id) { return ee.FeatureCollection(id); })).flatten().map(function (f) {
+  var raw = (CFG.USE_PREPARED ? ee.FeatureCollection(CFG.PREPARED_ID)
+    : ee.FeatureCollection(CFG.RAW_PARTS.map(function (id) { return ee.FeatureCollection(id); })).flatten()).map(function (f) {
     var oldC8 = ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('excluded_c8'), null), 0, f.get('excluded_c8')));
     var g5 = ee.Number(ee.Algorithms.If(ee.Algorithms.IsEqual(f.get('grassland_option'), null), oldC8, f.get('grassland_option')));
     var area = ee.Number(f.get('block_area_ha'));
@@ -1810,18 +1814,19 @@ function stepMap() {
   var FILL_KEYS = PARAMS.concat(['F5_opt', 'F5_pes']);
 
   /* ---------- Step 18a: null shares (FF-06) and gap fill by beat mean ---------- */
-  var nullShare = ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {
+  var nullShare = CFG.USE_PREPARED ? ee.Feature(ee.FeatureCollection(CFG.PREP_STATS_ID).first()).toDictionary(FILL_KEYS) :
+    ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {
     return ee.Number(1).subtract(raw.filter(ee.Filter.notNull([k])).size().divide(N_ALL));
   }));
   var BEAT_MEAN = {}, RANGE_MEAN = {};
-  FILL_KEYS.forEach(function (k) {
+  if (!CFG.USE_PREPARED) FILL_KEYS.forEach(function (k) {   // the prepared table is already gap-filled
     var ok = raw.filter(ee.Filter.notNull([k]));
     var groups = ee.List(ok.reduceColumns(ee.Reducer.mean().group({groupField: 1, groupName: 'beat'}), [k, 'beat_id']).get('groups'));
     BEAT_MEAN[k] = ee.Dictionary.fromLists(groups.map(function (g) { return ee.String(ee.Dictionary(g).get('beat')); }),
                                            groups.map(function (g) { return ee.Dictionary(g).get('mean'); }));
     RANGE_MEAN[k] = ee.Algorithms.If(ok.size().gt(0), ok.aggregate_mean(k), 0.5);
   });
-  var filled = raw.map(function (f) {
+  var filled = CFG.USE_PREPARED ? raw : raw.map(function (f) {
     var beat = ee.String(f.get('beat_id'));
     var out = f, log = ee.List([]);
     FILL_KEYS.forEach(function (k) {
@@ -1834,6 +1839,15 @@ function stepMap() {
   });
   // blocks that enter the need x feasibility matrix: not C1, not C2-C7 > 30 % (G5 never excludes)
   var inMatrix0 = filled.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));
+  if (CFG.PREP_ONLY) {
+    Export.table.toAsset({collection: filled, description: 'FRPIM02a_prepared_blocks', assetId: CFG.PREPARED_ID});
+    Export.table.toAsset({collection: ee.FeatureCollection([ee.Feature(null, nullShare)]), description: 'FRPIM02a_null_shares', assetId: CFG.PREP_STATS_ID});
+    print('====================================================================');
+    print('RUN 2a: Tasks tab -> RUN the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.');
+    print('When both show a tick, press Run again: RUN 2 then scores the prepared table (light for the Console).');
+    print('====================================================================');
+    return;
+  }
 
   /* ---------- Step 18b: statistics for the CV guard ---------- */
   var statD = {};
@@ -2599,9 +2613,9 @@ function runFrpimStep(n) {
   else { print("STOP: STEP must be 'AUTO', 'LAYERS', 'MAP' or 'VALIDATE'"); }
 }
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
-var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
+var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01, ASSETS.PREPARED, ASSETS.PREP_STATS, ASSETS.FINAL]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 8 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
+print('Script: FRPIM v2.2 division, build 9 (RUN 2a prepare) | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -2641,7 +2655,20 @@ ids.forEach(function (id) {
       return;
     }
     if (!HAS_QC01) { print('Note: the QC01 table is missing; the map is not affected, the QC log marks those checks NOT RECORDED.'); }
-    print('All ' + have.length + ' range tables found: scoring the whole division together.');
+    if (found[ASSETS.FINAL]) {
+      SETTINGS.__stage = 'PUBLISH';
+      print('Final results found: showing the three maps from the saved final table (no recomputation). ' +
+            'To score again from the start, delete ' + ASSETS.FINAL + ' and the prepared table.');
+      runFrpimStep('MAP'); return;
+    }
+    if (!found[ASSETS.PREPARED] || !found[ASSETS.PREP_STATS]) {
+      SETTINGS.__prep = true;
+      print('All ' + have.length + ' range tables found. RUN 2a: merging them and filling gaps as an export task ' +
+            '(too heavy for the Console at this size).');
+      runFrpimStep('MAP'); return;
+    }
+    SETTINGS.__prepared = true;
+    print('All ' + have.length + ' range tables and the prepared table found: scoring the whole area together.');
     runFrpimStep('MAP');
   };
   try { ee.data.getAsset(id, function (a, err) { done(!!a && !err); }); } catch (e) { done(false); }

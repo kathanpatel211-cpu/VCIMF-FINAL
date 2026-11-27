@@ -102,6 +102,8 @@ var ASSETS = {
 };
 ASSETS.RAW_PARTS = SETTINGS.RANGES.map(function (r) { return ASSETS.RAW_PREFIX + r.code; });
 ASSETS.RAW = ASSETS.RAW_PARTS[0];
+ASSETS.PREPARED = SETTINGS.ASSET_ROOT + 'FRPIM_v22_prepared_blocks_' + SETTINGS.RANGE_NAME;   // RUN 2a output
+ASSETS.PREP_STATS = SETTINGS.ASSET_ROOT + 'FRPIM_v22_prep_nullshare_' + SETTINGS.RANGE_NAME;
 var ANCHORS = {id: 'NOT_SET'};
 
 '''
@@ -125,9 +127,9 @@ function runFrpimStep(n) {
   else { print("STOP: STEP must be 'AUTO', 'LAYERS', 'MAP' or 'VALIDATE'"); }
 }
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
-var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
+var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01, ASSETS.PREPARED, ASSETS.PREP_STATS, ASSETS.FINAL]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 8 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
+print('Script: FRPIM v2.2 division, build 9 (RUN 2a prepare) | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -167,7 +169,20 @@ ids.forEach(function (id) {
       return;
     }
     if (!HAS_QC01) { print('Note: the QC01 table is missing; the map is not affected, the QC log marks those checks NOT RECORDED.'); }
-    print('All ' + have.length + ' range tables found: scoring the whole division together.');
+    if (found[ASSETS.FINAL]) {
+      SETTINGS.__stage = 'PUBLISH';
+      print('Final results found: showing the three maps from the saved final table (no recomputation). ' +
+            'To score again from the start, delete ' + ASSETS.FINAL + ' and the prepared table.');
+      runFrpimStep('MAP'); return;
+    }
+    if (!found[ASSETS.PREPARED] || !found[ASSETS.PREP_STATS]) {
+      SETTINGS.__prep = true;
+      print('All ' + have.length + ' range tables found. RUN 2a: merging them and filling gaps as an export task ' +
+            '(too heavy for the Console at this size).');
+      runFrpimStep('MAP'); return;
+    }
+    SETTINGS.__prepared = true;
+    print('All ' + have.length + ' range tables and the prepared table found: scoring the whole area together.');
     runFrpimStep('MAP');
   };
   try { ee.data.getAsset(id, function (a, err) { done(!!a && !err); }); } catch (e) { done(false); }
@@ -307,7 +322,25 @@ r2 = edit(r2, [
     ("var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);",
      "var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET).filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; })));"),
     ("var raw = ee.FeatureCollection(CFG.RAW_ASSET).map(function (f) {",
-     "var raw = ee.FeatureCollection(CFG.RAW_PARTS.map(function (id) { return ee.FeatureCollection(id); })).flatten().map(function (f) {"),
+     "var raw = (CFG.USE_PREPARED ? ee.FeatureCollection(CFG.PREPARED_ID)\n"
+     "  : ee.FeatureCollection(CFG.RAW_PARTS.map(function (id) { return ee.FeatureCollection(id); })).flatten()).map(function (f) {"),
+    ("var nullShare = ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {",
+     "var nullShare = CFG.USE_PREPARED ? ee.Feature(ee.FeatureCollection(CFG.PREP_STATS_ID).first()).toDictionary(FILL_KEYS) :\n"
+     "  ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {"),
+    ("FILL_KEYS.forEach(function (k) {\n  var ok = raw.filter(ee.Filter.notNull([k]));",
+     "if (!CFG.USE_PREPARED) FILL_KEYS.forEach(function (k) {   // the prepared table is already gap-filled\n  var ok = raw.filter(ee.Filter.notNull([k]));"),
+    ("var filled = raw.map(function (f) {", "var filled = CFG.USE_PREPARED ? raw : raw.map(function (f) {"),
+    ("var inMatrix0 = filled.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));",
+     "var inMatrix0 = filled.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));\n"
+     "if (CFG.PREP_ONLY) {\n"
+     "  Export.table.toAsset({collection: filled, description: 'FRPIM02a_prepared_blocks', assetId: CFG.PREPARED_ID});\n"
+     "  Export.table.toAsset({collection: ee.FeatureCollection([ee.Feature(null, nullShare)]), description: 'FRPIM02a_null_shares', assetId: CFG.PREP_STATS_ID});\n"
+     "  print('====================================================================');\n"
+     "  print('RUN 2a: Tasks tab -> RUN the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.');\n"
+     "  print('When both show a tick, press Run again: RUN 2 then scores the prepared table (light for the Console).');\n"
+     "  print('====================================================================');\n"
+     "  return;\n"
+     "}"),
     ("var DECISION = ee.FeatureCollection(summaryRows(withRx, function () { return 'RANGE_TOTAL'; })\n  .cat(summaryRows(withRx, function (f) { return f.get('beat_id'); })));",
      "var DECISION = ee.FeatureCollection(summaryRows(withRx, function () { return 'DIVISION_TOTAL'; })\n"
      "  .cat(summaryRows(withRx, function (f) { return ee.String('RANGE: ').cat(f.get('range')); }))\n"
@@ -340,7 +373,8 @@ r2 = edit(r2, [
 ], 'RUN 2')
 
 cfg02 = """  var CFG = {
-    STAGE: 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
+    STAGE: SETTINGS.__stage || 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS,
+    PREP_ONLY: !!SETTINGS.__prep, USE_PREPARED: !!SETTINGS.__prepared, PREPARED_ID: ASSETS.PREPARED, PREP_STATS_ID: ASSETS.PREP_STATS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
     RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     AOI_ASSET: SETTINGS.AOI_ASSET, RAW_PARTS: ASSETS.RAW_PARTS, QC01_ASSET: ASSETS.QC01, FINAL_ASSET: ASSETS.FINAL,
     V21_ASSET: ASSETS.V21, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, EXPECTED_ANCHOR_ID: null,
