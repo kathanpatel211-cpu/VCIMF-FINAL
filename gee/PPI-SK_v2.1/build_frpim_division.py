@@ -129,7 +129,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01, ASSETS.PREPARED, ASSETS.PREP_STATS, ASSETS.FINAL]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 9 (RUN 2a prepare) | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
+print('Script: FRPIM v2.2 division, build 10 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -177,8 +177,11 @@ ids.forEach(function (id) {
     }
     if (!found[ASSETS.PREPARED] || !found[ASSETS.PREP_STATS]) {
       SETTINGS.__prep = true;
-      print('All ' + have.length + ' range tables found. RUN 2a: merging them and filling gaps as an export task ' +
-            '(too heavy for the Console at this size).');
+      SETTINGS.__needPrepared = !found[ASSETS.PREPARED];
+      SETTINGS.__needStats = !found[ASSETS.PREP_STATS];
+      print('All ' + have.length + ' range tables found. RUN 2a: ' +
+            (SETTINGS.__needPrepared ? 'merging them and filling gaps as an export task (too heavy for the Console at this size)'
+                                     : 'prepared blocks already saved; only the small statistics table is still needed') + '.');
       runFrpimStep('MAP'); return;
     }
     SETTINGS.__prepared = true;
@@ -333,10 +336,11 @@ r2 = edit(r2, [
     ("var inMatrix0 = filled.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));",
      "var inMatrix0 = filled.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));\n"
      "if (CFG.PREP_ONLY) {\n"
-     "  Export.table.toAsset({collection: filled, description: 'FRPIM02a_prepared_blocks', assetId: CFG.PREPARED_ID});\n"
-     "  Export.table.toAsset({collection: ee.FeatureCollection([ee.Feature(null, nullShare)]), description: 'FRPIM02a_null_shares', assetId: CFG.PREP_STATS_ID});\n"
+     "  if (CFG.NEED_PREPARED) Export.table.toAsset({collection: filled, description: 'FRPIM02a_prepared_blocks', assetId: CFG.PREPARED_ID});\n"
+     "  // an asset table needs a geometry on every row: the one-row statistics table gets the area centroid\n"
+     "  if (CFG.NEED_STATS) Export.table.toAsset({collection: ee.FeatureCollection([ee.Feature(AOI.centroid(1), nullShare)]), description: 'FRPIM02a_null_shares', assetId: CFG.PREP_STATS_ID});\n"
      "  print('====================================================================');\n"
-     "  print('RUN 2a: Tasks tab -> RUN the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.');\n"
+     "  print('RUN 2a: Tasks tab -> RUN ' + (CFG.NEED_PREPARED && CFG.NEED_STATS ? 'the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.' : (CFG.NEED_PREPARED ? 'the task FRPIM02a_prepared_blocks (the statistics table is already saved).' : 'the task FRPIM02a_null_shares (the prepared blocks are already saved).')));\n"
      "  print('When both show a tick, press Run again: RUN 2 then scores the prepared table (light for the Console).');\n"
      "  print('====================================================================');\n"
      "  return;\n"
@@ -374,7 +378,7 @@ r2 = edit(r2, [
 
 cfg02 = """  var CFG = {
     STAGE: SETTINGS.__stage || 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS,
-    PREP_ONLY: !!SETTINGS.__prep, USE_PREPARED: !!SETTINGS.__prepared, PREPARED_ID: ASSETS.PREPARED, PREP_STATS_ID: ASSETS.PREP_STATS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
+    PREP_ONLY: !!SETTINGS.__prep, NEED_PREPARED: !!SETTINGS.__needPrepared, NEED_STATS: !!SETTINGS.__needStats, USE_PREPARED: !!SETTINGS.__prepared, PREPARED_ID: ASSETS.PREPARED, PREP_STATS_ID: ASSETS.PREP_STATS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
     RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     AOI_ASSET: SETTINGS.AOI_ASSET, RAW_PARTS: ASSETS.RAW_PARTS, QC01_ASSET: ASSETS.QC01, FINAL_ASSET: ASSETS.FINAL,
     V21_ASSET: ASSETS.V21, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, EXPECTED_ANCHOR_ID: null,
