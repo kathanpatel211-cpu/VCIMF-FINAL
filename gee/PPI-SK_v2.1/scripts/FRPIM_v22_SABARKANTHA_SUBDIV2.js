@@ -1812,7 +1812,12 @@ function stepMap() {
   var FILL_KEYS = PARAMS.concat(['F5_opt', 'F5_pes']);
 
   /* ---------- Step 18a: null shares (FF-06) and gap fill by beat mean ---------- */
-  var nullShare = CFG.USE_PREPARED ? ee.Feature(ee.FeatureCollection(CFG.PREP_STATS_ID).first()).toDictionary(FILL_KEYS) :
+  var nullShare = CFG.USE_PREPARED ? ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {
+      // share of blocks whose value k was gap-filled in RUN 2a = share of nulls in the raw tables (FF-06)
+      var hit = ee.Filter.or(ee.Filter.eq('gapfilled', k), ee.Filter.stringStartsWith('gapfilled', k + ','),
+                             ee.Filter.stringEndsWith('gapfilled', ',' + k), ee.Filter.stringContains('gapfilled', ',' + k + ','));
+      return raw.filter(hit).size().divide(N_ALL);
+    })) :
     ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {
     return ee.Number(1).subtract(raw.filter(ee.Filter.notNull([k])).size().divide(N_ALL));
   }));
@@ -1842,7 +1847,7 @@ function stepMap() {
     // an asset table needs a geometry on every row: the one-row statistics table gets the area centroid
     if (CFG.NEED_STATS) Export.table.toAsset({collection: ee.FeatureCollection([ee.Feature(AOI.centroid(1), nullShare)]), description: 'FRPIM02a_null_shares', assetId: CFG.PREP_STATS_ID});
     print('====================================================================');
-    print('RUN 2a: Tasks tab -> RUN ' + (CFG.NEED_PREPARED && CFG.NEED_STATS ? 'the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.' : (CFG.NEED_PREPARED ? 'the task FRPIM02a_prepared_blocks (the statistics table is already saved).' : 'the task FRPIM02a_null_shares (the prepared blocks are already saved).')));
+    print('RUN 2a: Tasks tab -> RUN ' + (CFG.NEED_PREPARED && CFG.NEED_STATS ? 'the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.' : (CFG.NEED_PREPARED ? 'the task FRPIM02a_prepared_blocks.' : 'the task FRPIM02a_null_shares (the prepared blocks are already saved).')));
     print('When both show a tick, press Run again: RUN 2 then scores the prepared table (light for the Console).');
     print('====================================================================');
     return;
@@ -2614,7 +2619,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01, ASSETS.PREPARED, ASSETS.PREP_STATS, ASSETS.FINAL]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 10 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
+print('Script: FRPIM v2.2 division, build 11 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -2660,10 +2665,10 @@ ids.forEach(function (id) {
             'To score again from the start, delete ' + ASSETS.FINAL + ' and the prepared table.');
       runFrpimStep('MAP'); return;
     }
-    if (!found[ASSETS.PREPARED] || !found[ASSETS.PREP_STATS]) {
+    if (!found[ASSETS.PREPARED]) {
       SETTINGS.__prep = true;
       SETTINGS.__needPrepared = !found[ASSETS.PREPARED];
-      SETTINGS.__needStats = !found[ASSETS.PREP_STATS];
+      SETTINGS.__needStats = false;   // null shares are read from the prepared table's 'gapfilled' field
       print('All ' + have.length + ' range tables found. RUN 2a: ' +
             (SETTINGS.__needPrepared ? 'merging them and filling gaps as an export task (too heavy for the Console at this size)'
                                      : 'prepared blocks already saved; only the small statistics table is still needed') + '.');

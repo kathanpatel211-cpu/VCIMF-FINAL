@@ -129,7 +129,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01, ASSETS.PREPARED, ASSETS.PREP_STATS, ASSETS.FINAL]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 10 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
+print('Script: FRPIM v2.2 division, build 11 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -175,10 +175,10 @@ ids.forEach(function (id) {
             'To score again from the start, delete ' + ASSETS.FINAL + ' and the prepared table.');
       runFrpimStep('MAP'); return;
     }
-    if (!found[ASSETS.PREPARED] || !found[ASSETS.PREP_STATS]) {
+    if (!found[ASSETS.PREPARED]) {
       SETTINGS.__prep = true;
       SETTINGS.__needPrepared = !found[ASSETS.PREPARED];
-      SETTINGS.__needStats = !found[ASSETS.PREP_STATS];
+      SETTINGS.__needStats = false;   // null shares are read from the prepared table's 'gapfilled' field
       print('All ' + have.length + ' range tables found. RUN 2a: ' +
             (SETTINGS.__needPrepared ? 'merging them and filling gaps as an export task (too heavy for the Console at this size)'
                                      : 'prepared blocks already saved; only the small statistics table is still needed') + '.');
@@ -328,7 +328,12 @@ r2 = edit(r2, [
      "var raw = (CFG.USE_PREPARED ? ee.FeatureCollection(CFG.PREPARED_ID)\n"
      "  : ee.FeatureCollection(CFG.RAW_PARTS.map(function (id) { return ee.FeatureCollection(id); })).flatten()).map(function (f) {"),
     ("var nullShare = ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {",
-     "var nullShare = CFG.USE_PREPARED ? ee.Feature(ee.FeatureCollection(CFG.PREP_STATS_ID).first()).toDictionary(FILL_KEYS) :\n"
+     "var nullShare = CFG.USE_PREPARED ? ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {\n"
+     "    // share of blocks whose value k was gap-filled in RUN 2a = share of nulls in the raw tables (FF-06)\n"
+     "    var hit = ee.Filter.or(ee.Filter.eq('gapfilled', k), ee.Filter.stringStartsWith('gapfilled', k + ','),\n"
+     "                           ee.Filter.stringEndsWith('gapfilled', ',' + k), ee.Filter.stringContains('gapfilled', ',' + k + ','));\n"
+     "    return raw.filter(hit).size().divide(N_ALL);\n"
+     "  })) :\n"
      "  ee.Dictionary.fromLists(FILL_KEYS, FILL_KEYS.map(function (k) {"),
     ("FILL_KEYS.forEach(function (k) {\n  var ok = raw.filter(ee.Filter.notNull([k]));",
      "if (!CFG.USE_PREPARED) FILL_KEYS.forEach(function (k) {   // the prepared table is already gap-filled\n  var ok = raw.filter(ee.Filter.notNull([k]));"),
@@ -340,7 +345,7 @@ r2 = edit(r2, [
      "  // an asset table needs a geometry on every row: the one-row statistics table gets the area centroid\n"
      "  if (CFG.NEED_STATS) Export.table.toAsset({collection: ee.FeatureCollection([ee.Feature(AOI.centroid(1), nullShare)]), description: 'FRPIM02a_null_shares', assetId: CFG.PREP_STATS_ID});\n"
      "  print('====================================================================');\n"
-     "  print('RUN 2a: Tasks tab -> RUN ' + (CFG.NEED_PREPARED && CFG.NEED_STATS ? 'the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.' : (CFG.NEED_PREPARED ? 'the task FRPIM02a_prepared_blocks (the statistics table is already saved).' : 'the task FRPIM02a_null_shares (the prepared blocks are already saved).')));\n"
+     "  print('RUN 2a: Tasks tab -> RUN ' + (CFG.NEED_PREPARED && CFG.NEED_STATS ? 'the two tasks FRPIM02a_prepared_blocks and FRPIM02a_null_shares.' : (CFG.NEED_PREPARED ? 'the task FRPIM02a_prepared_blocks.' : 'the task FRPIM02a_null_shares (the prepared blocks are already saved).')));\n"
      "  print('When both show a tick, press Run again: RUN 2 then scores the prepared table (light for the Console).');\n"
      "  print('====================================================================');\n"
      "  return;\n"
