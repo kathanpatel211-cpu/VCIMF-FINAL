@@ -822,7 +822,8 @@ function stepLayers() {
    * ====================================================================== */
 
   /* ---------- Step 3: range asset, UTM zone, beat field (FF-02, FF-05) ---------- */
-  var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);
+  var AOI_ALL = ee.FeatureCollection(CFG.AOI_ASSET);   // the whole asset; only the ranges in SETTINGS.RANGES are modelled
+  var AOI_FC = AOI_ALL.filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; })));
   var AOI = AOI_FC.geometry().dissolve({maxError: 1});
   var CRS = CFG.CRS;
 
@@ -830,8 +831,9 @@ function stepLayers() {
     n: AOI_FC.size(),
     props: ee.Feature(AOI_FC.first()).propertyNames(),
     utm: LIB.utmCrs(AOI),
-    ranges: AOI_FC.aggregate_array(CFG.RANGE_FIELD).distinct().sort(),
-    n_range_field: AOI_FC.filter(ee.Filter.notNull([CFG.RANGE_FIELD])).size()
+    n_all: AOI_ALL.size(),
+    ranges: AOI_ALL.aggregate_array(CFG.RANGE_FIELD).distinct().sort(),
+    n_range_field: AOI_ALL.filter(ee.Filter.notNull([CFG.RANGE_FIELD])).size()
   };
   if (CFG.ANCHOR_MODE === 'ASSET') {
     var af0 = ee.Feature(ee.FeatureCollection(CFG.ANCHOR_ASSET).first());
@@ -852,10 +854,11 @@ function stepLayers() {
     var unknown = (info.ranges || []).filter(function (x) { return expected.indexOf(x) < 0; });
     var absent = expected.filter(function (x) { return (info.ranges || []).indexOf(x) < 0; });
     print('Ranges in the division asset (' + CFG.RANGE_FIELD + '):', info.ranges);
-    if (unknown.length || absent.length || info.n_range_field !== info.n) {
+    if (unknown.length) { print('Other ranges in the asset, NOT modelled in this run: ' + unknown.join(', ') + ' (modelled: ' + expected.join(', ') + ', ' + info.n + ' polygons).'); }
+    if (absent.length || info.n_range_field !== info.n_all) {
       print('STOP: the range names in the asset do not match SETTINGS.RANGES. In the asset but not in SETTINGS: ' +
             JSON.stringify(unknown) + '; in SETTINGS but not in the asset: ' + JSON.stringify(absent) +
-            '; polygons without a range: ' + (info.n - info.n_range_field) + '. Correct SETTINGS.RANGES (names must match exactly) and press Run again.');
+            '; polygons without a range: ' + (info.n_all - info.n_range_field) + '. Correct SETTINGS.RANGES (names must match exactly) and press Run again.');
       return;
     }
     if (info.utm !== CRS) {
@@ -1286,6 +1289,7 @@ function stepLayers() {
 function stepMap() {
   var CFG = {
     STAGE: 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
+    RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     AOI_ASSET: SETTINGS.AOI_ASSET, RAW_PARTS: ASSETS.RAW_PARTS, QC01_ASSET: ASSETS.QC01, FINAL_ASSET: ASSETS.FINAL,
     V21_ASSET: ASSETS.V21, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, EXPECTED_ANCHOR_ID: null,
     W_N: SETTINGS.W_N, W_F: SETTINGS.W_F, CLASS_METHOD: SETTINGS.CLASS_METHOD, FIXED_BREAKS: [0.2, 0.4, 0.6, 0.8],
@@ -1347,7 +1351,7 @@ function stepMap() {
                        PRIORITY_RETAINED: 'Priority retained (Cat 1-2 -> Phase 1-3)',
                        DEPRIORITISED: 'De-prioritised (Cat 1-2 -> Phase 4-5 / Prot / Excl)',
                        NO_MAJOR_CHANGE: 'No major change', NOT_IN_V21: 'Not in v2.1 table'};
-  var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);
+  var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET).filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; })));
   var AOI = AOI_FC.geometry().dissolve({maxError: 1});
 
   /* ---------- small helpers (ES5 only: the Code Editor has an older JavaScript engine) ---------- */
@@ -2475,11 +2479,12 @@ function stepMap() {
 function stepValidate() {
   var CFG = {
     RANGE_NAME: SETTINGS.RANGE_NAME, CRS: SETTINGS.CRS, AOI_ASSET: SETTINGS.AOI_ASSET, FINAL_ASSET: ASSETS.FINAL,
+    RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, MIN_LOSS_PIXELS: 5, RECOVERED_RATIO: 0.80,
     TILE_SCALE: SETTINGS.TILE_SCALE
   };
 
-  var AOI = ee.FeatureCollection(CFG.AOI_ASSET).geometry().dissolve({maxError: 1});
+  var AOI = ee.FeatureCollection(CFG.AOI_ASSET).filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; }))).geometry().dissolve({maxError: 1});
   var fin = ee.FeatureCollection(CFG.FINAL_ASSET);
   var CRS = CFG.CRS;
 
@@ -2596,7 +2601,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 7 (asset: ' + SETTINGS.AOI_ASSET + ')');
+print('Script: FRPIM v2.2 division, build 8 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {

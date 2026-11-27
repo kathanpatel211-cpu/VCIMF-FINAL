@@ -127,7 +127,7 @@ function runFrpimStep(n) {
 var WATCH = [['ESA CCI biomass v7.0', 'ESA/CCI/Above_Ground_Biomass/V7_0']];
 var ids = ASSETS.RAW_PARTS.concat([ASSETS.QC01]).concat(WATCH.map(function (w) { return w[1]; }));
 var found = {}, waiting = ids.length;
-print('Script: FRPIM v2.2 division, build 7 (asset: ' + SETTINGS.AOI_ASSET + ')');
+print('Script: FRPIM v2.2 division, build 8 | ' + SETTINGS.DIVISION_NAME + ' | asset ' + SETTINGS.AOI_ASSET);
 print('Looking for saved range tables and checking the dataset version watch ...');
 ids.forEach(function (id) {
   var done = function (ok) {
@@ -216,6 +216,9 @@ var grid = ee.FeatureCollection(CFG.RANGES.map(function (r) { return gridFor(r.n
 '''
 r1 = r1[:i] + GRID + r1[j:]
 r1 = edit(r1, [
+    ("var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);",
+     "var AOI_ALL = ee.FeatureCollection(CFG.AOI_ASSET);   // the whole asset; only the ranges in SETTINGS.RANGES are modelled\n"
+     "var AOI_FC = AOI_ALL.filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; })));"),
     ("print('Blocks in grid (>= ' + CFG.MIN_BLOCK_HA + ' ha):', N_GRID);",
      "print('Blocks per range are counted inside the export tasks (a division-size grid is too large for the Console).');"),
     ("    n_blocks_grid: N_GRID,", "    n_blocks_grid: blocksIn.size(),        // blocks in this range's grid; RUN 2 adds the ranges"),
@@ -229,17 +232,18 @@ r1 = edit(r1, [
     ("  maxPixels: 1e11\n});\n", "  maxPixels: 1e11\n});\n}   // end of the shared tasks (skipped when ONLY_RANGES is set)\n"),
     ("print('NEXT: Tasks tab -> RUN ALL. When FRPIM01_raw_blocks_to_asset');\nprint('and FRPIM01_qc01_to_asset",
      "if (CFG.ONLY.length) { print('RE-RUN of ranges ' + CFG.ONLY.join(', ') + ' only: Tasks tab -> RUN those tasks. Then set ONLY_RANGES back to [] and press Run for RUN 2.'); }\nprint('NEXT: Tasks tab -> RUN ALL. When FRPIM01_raw_blocks_to_asset');\nprint('and FRPIM01_qc01_to_asset"),
-    ("  utm: LIB.utmCrs(AOI)\n};", "  utm: LIB.utmCrs(AOI),\n  ranges: AOI_FC.aggregate_array(CFG.RANGE_FIELD).distinct().sort(),\n  n_range_field: AOI_FC.filter(ee.Filter.notNull([CFG.RANGE_FIELD])).size()\n};"),
+    ("  utm: LIB.utmCrs(AOI)\n};", "  utm: LIB.utmCrs(AOI),\n  n_all: AOI_ALL.size(),\n  ranges: AOI_ALL.aggregate_array(CFG.RANGE_FIELD).distinct().sort(),\n  n_range_field: AOI_ALL.filter(ee.Filter.notNull([CFG.RANGE_FIELD])).size()\n};"),
     ("  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);",
      "  print('UTM zone of AOI centroid:', info.utm, '| working CRS:', CRS);\n"
      "  var expected = CFG.RANGES.map(function (r) { return r.name; });\n"
      "  var unknown = (info.ranges || []).filter(function (x) { return expected.indexOf(x) < 0; });\n"
      "  var absent = expected.filter(function (x) { return (info.ranges || []).indexOf(x) < 0; });\n"
      "  print('Ranges in the division asset (' + CFG.RANGE_FIELD + '):', info.ranges);\n"
-     "  if (unknown.length || absent.length || info.n_range_field !== info.n) {\n"
+     "  if (unknown.length) { print('Other ranges in the asset, NOT modelled in this run: ' + unknown.join(', ') + ' (modelled: ' + expected.join(', ') + ', ' + info.n + ' polygons).'); }\n"
+     "  if (absent.length || info.n_range_field !== info.n_all) {\n"
      "    print('STOP: the range names in the asset do not match SETTINGS.RANGES. In the asset but not in SETTINGS: ' +\n"
      "          JSON.stringify(unknown) + '; in SETTINGS but not in the asset: ' + JSON.stringify(absent) +\n"
-     "          '; polygons without a range: ' + (info.n - info.n_range_field) + '. Correct SETTINGS.RANGES (names must match exactly) and press Run again.');\n"
+     "          '; polygons without a range: ' + (info.n_all - info.n_range_field) + '. Correct SETTINGS.RANGES (names must match exactly) and press Run again.');\n"
      "    return;\n"
      "  }"),
     ("var refGeom = AOI.buffer(CFG.LOCAL_BUFFER_KM * 1000, 200);",
@@ -300,6 +304,8 @@ cfg01 = """  var CFG = {
 # ------------------------------------------------------------------ RUN 2
 r2 = body_after_cfg((src / '02_frpim.js').read_text())
 r2 = edit(r2, [
+    ("var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET);",
+     "var AOI_FC = ee.FeatureCollection(CFG.AOI_ASSET).filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; })));"),
     ("var raw = ee.FeatureCollection(CFG.RAW_ASSET).map(function (f) {",
      "var raw = ee.FeatureCollection(CFG.RAW_PARTS.map(function (id) { return ee.FeatureCollection(id); })).flatten().map(function (f) {"),
     ("var DECISION = ee.FeatureCollection(summaryRows(withRx, function () { return 'RANGE_TOTAL'; })\n  .cat(summaryRows(withRx, function (f) { return f.get('beat_id'); })));",
@@ -335,6 +341,7 @@ r2 = edit(r2, [
 
 cfg02 = """  var CFG = {
     STAGE: 'SCORE', PUBLISH_NOW: true, CRS: SETTINGS.CRS, RANGE_NAME: SETTINGS.RANGE_NAME, DIVISION_NAME: SETTINGS.DIVISION_NAME,
+    RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     AOI_ASSET: SETTINGS.AOI_ASSET, RAW_PARTS: ASSETS.RAW_PARTS, QC01_ASSET: ASSETS.QC01, FINAL_ASSET: ASSETS.FINAL,
     V21_ASSET: ASSETS.V21, DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, EXPECTED_ANCHOR_ID: null,
     W_N: SETTINGS.W_N, W_F: SETTINGS.W_F, CLASS_METHOD: SETTINGS.CLASS_METHOD, FIXED_BREAKS: [0.2, 0.4, 0.6, 0.8],
@@ -345,12 +352,15 @@ cfg02 = """  var CFG = {
 """
 cfg03 = """  var CFG = {
     RANGE_NAME: SETTINGS.RANGE_NAME, CRS: SETTINGS.CRS, AOI_ASSET: SETTINGS.AOI_ASSET, FINAL_ASSET: ASSETS.FINAL,
+    RANGE_FIELD: SETTINGS.RANGE_FIELD, RANGES: SETTINGS.RANGES,
     DRIVE_FOLDER: SETTINGS.DRIVE_FOLDER, MIN_LOSS_PIXELS: 5, RECOVERED_RATIO: 0.80,
     TILE_SCALE: SETTINGS.TILE_SCALE
   };
 """
 val = body_after_cfg((src / '03_validation.js').read_text())
-for a, b in [("fin.filter(ee.Filter.eq('excluded', 0));", "fin.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));"),
+for a, b in [("var AOI = ee.FeatureCollection(CFG.AOI_ASSET).geometry()",
+              "var AOI = ee.FeatureCollection(CFG.AOI_ASSET).filter(ee.Filter.inList(CFG.RANGE_FIELD, CFG.RANGES.map(function (r) { return r.name; }))).geometry()"),
+             ("fin.filter(ee.Filter.eq('excluded', 0));", "fin.filter(ee.Filter.eq('excluded', 0)).filter(ee.Filter.eq('excluded_c8', 0));"),
              ("retained.filter(ee.Filter.eq('E1', 1)).filter(ee.Filter.eq('D4', 0))\n                       .filter(ee.Filter.gte('E2', 0.6));",
               "retained.filter(ee.Filter.eq('F13', 1)).filter(ee.Filter.eq('DE2', 'no'))\n                       .filter(ee.Filter.gte('F14', 0.6));"),
              ("'suit_core'", "'RFI'"),
@@ -366,6 +376,25 @@ out += fn('stepValidate', '', cfg03, val, 'VALIDATION (Section 15, optional)')
 out += DISPATCH
 import sys
 target = 'scripts/FRPIM_v22_SABARKANTHA_DIVISION.js'
+argv = sys.argv[:]
+opts = {}
+while '--subset' in argv or '--name' in argv or '--title' in argv:
+    for k in ('--subset', '--name', '--title'):
+        if k in argv:
+            i = argv.index(k); opts[k] = argv[i + 1]; del argv[i:i + 2]
+sys.argv = argv
+if '--subset' in opts:
+    # e.g. --subset "Poshina:POS,Rdf Poshina:RPO" --name SBK_SD2 --title "Sabarkantha Sub-division 2"
+    pairs = [x.split(':') for x in opts['--subset'].split(',')]
+    i = out.index('  RANGES: ['); j = out.index('  ],', i) + 4
+    out = out[:i] + '  RANGES: [\n    ' + ', '.join("{name: '%s', code: '%s'}" % (n.strip(), c.strip()) for n, c in pairs) + '\n  ],' + out[j:]
+    nm = opts.get('--name', 'Subset'); tt = opts.get('--title', 'Selected ranges')
+    for x, y in (("  RANGE_NAME: 'Sabarkantha',", "  RANGE_NAME: '" + nm + "',"),
+                 ("  DIVISION_NAME: 'Sabarkantha Forest Division',", "  DIVISION_NAME: '" + tt + "',"),
+                 ("  DRIVE_FOLDER: 'FRPIM_v22_Sabarkantha',", "  DRIVE_FOLDER: 'FRPIM_v22_" + nm + "',"),
+                 (" *  7 ranges, ~81,000 ha of forest, ~8,000 blocks of 10 ha", " *  " + tt + ": " + ', '.join(n.strip() for n, c in pairs))):
+        assert out.count(x) == 1, x
+        out = out.replace(x, y)
 if len(sys.argv) >= 3:
     # another Earth Engine project: python build_frpim_division.py AOI_ASSET ASSET_ROOT [OUTFILE]
     aoi, root = sys.argv[1], sys.argv[2].rstrip('/') + '/'
