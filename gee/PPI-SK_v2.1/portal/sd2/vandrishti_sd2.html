@@ -338,7 +338,7 @@ dl.kv dt { color: var(--faint); } dl.kv dd { margin: 0; }
 #bigmap, #big3d { height: min(74vh, 760px); min-height: 420px; border-radius: 18px; overflow: hidden; position: relative; border: 1px solid var(--line); }
 #bigmap { background: var(--deep); }
 #big3d { background: radial-gradient(700px 400px at 70% 10%, #164a31, transparent 60%), #050e0a; }
-.leaflet-container { background: var(--deep); font-family: var(--font-ui); }
+html .leaflet-container { background: var(--deep); font-family: var(--font-ui); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); }
 .leaflet-bar a { background: var(--panel-2); color: var(--ink); border-color: var(--line-2); }
 .leaflet-control-scale-line { background: rgba(4, 11, 8, .7); color: var(--ink); border-color: var(--muted); }
@@ -350,6 +350,21 @@ dl.kv dt { color: var(--faint); } dl.kv dd { margin: 0; }
 .flowcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 860px) { .flowcards { grid-template-columns: minmax(0, 1fr); } }
 .still *, .still *::before, .still *::after { animation: none !important; }
+.maps3 figure.zoomable { cursor: zoom-in; }
+.maps3 figure.zoomable .mapwrap { position: relative; display: block; border-radius: 12px; transition: transform .2s, box-shadow .2s; }
+.maps3 figure.zoomable:hover .mapwrap, .maps3 figure.zoomable:focus-visible .mapwrap { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--gold), var(--shadow); }
+.maps3 .open { position: absolute; right: 8px; bottom: 8px; font-size: 11px; font-weight: 700; background: rgba(4, 11, 8, .82); color: var(--gold); border: 1px solid rgba(246, 196, 106, .45); border-radius: 8px; padding: 3px 8px; pointer-events: none; }
+.mpanel { position: fixed; inset: 0; z-index: 1500; display: grid; grid-template-columns: minmax(0, 1fr) min(1020px, 100%); }
+.mpanel .scrim { background: rgba(0, 0, 0, .6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.mpanel .side { background: var(--deep); border-left: 1px solid var(--line-2); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; box-shadow: -20px 0 60px rgba(0, 0, 0, .5); animation: slidein .35s cubic-bezier(.2, .8, .2, 1) both;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); }
+@keyframes slidein { from { transform: translateX(40px); opacity: .001; } to { transform: none; opacity: 1; } }
+.mpanel .ph { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.mpanel .ph h2 { font-size: 17px; }
+.mpanel .pmap { position: relative; min-height: 0; }
+.mpanel .pmap > div { position: absolute; inset: 0; }
+.mpanel .pf { padding: 10px 16px 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+@media (max-width: 760px) { .mpanel { grid-template-columns: 0 minmax(0, 1fr); } }
 .just { border-left: 3px solid var(--gold); background: rgba(246, 196, 106, .08); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; font-size: 13.5px; }
 .just b { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
@@ -615,11 +630,56 @@ function mapSVG(geom, layer, opts) {
   return out + "</svg>";
 }
 function legendRow(tbl, keys) { return el("div", { class: "legend" }, keys.map((k) => el("span", null, el("i", { style: "background:" + tbl[k][1] }), tbl[k][0]))); }
-function maps3(geom) {
+function maps3(geom, ctx) {
   const wrap = el("div", { class: "maps3" });
-  [["n", "Map 1 · Restoration need", NEED, [1, 2, 3, 4, 5]], ["f", "Map 2 · Feasibility", FEAS, [1, 2, 3, 4, 5]], ["p", "Map 3 · Priority phase", PHASE, [1, 2, 3, 4, 5, 6, 7]]].forEach(([k, t, tbl, keys]) =>
-    wrap.append(el("figure", null, el("figcaption", { text: t }), svgEl(mapSVG(geom, k)), legendRow(tbl, keys))));
+  [["n", "Map 1 · Restoration need", NEED, [1, 2, 3, 4, 5]], ["f", "Map 2 · Feasibility", FEAS, [1, 2, 3, 4, 5]], ["p", "Map 3 · Priority phase", PHASE, [1, 2, 3, 4, 5, 6, 7]]].forEach(([k, t, tbl, keys]) => {
+    if (!ctx) { wrap.append(el("figure", null, el("figcaption", { text: t }), svgEl(mapSVG(geom, k)), legendRow(tbl, keys))); return; }
+    const open = () => openMapPanel(geom, k, ctx);
+    wrap.append(el("figure", { class: "zoomable", tabindex: "0", role: "button", "aria-label": t + ": open large on the range map", onclick: open, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } },
+      el("figcaption", { text: t }), el("span", { class: "mapwrap" }, svgEl(mapSVG(geom, k)), el("span", { class: "open", text: "Open large ⤢" })), legendRow(tbl, keys)));
+  });
   return wrap;
+}
+let PANEL = null;
+function closeMapPanel() { if (!PANEL) return; PANEL.map.remove(); PANEL.node.remove(); document.removeEventListener("keydown", PANEL.key); document.body.style.overflow = ""; if (PANEL.back) PANEL.back.focus(); PANEL = null; }
+function openMapPanel(geom, layer, ctx) {
+  closeMapPanel();
+  const r = ctx.r, M = RMETA[r], w = ctx.w;
+  const mapHost = el("div"), legend = el("div", { class: "grid", style: "gap:6px" });
+  const node = el("div", { class: "mpanel", role: "dialog", "aria-modal": "true", "aria-label": "Range map" });
+  const closeBtn = el("button", { class: "btn ghost", type: "button", onclick: closeMapPanel, text: "Close ✕" });
+  const zoomWork = el("button", { class: "btn", type: "button", text: "Zoom to work" }), zoomRange = el("button", { class: "btn ghost", type: "button", text: "Whole " + M.name + " range" });
+  const layerSeg = seg3((k) => { layer = k; blocks.setStyle(style); draw(); }, layer);
+  node.append(el("div", { class: "scrim", onclick: closeMapPanel }),
+    el("div", { class: "side" },
+      el("div", { class: "ph" }, el("div", null, el("div", { class: "eyebrow", text: M.name + " Range" + (w ? " · " + dispId(w.id) : "") }), el("h2", { text: w ? w.name : (ctx.name || "This KML") })),
+        el("div", { class: "btns" }, layerSeg, zoomWork, zoomRange, closeBtn)),
+      el("div", { class: "pmap" }, mapHost),
+      el("div", { class: "pf" }, legend, el("div", { class: "hint", text: "Thick white line: this work. Coloured outlines: other works of the range, by stage. Tap a block for its FRPIM values." }))));
+  document.body.append(node); document.body.style.overflow = "hidden";
+  const style = (f) => { const b = f.properties, on = b.r === r; return { fillColor: on ? colourOf(b, layer) : "#183126", fillOpacity: on ? 0.9 : 0.45, color: "#0a1a12", weight: 0.4 }; };
+  const map = L.map(mapHost, { preferCanvas: true, zoomSnap: 0.25, attributionControl: false });
+  const renderer = L.canvas({ padding: 0.4 });
+  const near = BLOCKS;
+  const blocks = L.geoJSON({ type: "FeatureCollection", features: near.map((b) => ({ type: "Feature", properties: b, geometry: b.geom })) },
+    { renderer, style, onEachFeature: (f, l) => l.bindPopup(() => { const b = f.properties; return el("div", { style: "font-size:12.5px;line-height:1.55" }, el("b", { text: RMETA[b.r].name + " · " + b.bt + " beat" }), el("br"), PHASE[b.p][0],
+      b.p <= 5 ? [el("br"), "Need " + NEED[b.n][0] + " (RNI " + b.rni.toFixed(3) + ")", el("br"), "Feasibility " + FEAS[b.f][0] + " (RFI " + b.rfi.toFixed(3) + ")", el("br"), RX[b.rx] + (b.smc ? " + SMC" : "")] : null); }) }).addTo(map);
+  RANGES.forEach((R, i) => L.geoJSON(R.outline, { renderer, interactive: false, style: { fill: false, color: RMETA[i].colour, weight: i === r ? 2.4 : 1.2, dashArray: "6 4", opacity: i === r ? 1 : 0.6 } }).addTo(map));
+  const stCol = (st) => (st.startsWith("APPROVED") ? "#4fd38b" : st === "DCF" ? "#f6c46a" : st === "ACF" || st === "RET_ACF" ? "#74b4ff" : st === "REJECTED" ? "#ff6f5e" : "#dedede");
+  Store.all().filter((o) => o.r === r && (!w || o.id !== w.id) && o.geom).forEach((o) => L.geoJSON(o.geom, { style: { color: stCol(o.status), weight: 2, fillOpacity: 0.08, fillColor: stCol(o.status) } }).bindTooltip(dispId(o.id) + " · " + o.name).addTo(map));
+  L.geoJSON(geom, { interactive: false, style: { color: "#000", weight: 7, opacity: 0.8, fill: false } }).addTo(map);
+  const work = L.geoJSON(geom, { interactive: false, style: { color: "#ffffff", weight: 3, fillColor: "#ffffff", fillOpacity: 0.12 } }).addTo(map);
+  L.control.scale({ imperial: false }).addTo(map);
+  const fitWork = () => map.fitBounds(work.getBounds(), { padding: [60, 60], maxZoom: 16 });
+  const fitRange = () => map.fitBounds(L.latLngBounds(BLOCKS.filter((b) => b.r === r).map((b) => [b.y, b.x])), { padding: [16, 16] });
+  zoomWork.addEventListener("click", fitWork); zoomRange.addEventListener("click", fitRange);
+  const draw = () => { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE; legend.replaceChildren(legendRow(tbl, layer === "p" ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7])); };
+  draw();
+  requestAnimationFrame(() => { map.invalidateSize(); fitWork(); });
+  const key = (e) => { if (e.key === "Escape") closeMapPanel(); };
+  document.addEventListener("keydown", key);
+  PANEL = { map, node, key, back: document.activeElement };
+  closeBtn.focus({ preventScroll: true });
 }
 function verdictBox(w) {
   const v = VERDICT[w.verdict];
@@ -838,7 +898,7 @@ function logoMark(size) { return svgEl('<svg viewBox="0 0 32 32" width="' + size
 
 /* ---------------- session and routing ---------------- */
 let ROLE = null, RIDX = null, VIEW = { v: "dash" }, bigmap = null, SCENES = [], ANIMATE = true;
-function killScenes() { SCENES.forEach((s) => s && s.destroy()); SCENES = []; if (bigmap) { bigmap.remove(); bigmap = null; } }
+function killScenes() { closeMapPanel(); SCENES.forEach((s) => s && s.destroy()); SCENES = []; if (bigmap) { bigmap.remove(); bigmap = null; } }
 let DIRTY = false;
 document.addEventListener("input", (e) => { if (e.target && e.target.closest && e.target.closest("main")) DIRTY = true; });
 function go(v) { VIEW = v; ANIMATE = true; DIRTY = false; render(); window.scrollTo(0, 0); }
@@ -1292,7 +1352,7 @@ function editView(main, id) {
   }
   function refresh() {
     mapsHost.replaceChildren();
-    if (st.result) mapsHost.append(el("h2", { text: "FRPIM check of this KML" }), maps3({ type: "FeatureCollection", features: st.parsed.features }));
+    if (st.result) mapsHost.append(el("h2", { text: "FRPIM check of this KML" }), maps3({ type: "FeatureCollection", features: st.parsed.features }, { r: RIDX, name: name.value || st.fileName }));
     updateFindings();
   }
   let tmr = 0; const later = () => { clearTimeout(tmr); tmr = setTimeout(updateFindings, 450); };
@@ -1405,7 +1465,7 @@ function workView(main, id) {
     el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => saveReport(w), text: "Download report" }), el("button", { class: "btn ghost", type: "button", onclick: () => go({ v: "works" }), text: "Register" }))));
   main.append(el("div", { class: "card" }, trackBar(w)));
   const left = el("div", { class: "grid" }), right = el("div", { class: "grid" });
-  left.append(el("div", { class: "card" }, el("h2", null, "Treatment KML on the three FRPIM maps", el("small", { text: w.fileName || "" })), maps3(w.geom)));
+  left.append(el("div", { class: "card" }, el("h2", null, "Treatment KML on the three FRPIM maps", el("small", { text: "click a map to open it large on the range map" })), maps3(w.geom, { r: w.r, w })));
   left.append(el("div", { class: "card" }, el("h2", { text: "FRPIM findings" }), findings(w)));
   const det = el("dl", { class: "kv" });
   const kv = (k, v) => { if (v != null && v !== "") det.append(el("dt", { text: k }), el("dd", { text: String(v) })); };
