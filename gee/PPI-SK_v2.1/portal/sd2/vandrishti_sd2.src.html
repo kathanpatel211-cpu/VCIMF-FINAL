@@ -349,6 +349,9 @@ dl.kv dt { color: var(--faint); } dl.kv dd { margin: 0; }
 .foot b { font-family: var(--font-display); color: var(--muted); }
 .flowcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 860px) { .flowcards { grid-template-columns: minmax(0, 1fr); } }
+.still *, .still *::before, .still *::after { animation: none !important; }
+.just { border-left: 3px solid var(--gold); background: rgba(246, 196, 106, .08); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; font-size: 13.5px; }
+.just b { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 /*LEAFLET_CSS*/
 </style>
@@ -835,7 +838,9 @@ function logoMark(size) { return svgEl('<svg viewBox="0 0 32 32" width="' + size
 /* ---------------- session and routing ---------------- */
 let ROLE = null, RIDX = null, VIEW = { v: "dash" }, bigmap = null, SCENES = [], ANIMATE = true;
 function killScenes() { SCENES.forEach((s) => s && s.destroy()); SCENES = []; if (bigmap) { bigmap.remove(); bigmap = null; } }
-function go(v) { VIEW = v; ANIMATE = true; render(); window.scrollTo(0, 0); }
+let DIRTY = false;
+document.addEventListener("input", (e) => { if (e.target && e.target.closest && e.target.closest("main")) DIRTY = true; });
+function go(v) { VIEW = v; ANIMATE = true; DIRTY = false; render(); window.scrollTo(0, 0); }
 function me() { return userOf(ROLE, RIDX); }
 function trail(w, action, note) { (w.trail = w.trail || []).push({ at: new Date().toISOString(), role: ROLE, user: me(), action, note: note || "" }); w.updatedAt = new Date().toISOString(); }
 function scoped() { return ROLE === "RFO" ? Store.all().filter((w) => w.r === RIDX) : Store.all(); }
@@ -1252,9 +1257,14 @@ function editView(main, id) {
       el("div", { class: "field" }, "Water for watering seedlings", radioGroup("water", WATER, c0.water)),
       el("label", { class: "field" }, "Field observations", el("textarea", { id: "rc-note", maxlength: "800", placeholder: "Slope, gullies, rock, existing rootstock, grazing pressure, anything the ACF should know (optional)" }, c0.note || ""))));
   const smcHint = el("div", { class: "banner a", hidden: true });
+  const just = el("textarea", { id: "p-just", maxlength: "1000", placeholder: "Why this site should be treated although FRPIM gives it lower priority: e.g. catchment of a village tank, plantation gap, soil erosion threatening a road, public demand" });
+  just.value = c0.just || "";
+  const justHead = el("h3"), justBox = el("div", { class: "subcard", hidden: true, style: "border-color:rgba(246,196,106,.45)" }, justHead, el("label", { class: "field" }, "Why this site (required to submit)", just));
+  const costHint = el("div", { class: "hint", hidden: true });
   const file = el("input", { type: "file", id: "p-file", hidden: true, accept: ".kml,.kmz,.geojson,.json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" });
   const fmsg = el("div", { class: "hint" }, st.fileName ? "Current KML: " + st.fileName : "");
-  const preview = el("div", { class: "grid", style: "gap:14px" });
+  const preview = el("div", { class: "grid", style: "gap:14px" }), mapsHost = el("div", { class: "grid", style: "gap:14px" }), findHost = el("div", { class: "still" });
+  preview.append(mapsHost, findHost);
   const drop = el("div", { class: "drop", tabindex: "0", role: "button", "aria-label": "Choose the treatment KML", onclick: () => file.click(),
     onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } } },
     el("div", { class: "ico" }, svgEl('<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="#f6c46a" stroke-width="2" fill="none" stroke-linecap="round"/></svg>')),
@@ -1272,13 +1282,21 @@ function editView(main, id) {
     else smcHint.hidden = true;
   }
   cert.addEventListener("change", smcCompare);
-  function refresh() {
-    preview.replaceChildren();
-    if (!st.result) return;
+  function updateFindings() {
+    if (!st.result) { findHost.replaceChildren(); justBox.hidden = true; return; }
     const vd = verdictOf(st.result, treat.value, parseFloat(est.value) || 0, RIDX);
-    preview.append(el("h2", { text: "FRPIM check of this KML" }), maps3({ type: "FeatureCollection", features: st.parsed.features }), findings(Object.assign({ result: st.result, verdict: vd.v }, vd)));
+    findHost.replaceChildren(findings(Object.assign({ result: st.result, verdict: vd.v }, vd)));
+    justBox.hidden = vd.v === "g"; justHead.textContent = "FRPIM check " + VERDICT[vd.v][0] + ": record why this work is needed";
     smcCompare();
   }
+  function refresh() {
+    mapsHost.replaceChildren();
+    if (st.result) mapsHost.append(el("h2", { text: "FRPIM check of this KML" }), maps3({ type: "FeatureCollection", features: st.parsed.features }));
+    updateFindings();
+  }
+  let tmr = 0; const later = () => { clearTimeout(tmr); tmr = setTimeout(updateFindings, 450); };
+  cost.addEventListener("input", () => { const v = parseFloat(cost.value) || 0; costHint.hidden = v < 1000;
+    costHint.textContent = "That is ₹ " + (v / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 }) + " crore. Enter the cost in lakh: for ₹ 20,00,000 type 20."; });
   async function onFile(f) {
     fmsg.className = "hint"; fmsg.textContent = "Reading " + f.name + "…";
     try {
@@ -1294,9 +1312,9 @@ function editView(main, id) {
       refresh();
     } catch (e) { fmsg.className = "err"; fmsg.textContent = (e && e.message) || "The file could not be read."; }
   }
-  treat.addEventListener("change", refresh); est.addEventListener("input", refresh);
+  treat.addEventListener("change", updateFindings); est.addEventListener("input", later);
   const certData = () => ({ checks: certBoxes.map((b) => b.checked), smcSuit: radioVal(cert, "smcSuit"), smcWorks: checkVals(cert, "smcWorks"),
-    water: radioVal(cert, "water"), note: cert.querySelector("#rc-note").value.trim(), at: new Date().toISOString(), by: me() });
+    water: radioVal(cert, "water"), note: cert.querySelector("#rc-note").value.trim(), just: just.value.trim(), at: new Date().toISOString(), by: me() });
   async function save(submit) {
     const d = { name: name.value.trim(), beat: beat.value, scheme: scheme.value, year: year.value, treat: treat.value, estArea: parseFloat(est.value) || null, estCost: parseFloat(cost.value) || null, seedlings: parseInt(seed.value) || null, remarks: rem.value.trim() };
     const fail = (t, focus) => { msg.className = "err"; msg.textContent = t; if (focus) focus.focus(); };
@@ -1308,6 +1326,7 @@ function editView(main, id) {
       if (!c.checks.every(Boolean)) return fail("Certify every item of the field certification before submitting.");
       if (!c.smcSuit) return fail("Record the SMC suitability of the site.");
       if ((c.smcSuit === "Suitable" || c.smcSuit === "Partly suitable") && !c.smcWorks.length) return fail("Tick the SMC works proposed.");
+      if (verdictOf(st.result, d.treat, d.estArea || 0, RIDX).v !== "g" && c.just.length < 10) return fail("The FRPIM check is not Green. Write why this site is needed (at least 10 characters).", just);
       if (!smcHint.hidden && c.note.length < 15) return fail("Your SMC assessment differs from FRPIM. Explain it in the field observations (at least 15 characters).");
     }
     const geom = simplifyFC({ type: "FeatureCollection", features: st.parsed.features.map((f) => ({ type: "Feature", properties: { name: String(f.properties.name || "").slice(0, 80) }, geometry: f.geometry })) });
@@ -1328,8 +1347,8 @@ function editView(main, id) {
       el("div", { class: "card" }, el("h2", { text: "2 · Work details" }), el("div", { class: "formgrid" },
         el("label", { class: "field full" }, "Name of work *", name), el("label", { class: "field" }, "Beat", beat), el("label", { class: "field" }, "Scheme", scheme),
         el("label", { class: "field" }, "Work year", year), el("label", { class: "field" }, "Treatment proposed", treat), el("label", { class: "field" }, "Area in the estimate (ha) *", est),
-        el("label", { class: "field" }, "Estimated cost (₹ lakh)", cost), el("label", { class: "field full" }, "Seedlings proposed", seed), el("label", { class: "field full" }, "Remarks", rem))),
-      el("div", { class: "card" }, el("h2", null, "3 · Field certification by RFO", el("small", { text: "required to submit" })), cert, smcHint),
+        el("label", { class: "field" }, "Estimated cost (₹ lakh)", cost, costHint), el("label", { class: "field full" }, "Seedlings proposed", seed), el("label", { class: "field full" }, "Remarks", rem))),
+      el("div", { class: "card" }, el("h2", null, "3 · Field certification by RFO", el("small", { text: "required to submit" })), justBox, cert, smcHint),
       el("div", { class: "card action" }, el("h2", { text: "4 · Submit" }), el("div", { class: "hint", text: "By submitting, the RFO certifies the site and the SMC assessment. The work goes to the ACF for scrutiny. You can save a draft first." }),
         el("div", { class: "btns" }, el("button", { class: "btn gold big", type: "button", onclick: () => save(true), text: "Certify and submit to ACF" }), el("button", { class: "btn ghost", type: "button", onclick: () => save(false), text: "Save draft" })), msg))));
   if (st.result) refresh();
@@ -1363,6 +1382,13 @@ function rfoCertCard(w) {
       diff ? el("div", { class: "banner a", text: "The field assessment differs from FRPIM. The ACF should check the RFO's explanation." }) : null,
       c.note ? el("div", { class: "banner i", text: c.note }) : null));
 }
+function justCard(w) {
+  if (w.verdict === "g") return null;
+  const r = w.rfoCert && w.rfoCert.just, a = w.acf && w.acf.just;
+  return el("div", { class: "card" }, el("h2", null, "Why this work is needed", el("small", { text: "FRPIM check " + VERDICT[w.verdict][0] + ": justification outside the model" })),
+    el("div", { class: "just" }, el("b", { text: "RFO, " + rOf(w).name }), r || "Not recorded yet"),
+    el("div", { class: "just" }, el("b", { text: "ACF, " + APP.unit }), a || (["DRAFT", "ACF", "RET_RFO", "RET_ACF"].includes(w.status) ? "To be recorded by the ACF before sending to the DCF" : "Not recorded")));
+}
 function acfCard(w) {
   const a = w.acf; if (!a) return null;
   return el("div", { class: "card" }, el("h2", null, "ACF scrutiny", el("small", { text: dd(a.at) })),
@@ -1387,6 +1413,7 @@ function workView(main, id) {
   kv("Estimated cost", w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : null); kv("Seedlings", w.seedlings ? w.seedlings.toLocaleString("en-IN") : null);
   kv("Proposed by", w.createdBy + ", " + dd(w.createdAt)); kv("RFO remarks", w.remarks);
   const act = actionBox(w); if (act) right.append(act);
+  const j = justCard(w); if (j) right.append(j);
   right.append(el("div", { class: "card" }, el("h2", { text: "Work details" }), det));
   right.append(rfoCertCard(w));
   const ac = acfCard(w); if (ac) right.append(ac);
@@ -1422,29 +1449,30 @@ function actionBox(w) {
   if (ROLE === "ACF" && ["ACF", "RET_ACF"].includes(w.status)) {
     const boxes = ACF_CHECKS.map((c, i) => el("input", { type: "checkbox", id: "ac" + i }));
     const insp = el("input", { type: "checkbox", id: "ac-insp" }), inspOn = el("input", { type: "date", id: "ac-insp-on", style: "max-width:190px" });
-    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: "Optional: your remarks for the DCF, or what the RFO should review" });
-    const acf = () => ({ checks: boxes.map((b) => b.checked), inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: rem.value.trim(), at: new Date().toISOString(), by: ROLES.ACF.id });
+    const ng = w.verdict !== "g";
+    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: ng ? "Why the deviation from FRPIM is needed and why this plantation is required here (required to send to the DCF)" : "Optional: your remarks for the DCF, or what the RFO should review" });
+    const acf = () => ({ checks: boxes.map((b) => b.checked), inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: rem.value.trim(), just: ng ? rem.value.trim() : "", at: new Date().toISOString(), by: ROLES.ACF.id });
     const box = el("div", { class: "card action" }, el("h2", null, "ACF scrutiny", el("small", { text: "choose one of the two actions" })));
     if (w.status === "RET_ACF") { const last = (w.trail || []).filter((t) => t.role === "DCF").pop(); if (last) box.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the DCF: " }), last.note || "re-examine the proposal")); }
-    box.append(el("div", { class: "hint", text: "The RFO has certified the site and SMC suitability (below). Tick what you checked and add remarks if you wish; both are optional." }),
+    box.append(el("div", { class: "hint", text: ng ? "FRPIM check " + VERDICT[w.verdict][0] + ". The RFO has recorded why the site is needed (below). To send it to the DCF, write why the deviation is needed; the checks stay optional." : "The RFO has certified the site and SMC suitability (below). Tick what you checked and add remarks if you wish; both are optional." }),
       el("div", { class: "checks" }, ACF_CHECKS.map((c, i) => el("label", null, boxes[i], c)), el("label", null, insp, "Joint / sample site inspection done by ACF")),
-      el("label", { class: "field" }, "Date of inspection", inspOn), el("label", { class: "field" }, "ACF remarks (optional)", rem),
+      el("label", { class: "field" }, "Date of inspection", inspOn), el("label", { class: "field" }, ng ? "Justification for the deviation (required to send to the DCF)" : "ACF remarks (optional)", rem),
       decisionTiles([
-        { tone: "go", icon: "→", title: "Send to DCF", sub: "Recommend the work for final approval", run: () => commit("DCF", "Recommended to DCF", rem.value.trim(), { acf: acf() }) },
+        { tone: "go", icon: "→", title: "Send to DCF", sub: "Recommend the work for final approval", run: () => { if (ng && rem.value.trim().length < 10) { fail("Write why the deviation is needed (at least 10 characters) before sending it to the DCF."); rem.focus(); return; } commit("DCF", ng ? "Recommended to DCF with justification for deviation" : "Recommended to DCF", rem.value.trim(), { acf: acf() }); } },
         { tone: "back", icon: "↩", title: "Return to RFO", sub: "Send back for further review or revision", run: () => commit("RET_RFO", "Returned to RFO for further review", rem.value.trim(), { acf: acf() }) }
       ]), msg);
     return box;
   }
   if (ROLE === "DCF" && w.status === "DCF") {
-    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Remarks (optional for approval)" : "Reason, required to approve although the FRPIM check is " + VERDICT[w.verdict][0] });
+    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: "Remarks (optional to approve; required to return or not approve)" });
     const green = w.verdict === "g", need = (n, t) => { const r = rem.value.trim(); if (r.length < n) { fail(t); rem.focus(); return null; } return r; };
     return el("div", { class: "card action" }, el("h2", null, "DCF decision", el("small", { text: "final authority" })),
-      el("div", { class: "hint", text: (green ? "FRPIM check Green." : "FRPIM check " + VERDICT[w.verdict][0] + ": approval is recorded as a deviation with your reason.") + " The RFO certification and ACF scrutiny are below." }),
+      el("div", { class: "hint", text: (green ? "FRPIM check Green." : "FRPIM check " + VERDICT[w.verdict][0] + ". The RFO and the ACF have recorded why this work is needed (below).") + " Approve it, or approve it with a recorded deviation from FRPIM." }),
       el("label", { class: "field" }, "Remarks", rem), msg,
       decisionTiles([
-        { tone: "go", icon: "✓", title: "Approve", sub: green ? "Sanction the work as proposed" : "Only for Green works", disabled: !green,
+        { tone: "go", icon: "✓", title: "Approve", sub: "Sanction the work as proposed",
           run: () => commit("APPROVED", "Approved by DCF", rem.value.trim(), { dcf: { decision: "Approved", remarks: rem.value.trim(), at: new Date().toISOString() } }) },
-        { tone: "warn", icon: "≠", title: "Approve with recorded deviation", sub: "Approve and record why FRPIM is overridden", run: () => { const r = need(15, "Write the reason for the deviation from FRPIM (at least 15 characters)."); if (r) commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } },
+        { tone: "warn", icon: "≠", title: "Approve with recorded deviation", sub: "Approve and record why FRPIM is overridden", run: () => { const r = rem.value.trim() || "Deviation from FRPIM accepted on the justification recorded by the RFO and the ACF."; commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } },
         { tone: "back", icon: "↩", title: "Return to ACF", sub: "Ask for re-examination", run: () => { const r = need(10, "Write what must be re-examined."); if (r) commit("RET_ACF", "Returned to ACF by DCF", r); } },
         { tone: "stop", icon: "✕", title: "Not approve", sub: "Close the proposal with reasons", run: () => { const r = need(10, "Write the reason for not approving."); if (r) commit("REJECTED", "Not approved by DCF", r, { dcf: { decision: "Not approved", remarks: r, at: new Date().toISOString() } }); } }
       ]));
@@ -1501,6 +1529,7 @@ async function saveReport(w) {
     "<table><tr><th>Need (Map 1)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(NEED, r.byNeed, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
     "<table><tr><th>Feasibility (Map 2)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(FEAS, r.byFeas, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
     "<table><tr><th>What FRPIM recommends</th><th class=n>ha</th></tr>" + Object.keys(RX).filter((k) => r.byRx[k] > 0).map((k) => "<tr><td>" + esc(RX[k]) + "</td><td class=n>" + r.byRx[k].toFixed(2) + "</td></tr>").join("") + (r.smcHa > 0 ? "<tr><td>of which SMC works required</td><td class=n>" + r.smcHa.toFixed(2) + "</td></tr>" : "") + "</table>" +
+    (w.verdict !== "g" ? "<h2>Why this work is needed</h2><p><b>RFO:</b> " + esc((c && c.just) || "-") + "</p><p><b>ACF:</b> " + esc((a && a.just) || "-") + "</p>" : "") +
     (c ? "<h2>RFO field certification (" + esc(dd(c.at)) + ")</h2><table>" + RFO_CHECKS.map((t, i) => ck(c.checks && c.checks[i], t)).join("") + "</table><br><table><tr><th>SMC suitability</th><td>" + esc(c.smcSuit) + "</td></tr><tr><th>SMC works proposed</th><td>" + esc((c.smcWorks || []).join(", ")) + "</td></tr><tr><th>Water</th><td>" + esc(c.water) + "</td></tr><tr><th>Field observations</th><td>" + esc(c.note) + "</td></tr></table>" : "") +
     (a ? "<h2>ACF scrutiny (" + esc(dd(a.at)) + ")</h2><table>" + ACF_CHECKS.map((t, i) => ck(a.checks && a.checks[i], t)).join("") + (a.inspected ? ck(true, "Joint / sample site inspection by ACF" + (a.inspectedOn ? " on " + dd(a.inspectedOn) : "")) : "") + "</table><p><b>ACF remarks:</b> " + esc(a.remarks) + "</p>" : "") +
     (w.dcf ? "<h2>DCF decision</h2><p><b>" + esc(w.dcf.decision) + "</b> (" + esc(dd(w.dcf.at)) + ")<br>" + esc(w.dcf.remarks) + "</p>" : "") +
@@ -1529,11 +1558,12 @@ async function loadDemo() {
       remarks: "Mock-drill example.", fileName: "example_" + RMETA[s.r].code.toLowerCase() + "_" + (k + 1) + ".kml", geom: { type: "FeatureCollection", features }, result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, sOther: vd.sOther, matchPct: vd.matchPct,
       createdAt: iso(ago[0]), createdBy: rfo, model: APP.model, trail: [],
       rfoCert: { checks: RFO_CHECKS.map(() => true), smcSuit: smc[0], smcWorks: smc[1], water: smc[2], note: stage === "APPROVED_DEV" ? "Gullies feed the village tank; SMC will cut the silt inflow." : "Boundary walked with GPS on the date of inspection.", at: iso(ago[1]), by: rfo } };
+    if (vd.v !== "g") w.rfoCert.just = stage === "APPROVED_DEV" ? "Catchment of the Golvada village tank: gullies carry silt into the tank every monsoon. SMC and drought-hardy planting will hold the soil." : "Gap between two earlier plantations of this beat; villagers have asked for the site to be closed and planted.";
     w.trail.push(mk("RFO", "Draft created", "KML " + w.fileName, ago[0]));
     w.trail.push(mk("RFO", "Certified and submitted to ACF", "FRPIM " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2 · SMC: " + smc[0] + " (" + smc[1].join(", ") + ")", ago[1]));
     const ok = ACF_CHECKS.map(() => true);
     if (["APPROVED", "DCF", "APPROVED_DEV"].includes(stage)) {
-      w.acf = { checks: ok, inspected: k === 0, inspectedOn: k === 0 ? iso(ago[2] + 1) : null, remarks: stage === "APPROVED_DEV" ? "Low FRPIM priority, but SMC here protects the catchment of the village tank downstream. RFO's SMC assessment confirmed at site." : "RFO certification checked. Phase 1-2 land; SMC works and rates in order.", at: iso(ago[2]), by: ROLES.ACF.id };
+      w.acf = { checks: ok, inspected: k === 0, inspectedOn: k === 0 ? iso(ago[2] + 1) : null, just: vd.v !== "g" ? "Site inspected. The RFO's reason holds: the work protects the village tank catchment and links two existing plantations. Recommended despite lower FRPIM priority." : "", remarks: stage === "APPROVED_DEV" ? "Low FRPIM priority, but SMC here protects the catchment of the village tank downstream. RFO's SMC assessment confirmed at site." : "RFO certification checked. Phase 1-2 land; SMC works and rates in order.", at: iso(ago[2]), by: ROLES.ACF.id };
       w.trail.push(mk("ACF", "Recommended to DCF", w.acf.remarks, ago[2]));
       if (stage === "APPROVED") { w.dcf = { decision: "Approved", remarks: "Approved. Take up SMC before the monsoon.", at: iso(ago[3]) }; w.trail.push(mk("DCF", "Approved by DCF", w.dcf.remarks, ago[3])); }
       if (stage === "APPROVED_DEV") { w.dcf = { decision: "Approved with recorded deviation", remarks: "Approved as catchment treatment for the village tank; deviation from FRPIM priority recorded.", at: iso(ago[3]) }; w.trail.push(mk("DCF", "Approved by DCF with recorded deviation", w.dcf.remarks, ago[3])); }
@@ -1555,7 +1585,7 @@ async function boot() {
   try { await loadData(); } catch (e) { $("#app").replaceChildren(el("div", { class: "gut", style: "padding-block:40px" }, el("div", { class: "banner r", text: "The FRPIM blocks could not be loaded. Reload the page." }))); return; }
   render();
   Store.on(() => { if (!ROLE) return; const typing = document.activeElement && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName);
-    if (VIEW.v === "new" || VIEW.v === "map" || typing) return; render(); });
+    if (VIEW.v === "new" || VIEW.v === "map" || typing || DIRTY) return; render(); });
   await Store.init();
   render();
 }
