@@ -121,7 +121,7 @@ class Atlas:
     # -- header / footer
     def header(self, fig, section, code, title, sub, page):
         fig.patches.append(Rectangle((0, 1 - 0.34 / H), 1, 0.34 / H, transform=fig.transFigure, facecolor=FOREST, zorder=0))
-        T(fig, 0.50 / W, 1 - 0.17 / H, self.opt["title"].upper() + "  ·  RESTORATION ATLAS", 8.5, "#d8e8dc", "semibold", va="center")
+        T(fig, 0.50 / W, 1 - 0.17 / H, (self.opt["name"] + " Restoration Atlas  ·  " + self.opt["title"]).upper(), 8.5, "#d8e8dc", "semibold", va="center")
         T(fig, 1 - 0.50 / W, 1 - 0.17 / H, "FRPIM v2.2  ·  " + self.opt["date"], 8.5, "#d8e8dc", ha="right", va="center")
         y = 1 - 0.68 / H
         if section:
@@ -574,11 +574,13 @@ def cover(A, opt, retained):
         ax.add_patch(PathPatch(path_of(g), facecolor="none", edgecolor="#f6c46a", linewidth=0.8, linestyle=(0, (5, 2))))
     b = A.union.bounds
     ax.set_xlim(b[0] - 2000, b[2] + 2000); ax.set_ylim(b[1] - 2000, b[3] + 2000); ax.set_aspect("equal")
-    T(fig, 0.07, 0.935, "FRPIM v2.2  ·  FOREST RESTORATION PRIORITY AND INTERVENTION MODEL", 10, "#f6c46a", "bold")
-    T(fig, 0.07, 0.87, opt["title"], 46, "white", "bold", family=SERIF, va="center")
-    T(fig, 0.07, 0.815, "Restoration Atlas", 46, "#9be3b6", "bold", family=SERIF, va="center")
-    T(fig, 0.07, 0.765, opt["place"], 13, "#cfe2d6", va="center")
-    y = 0.70
+    T(fig, 0.07, 0.945, opt["kicker"].upper(), 10, "#f6c46a", "bold")
+    fig.add_artist(plt.Line2D([0.07, 0.93], [0.932, 0.932], color="#2f6b4f", lw=0.8))
+    T(fig, 0.07, 0.885, opt["name"], 50, "white", "bold", family=SERIF, va="center")
+    T(fig, 0.07, 0.832, "Restoration Atlas", 50, "#9be3b6", "bold", family=SERIF, va="center")
+    T(fig, 0.07, 0.788, opt["subtitle"], 13, "#cfe2d6", va="center")
+    T(fig, 0.07, 0.768, "FRPIM v2.2  ·  Forest Restoration Priority and Intervention Model", 9.5, "#9fb8a8", va="center")
+    y = 0.705
     stats = [(f"{sum(float(p.get('block_area_ha') or 0) for _, p in A.blocks):,.0f}", "ha of forest mapped"),
              (f"{len(A.blocks):,}", "blocks of 10 ha"),
              (f"{sum(float(p['net_plantable_ha']) for p in retained):,.0f}", "ha net plantable"),
@@ -591,14 +593,16 @@ def cover(A, opt, retained):
     T(fig, 0.07, 0.30, "Ranges", 10, "#f6c46a", "bold")
     for k, r in enumerate(A.ranges):
         T(fig, 0.07, 0.28 - k * 0.020, r, 12, "white")
-    T(fig, 0.07, 0.10, "Right land. Right treatment. Right order.", 13, "#f6c46a", "semibold", family=SERIF)
-    T(fig, 0.07, 0.075, opt["date"] + "  ·  map colours: priority phase (Map 3)", 9, "#9fb8a8")
+    T(fig, 0.07, 0.125, opt["tagline"], 15, "#f6c46a", "semibold", family=SERIF)
+    if opt.get("prepared"):
+        T(fig, 0.07, 0.098, opt["prepared"], 10, "white")
+    T(fig, 0.07, 0.078, opt["date"] + "  ·  map colours: priority phase (Map 3)", 9, "#9fb8a8")
     return A.save(fig, "p001_cover")
 
 
 def contents(A, opt, pages):
     fig = plt.figure(figsize=(W, H), facecolor=PAPER)
-    A.header(fig, "", "", "Contents", opt["title"] + "  ·  Restoration Atlas", 2)
+    A.header(fig, "", "", "Contents", opt["name"] + " Restoration Atlas  ·  " + opt["place"], 2)
     x, y, colw = 0.50 / W, 1 - 2.05 / H, (W - 1.0) / 2 / W
     sec = None
     entries = [("", "", "At a glance", 3)] + [(s, c, t, pg) for pg, (s, c, t, spec) in pages if spec[0] != "section"]
@@ -785,8 +789,8 @@ def methods_page(A, pg, retained, weights):
 
 def main():
     args = sys.argv[1:]
-    opt = {"title": "Restoration area", "place": "", "prefix": "FRPIM", "range_field": None, "date": "", "fonts": None}
-    for k in ("title", "place", "prefix", "range-field", "date", "fonts"):
+    opt = {"title": "Restoration area", "place": "", "prefix": "FRPIM", "range_field": None, "date": "", "fonts": None, "name": "Forest", "kicker": "", "subtitle": "", "tagline": "", "prepared": ""}
+    for k in ("title", "place", "prefix", "range-field", "date", "fonts", "name", "kicker", "subtitle", "tagline", "prepared"):
         if "--" + k in args:
             i = args.index("--" + k); opt[k.replace("-", "_")] = args[i + 1]; del args[i:i + 2]
     src, out = Path(args[0]), Path(args[1])
