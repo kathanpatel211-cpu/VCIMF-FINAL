@@ -893,7 +893,22 @@ function seg3(onPick, initial) {
     onclick: (e) => { s.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget))); onPick(k); } })));
   return s;
 }
-function logoMark(size) { return svgEl('<svg viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true"><rect x="5" y="17" width="5" height="9" rx="1" fill="#2bb673"/><rect x="11" y="11" width="5" height="15" rx="1" fill="#f46036"/><rect x="17" y="6" width="5" height="20" rx="1" fill="#d7263d"/><rect x="23" y="13" width="5" height="13" rx="1" fill="#fbb13c"/><rect x="20" y="1.5" width="3" height="3" rx=".6" fill="#f6c46a"/></svg>'); }
+let LOGO_N = 0;
+function logoSVG(size, id) {
+  /* VanDrishti mark: an eye (drishti) whose iris holds a teak leaf (van); the catchlight is a square pixel
+     and a satellite orbit passes behind: forest seen through remote sensing. */
+  return '<svg viewBox="0 0 48 48" width="' + size + '" height="' + size + '" aria-hidden="true">' +
+    '<defs><linearGradient id="vdi' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe6ad"/><stop offset=".5" stop-color="#f6c46a"/><stop offset="1" stop-color="#ec8424"/></linearGradient></defs>' +
+    '<ellipse cx="24" cy="24.5" rx="21.6" ry="8.2" transform="rotate(-28 24 24.5)" fill="none" stroke="#8fd0ff" stroke-width="1.3" stroke-dasharray="2.4 2.2" stroke-linecap="round"/>' +
+    '<path d="M4.2 24.5 C11.5 11.2 36.5 11.2 43.8 24.5 C36.5 37.8 11.5 37.8 4.2 24.5 Z" fill="#061a10" stroke="#eef6f0" stroke-width="2.3" stroke-linejoin="round"/>' +
+    '<circle cx="24" cy="24.5" r="10.2" fill="url(#vdi' + id + ')"/>' +
+    '<path d="M24 33.4 C17.9 30.2 17.4 22.6 24 15.6 C30.6 22.6 30.1 30.2 24 33.4 Z" fill="#0d4a2e"/>' +
+    '<path d="M24 32.6 V18.6 M24 23.4 L27.1 20.9 M24 26.6 L20.9 24.1 M24 29.6 L26.6 27.5" stroke="#f6c46a" stroke-width="1.05" stroke-linecap="round" fill="none"/>' +
+    '<rect x="27.6" y="17.3" width="2.9" height="2.9" rx=".45" fill="#ffffff"/>' +
+    '<g transform="rotate(-28 38.6 11.4)"><rect x="37.2" y="10" width="2.8" height="2.8" rx=".4" fill="#dff1ff"/><rect x="32.9" y="10.6" width="3.6" height="1.6" rx=".3" fill="#8fd0ff"/><rect x="40.7" y="10.6" width="3.6" height="1.6" rx=".3" fill="#8fd0ff"/></g>' +
+    '</svg>';
+}
+function logoMark(size) { return svgEl(logoSVG(size, ++LOGO_N)); }
 
 /* ---------------- session and routing ---------------- */
 let ROLE = null, RIDX = null, VIEW = { v: "dash" }, bigmap = null, SCENES = [], ANIMATE = true;
@@ -983,7 +998,7 @@ function loginView() {
   const view = el("div", { class: "login" }, host, el("div", { class: "veil" }),
     el("div", { class: "inner gut" },
       el("div", { class: "brandblock" },
-        el("div", { class: "wordmark" }, el("div", { class: "logo" }, logoMark(30)), el("div", null, el("b", { text: APP.name }), el("span", null, el("span", { class: "deva", text: APP.deva }), " · " + APP.sub))),
+        el("div", { class: "wordmark" }, el("div", { class: "logo" }, logoMark(44)), el("div", null, el("b", { text: APP.name }), el("span", null, el("span", { class: "deva", text: APP.deva }), " · " + APP.sub))),
         el("div", { class: "grid", style: "gap:16px" }, el("div", { class: "eyebrow", text: APP.org + " · " + APP.unit }),
           el("h1", null, "Right land. Right treatment. ", el("span", { class: "grad", text: "Right order." })),
           el("p", { text: "Every restoration work in Poshina, RDF Poshina, RDF Khedbrahma and Vadali is checked against the FRPIM need, feasibility and priority maps before a single pit is dug. The RFO proposes and certifies the site, the ACF scrutinises, the DCF approves." })),
@@ -1009,7 +1024,7 @@ function shell() {
   const cur = VIEW.v === "work" || VIEW.v === "range" ? (VIEW.v === "range" ? "dash" : null) : VIEW.v;
   return el("header", { class: "top" },
     el("div", { class: "bar gut" },
-      el("div", { class: "brand" }, el("div", { class: "logo" }, logoMark(24)), el("div", null, el("b", null, APP.name, el("span", { class: "deva", text: APP.deva })), el("small", { text: ROLE === "DCF" ? APP.org : ROLE === "ACF" ? APP.unit + " · " + APP.org : RMETA[RIDX].name + " Range · " + APP.unit }))),
+      el("div", { class: "brand" }, el("div", { class: "logo" }, logoMark(34)), el("div", null, el("b", null, APP.name, el("span", { class: "deva", text: APP.deva })), el("small", { text: ROLE === "DCF" ? APP.org : ROLE === "ACF" ? APP.unit + " · " + APP.org : RMETA[RIDX].name + " Range · " + APP.unit }))),
       el("nav", { class: "navwrap", "aria-label": "Main" }, el("span", { class: "pill", "aria-hidden": "true" }), nav.map(([k, t]) => el("button", { type: "button", "aria-current": cur === k ? "page" : null,
         onclick: () => go({ v: k }) }, t, k === "inbox" && n ? el("span", { class: "count", text: String(n) }) : null))),
       el("div", { class: "who" }, avatar(ROLE), el("div", null, el("b", { text: ROLE === "RFO" ? "RFO · " + RMETA[RIDX].name : ROLES[ROLE].title }), el("small", { text: me() })),
