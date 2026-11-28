@@ -1,0 +1,1564 @@
+<title>VanDrishti Sub-division 2</title>
+<link rel="artifact-thumbnail" href="thumb.jpg">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Noto+Sans+Devanagari:wght@600&display=swap">
+<style>
+/* Layout concept: a night-forest command centre. The sub-division is a live 3D field of pixel
+   columns (one per 10 ha block); everything else sits on quiet glass panels around it.
+   Single committed dark look, matching the Van Punarjeevan atlas covers. */
+:root {
+  color-scheme: dark;
+  --night: #040b08; --deep: #08160f; --panel: #0d2017; --panel-2: #112a1f; --raise: #163527;
+  --line: rgba(196, 232, 210, 0.10); --line-2: rgba(196, 232, 210, 0.20);
+  --ink: #eef6f0; --muted: #a3baac; --faint: #6f897a;
+  --gold: #f6c46a; --ember: #f46036; --mint: #9be3b6;
+  --ok: #4fd38b; --ok-soft: rgba(79, 211, 139, 0.14); --warn: #f6b73c; --warn-soft: rgba(246, 183, 60, 0.14);
+  --bad: #ff6f5e; --bad-soft: rgba(255, 111, 94, 0.14); --info: #74b4ff; --info-soft: rgba(116, 180, 255, 0.14);
+  --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-deva: "Noto Sans Devanagari", "Nirmala UI", "Mangal", sans-serif;
+  --r: 18px; --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  background: radial-gradient(1100px 620px at 82% -8%, rgba(31, 110, 72, 0.35), transparent 62%),
+    radial-gradient(900px 520px at -10% 110%, rgba(246, 96, 54, 0.10), transparent 60%), var(--night);
+  background-attachment: fixed; -webkit-font-smoothing: antialiased; }
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5;
+  background-image: linear-gradient(rgba(196, 232, 210, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(196, 232, 210, .025) 1px, transparent 1px);
+  background-size: 28px 28px; mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 75%); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 60; background: var(--night); }
+#app { position: relative; z-index: 1; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.1; font-weight: 700; }
+h2 { font-size: 16px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+h2 small { color: var(--faint); font-family: var(--font-ui); font-weight: 500; font-size: 12px; }
+p { margin: 0; }
+a { color: var(--mint); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 8px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.gut { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1320px; margin-inline: auto; }
+.eyebrow { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--gold); }
+.hint { color: var(--muted); font-size: 12.5px; }
+.err { color: var(--bad); font-size: 13px; font-weight: 600; }
+.okm { color: var(--ok); font-size: 13px; font-weight: 600; }
+.grid { display: grid; gap: 16px; align-content: start; }
+.grid > * { min-width: 0; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g-main { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1060px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g-main, .g3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .g2, .g4 { grid-template-columns: minmax(0, 1fr); } }
+.card { background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .015)), var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line-2); background: var(--raise); color: var(--ink); border-radius: 12px; padding: 9px 15px; font-weight: 600; cursor: pointer; font-size: 13.5px; transition: transform .15s, background .15s, border-color .15s; }
+.btn:hover { transform: translateY(-1px); border-color: var(--mint); }
+.btn.gold { background: linear-gradient(135deg, #ffd88a, #f0a52a); color: #2a1a00; border-color: transparent; box-shadow: 0 10px 28px rgba(240, 165, 42, .28); }
+.btn.ghost { background: transparent; }
+.btn.bad { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 40%, transparent); color: #ffd2cc; }
+.btn.big { padding: 13px 20px; font-size: 15px; border-radius: 14px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; }
+.c-g { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.c-a { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.c-r { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.c-i { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 35%, transparent); }
+.c-x { background: rgba(246, 196, 106, .14); color: var(--gold); border-color: rgba(246, 196, 106, .4); }
+.c-s { background: rgba(255, 255, 255, .06); color: var(--muted); border-color: var(--line-2); }
+.rdot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; }
+
+/* ---------- login ---------- */
+.login { position: relative; min-height: 100vh; overflow: hidden; display: grid; }
+#field-login { position: absolute; inset: 0; }
+#field-login canvas { display: block; }
+.login .veil { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(4, 11, 8, .95) 0%, rgba(4, 11, 8, .84) 44%, rgba(4, 11, 8, .1) 72%), linear-gradient(0deg, rgba(4, 11, 8, .85), transparent 35%); }
+.login .inner { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 470px); gap: 40px; align-items: center; padding-block: 34px; width: 100%; pointer-events: none; }
+.login .inner > * { pointer-events: auto; }
+@media (max-width: 980px) { .login .inner { grid-template-columns: minmax(0, 1fr); } .login .veil { background: linear-gradient(180deg, rgba(4, 11, 8, .55), rgba(4, 11, 8, .93) 46%); } }
+.wordmark { display: flex; gap: 14px; align-items: center; }
+.wordmark b { font-family: var(--font-display); font-size: 26px; font-weight: 800; letter-spacing: -0.02em; display: block; line-height: 1; }
+.wordmark span { color: var(--muted); font-size: 12.5px; }
+.deva { font-family: var(--font-deva); }
+.logo { width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center; background: linear-gradient(140deg, #1f7a4f, #08291a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 10px 30px rgba(0, 0, 0, .4); flex: none; }
+.brandblock { display: grid; gap: 26px; max-width: 640px; }
+.brandblock h1 { font-size: clamp(34px, 5vw, 62px); line-height: 1.02; font-weight: 800; letter-spacing: -0.03em; }
+.grad { background: linear-gradient(100deg, var(--gold), var(--ember) 60%, #ff9fb0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brandblock p { color: #c6d8cc; font-size: 15.5px; max-width: 56ch; }
+.statsrow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line-2); padding-top: 16px; }
+.statsrow div { display: grid; gap: 2px; font-size: 12px; color: var(--muted); padding-right: 10px; }
+.statsrow b { font-family: var(--font-display); font-size: clamp(20px, 2.4vw, 28px); color: var(--ink); font-weight: 700; }
+@media (max-width: 520px) { .statsrow { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 14px; } }
+.flow3 { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; color: #c6d8cc; }
+.flow3 span { display: inline-flex; gap: 8px; align-items: center; }
+.flow3 i { font-style: normal; font-weight: 800; font-size: 11px; padding: 4px 8px; border-radius: 8px; color: #fff; }
+.flow3 .arrow { color: var(--faint); }
+.signin { background: linear-gradient(180deg, rgba(20, 48, 35, .82), rgba(10, 26, 19, .9)); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--line-2); border-radius: 24px; padding: 24px; display: grid; gap: 14px; box-shadow: var(--shadow); }
+.signin h2 { font-size: 21px; }
+.steplabel { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); font-weight: 700; }
+.roles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rolebtn { border: 1px solid var(--line-2); background: rgba(255, 255, 255, .03); border-radius: 14px; padding: 12px 10px; text-align: left; cursor: pointer; display: grid; gap: 6px; transition: border-color .2s, background .2s, transform .2s; }
+.rolebtn:hover { transform: translateY(-2px); }
+.rolebtn[aria-pressed="true"] { border-color: var(--gold); background: rgba(246, 196, 106, .09); box-shadow: 0 0 0 3px rgba(246, 196, 106, .15); }
+.rolebtn b { font-family: var(--font-display); font-size: 15px; }
+.rolebtn small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.rangepick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rangebtn { position: relative; overflow: hidden; border: 1px solid var(--line-2); background: rgba(255, 255, 255, .03); border-radius: 14px; padding: 12px 12px 11px 16px; text-align: left; cursor: pointer; display: grid; gap: 3px; transition: border-color .2s, transform .2s, background .2s; }
+.rangebtn::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--rc); }
+.rangebtn:hover { transform: translateY(-2px); }
+.rangebtn[aria-pressed="true"] { border-color: var(--rc); background: color-mix(in srgb, var(--rc) 12%, transparent); }
+.rangebtn b { font-family: var(--font-display); font-size: 14.5px; }
+.rangebtn small { color: var(--muted); font-size: 11.5px; }
+.field { display: grid; gap: 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+input, select, textarea { font: inherit; color: var(--ink); background: rgba(0, 0, 0, .28); border: 1px solid var(--line-2); border-radius: 11px; padding: 10px 12px; width: 100%; min-width: 0; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(246, 196, 106, .18); }
+textarea { min-height: 80px; resize: vertical; }
+select option { background: var(--panel); }
+.go { border: 0; border-radius: 14px; padding: 14px; font-weight: 700; font-size: 15px; cursor: pointer; color: #2a1a00; background: linear-gradient(135deg, #ffd88a, #f0a52a); box-shadow: 0 14px 34px rgba(240, 165, 42, .3); transition: transform .15s; font-family: var(--font-display); }
+.go:hover { transform: translateY(-1px); }
+.creds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+@media (max-width: 460px) { .roles { grid-template-columns: minmax(0, 1fr); } .creds { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- shell ---------- */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; background: rgba(4, 11, 8, .78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+header .bar { display: flex; align-items: center; gap: 16px; padding-block: 10px; }
+.brand { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.brand .logo { width: 38px; height: 38px; border-radius: 11px; }
+.brand b { font-family: var(--font-display); font-size: 17px; font-weight: 800; display: flex; gap: 8px; align-items: baseline; }
+.brand b .deva { font-size: 12px; color: var(--gold); font-weight: 600; }
+.brand small { color: var(--faint); font-size: 11.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.navwrap { position: relative; display: flex; gap: 2px; margin-inline: auto; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.navwrap::-webkit-scrollbar { display: none; }
+.navwrap button { position: relative; z-index: 1; border: 0; background: none; padding: 7px 12px; border-radius: 10px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+.navwrap button[aria-current="page"] { color: var(--ink); }
+.navwrap .pill { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 10px; background: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .06)); box-shadow: inset 0 0 0 1px var(--line-2); transition: left .3s cubic-bezier(.2, .8, .2, 1), width .3s cubic-bezier(.2, .8, .2, 1); }
+.count { background: var(--ember); color: #fff; font-size: 10.5px; border-radius: 999px; padding: 1px 6px; font-weight: 800; }
+.who { display: flex; gap: 10px; align-items: center; }
+.who b { font-size: 13px; display: block; }
+.who small { color: var(--faint); font-size: 11.5px; font-family: var(--font-num); }
+.av { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; flex: none; }
+.ghostbtn { border: 1px solid var(--line-2); background: none; border-radius: 10px; padding: 6px 10px; cursor: pointer; color: var(--muted); font-size: 12.5px; }
+@media (max-width: 1100px) { header .bar { flex-wrap: wrap; } .navwrap { order: 3; width: 100%; margin: 0; } .who > div:nth-child(2) { display: none; } }
+@media (max-width: 700px) { header.top { position: static; } .brand small { display: none; } }
+main { display: grid; gap: 18px; padding-block: 22px 10px; }
+.rise > * { animation: rise .6s cubic-bezier(.2, .8, .2, 1) both; }
+.rise > *:nth-child(2) { animation-delay: .06s; } .rise > *:nth-child(3) { animation-delay: .12s; } .rise > *:nth-child(4) { animation-delay: .18s; } .rise > *:nth-child(n+5) { animation-delay: .24s; }
+@keyframes rise { from { transform: translateY(12px); opacity: .001; } to { transform: none; opacity: 1; } }
+.pagehead { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.pagehead p { color: var(--muted); margin-top: 6px; max-width: 70ch; }
+
+/* ---------- hero with the 3D field ---------- */
+.hero { position: relative; border-radius: 26px; overflow: hidden; border: 1px solid var(--line-2); min-height: 470px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  background: radial-gradient(700px 480px at 75% 30%, color-mix(in srgb, var(--rc, #1f7a4f) 26%, transparent), transparent 70%), linear-gradient(160deg, #0b2016, #050e0a); }
+.hero .txt { position: relative; z-index: 2; padding: 30px; display: grid; gap: 16px; align-content: center; }
+.hero .txt h1 { font-size: clamp(30px, 4vw, 50px); font-weight: 800; letter-spacing: -0.03em; }
+.hero .txt h1 .rn { color: var(--rc, var(--mint)); }
+.hero .txt p { color: #c6d8cc; max-width: 52ch; }
+.hero .scene { position: relative; min-height: 470px; }
+.hero .scene > div:first-child { position: absolute; inset: 0; }
+.hero .scene canvas { display: block; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fact { border: 1px solid var(--line); border-radius: 14px; padding: 11px 13px; background: rgba(0, 0, 0, .22); display: grid; gap: 1px; }
+.fact b { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
+.fact span { color: var(--muted); font-size: 12px; }
+.overlay-tl { position: absolute; z-index: 3; left: 14px; top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+.overlay-bl { position: absolute; z-index: 3; left: 14px; right: 14px; bottom: 12px; }
+@media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); } .hero .scene { min-height: 380px; } .hero .txt { padding: 22px; } }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line-2); backdrop-filter: blur(8px); }
+.seg button { border: 0; background: none; color: var(--muted); padding: 6px 11px; border-radius: 9px; cursor: pointer; font-weight: 600; font-size: 12.5px; }
+.seg button[aria-pressed="true"] { background: rgba(255, 255, 255, .13); color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid rgba(255, 255, 255, .18); }
+.tip3d { position: absolute; z-index: 4; pointer-events: none; background: rgba(4, 11, 8, .9); border: 1px solid var(--line-2); color: var(--ink); border-radius: 10px; padding: 7px 10px; font-size: 12px; white-space: nowrap; box-shadow: var(--shadow); }
+.rangechips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rangechips button { border: 1px solid var(--line-2); background: rgba(0, 0, 0, .35); backdrop-filter: blur(8px); color: var(--ink); border-radius: 999px; padding: 5px 11px 5px 9px; cursor: pointer; font-size: 12px; font-weight: 600; display: inline-flex; gap: 7px; align-items: center; }
+.rangechips button[aria-pressed="true"] { border-color: var(--gold); background: rgba(246, 196, 106, .14); }
+
+/* ---------- KPIs ---------- */
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; perspective: 900px; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { position: relative; border-radius: 16px; padding: 14px 15px; background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015)), var(--panel); border: 1px solid var(--line); display: grid; gap: 4px; align-content: start; transition: transform .25s; transform-style: preserve-3d; overflow: hidden; }
+.kpi::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(240px 120px at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .08), transparent 70%); }
+.kpi span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.kpi b { font-family: var(--font-display); font-size: 27px; font-weight: 700; line-height: 1.1; }
+.kpi small { color: var(--faint); font-size: 11.5px; }
+.kpi.hl { border-color: rgba(246, 96, 54, .5); background: linear-gradient(180deg, rgba(246, 96, 54, .16), rgba(246, 96, 54, .03)), var(--panel); }
+.kpirow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ring { width: 42px; height: 42px; flex: none; }
+.ring .tr { fill: none; stroke: rgba(255, 255, 255, .1); stroke-width: 5; }
+.ring .fg { fill: none; stroke: var(--ok); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1.1s cubic-bezier(.2, .8, .2, 1); }
+
+/* ---------- range cards (command centre) ---------- */
+.rcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .rcards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .rcards { grid-template-columns: minmax(0, 1fr); } }
+.rcard { position: relative; overflow: hidden; border-radius: 18px; border: 1px solid var(--line); padding: 16px; display: grid; gap: 11px; text-align: left; cursor: pointer; color: var(--ink);
+  background: radial-gradient(260px 160px at 100% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 70%), var(--panel); transition: transform .2s, border-color .2s; }
+.rcard:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--rc) 60%, transparent); }
+.rcard .nm { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.rcard .nm b { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+.rcard .nm b::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--rc); margin-right: 8px; }
+.rcard dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.rcard dt { color: var(--faint); font-size: 11px; }
+.rcard dd { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 17px; }
+.rcard .pend { position: absolute; top: 14px; right: 14px; }
+.stack { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, .06); }
+.stack > div { height: 100%; transform-origin: left; animation: grow .9s cubic-bezier(.2, .8, .2, 1) both; }
+.stack.tall { height: 18px; border-radius: 8px; }
+@keyframes grow { from { transform: scaleX(0); } to { transform: none; } }
+
+/* ---------- pipeline, bars, lists ---------- */
+.pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pipe button { border: 1px solid var(--line); background: rgba(0, 0, 0, .2); border-radius: 14px; padding: 12px; text-align: left; display: grid; gap: 2px; cursor: pointer; position: relative; overflow: hidden; }
+.pipe button:hover { border-color: var(--line-2); }
+.pipe span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.pipe b { font-family: var(--font-display); font-size: 26px; }
+.pipe small { color: var(--faint); font-size: 11.5px; }
+.pipe .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; transform-origin: left; animation: grow .8s cubic-bezier(.2, .8, .2, 1) both; }
+.hbars { display: grid; gap: 10px; }
+.hbar { display: grid; grid-template-columns: minmax(90px, 140px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.hbar .tr { height: 10px; border-radius: 999px; background: rgba(255, 255, 255, .06); overflow: hidden; display: flex; }
+.hbar .tr > div { height: 100%; transform-origin: left; animation: grow .9s cubic-bezier(.2, .8, .2, 1) both; }
+.hbar .v { font-family: var(--font-num); color: var(--muted); font-size: 12px; }
+.list { display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--line); background: rgba(0, 0, 0, .18); border-radius: 14px; padding: 11px 13px 11px 0; text-align: left; cursor: pointer; color: var(--ink); overflow: hidden; }
+.item:hover { border-color: var(--line-2); background: rgba(255, 255, 255, .03); }
+.item .st { align-self: stretch; border-radius: 0 3px 3px 0; }
+.item .t { font-weight: 600; font-size: 14px; }
+.item .m { color: var(--muted); font-size: 12px; }
+.item .r { display: grid; gap: 4px; justify-items: end; }
+@media (max-width: 600px) { .item { grid-template-columns: 4px minmax(0, 1fr); } .item .r { grid-column: 2; justify-items: start; display: flex; flex-wrap: wrap; } }
+.empty { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 26px 10px; color: var(--muted); }
+.empty b { font-family: var(--font-display); color: var(--ink); font-size: 16px; }
+.feed { display: grid; gap: 12px; }
+.feed > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 13px; }
+.feed small { display: block; color: var(--faint); font-size: 11.5px; }
+.beats { display: grid; gap: 8px; }
+.beat { display: grid; grid-template-columns: minmax(80px, 120px) minmax(0, 1fr) 64px; gap: 10px; align-items: center; font-size: 12.5px; }
+.beat .tr { height: 10px; border-radius: 4px; background: rgba(255, 255, 255, .05); overflow: hidden; }
+.beat .tr div { height: 100%; background: linear-gradient(90deg, #a50026, #f46d43); transform-origin: left; animation: grow .9s cubic-bezier(.2, .8, .2, 1) both; }
+.beat .v { text-align: right; font-family: var(--font-num); color: var(--muted); }
+
+/* ---------- tables ---------- */
+.tw { overflow-x: auto; border-radius: 12px; }
+table.t { border-collapse: collapse; width: 100%; font-size: 13px; }
+.t th { text-align: left; font-size: 11.5px; color: var(--faint); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 8px 10px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+.t td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.t .n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.t tr.click { cursor: pointer; } .t tr.click:hover td { background: rgba(255, 255, 255, .03); }
+.t tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); }
+.sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 8px; vertical-align: -1px; border: 1px solid rgba(255, 255, 255, .2); }
+.filters { display: grid; grid-template-columns: minmax(0, 2fr) repeat(5, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .filters input { grid-column: 1 / -1; } }
+
+/* ---------- work file and check ---------- */
+.verdict { border-radius: 14px; padding: 13px 15px; border: 1px solid; display: grid; gap: 6px; }
+.verdict.g { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 40%, transparent); } .verdict.g b { color: var(--ok); }
+.verdict.a { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 40%, transparent); } .verdict.a b { color: var(--warn); }
+.verdict.r { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 40%, transparent); } .verdict.r b { color: var(--bad); }
+.verdict ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .mini { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mini > div { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: rgba(0, 0, 0, .2); display: grid; }
+.mini b { font-family: var(--font-display); font-size: 19px; }
+.mini span { color: var(--muted); font-size: 11.5px; }
+.maps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .maps3 { grid-template-columns: minmax(0, 1fr); } }
+.maps3 figure { margin: 0; display: grid; gap: 6px; }
+.maps3 figcaption { font-size: 12px; font-weight: 700; color: var(--muted); }
+.maps3 svg { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
+.maps3 .legend { font-size: 11px; gap: 4px 10px; }
+.track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative; }
+.track > div { display: grid; justify-items: center; text-align: center; gap: 4px; position: relative; padding-inline: 4px; }
+.track > div::before { content: ""; position: absolute; top: 17px; left: -50%; width: 100%; height: 2px; background: var(--line-2); z-index: 0; }
+.track > div:first-child::before { display: none; }
+.track > div.done::before, .track > div.now::before, .track > div.back::before { background: var(--ok); }
+.track .dot { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 11px; background: var(--raise); border: 1px solid var(--line-2); position: relative; z-index: 1; color: var(--muted); }
+.track .done .dot { background: var(--ok); color: #03210f; border-color: transparent; }
+.track .now .dot { background: var(--gold); color: #2a1a00; border-color: transparent; box-shadow: 0 0 0 6px rgba(246, 196, 106, .18); animation: pulse 1.8s ease-in-out infinite; }
+.track .back .dot { background: var(--bad); color: #fff; border-color: transparent; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 11px rgba(246, 196, 106, .05); } }
+.track b { font-size: 12.5px; } .track small { color: var(--faint); font-size: 11.5px; }
+dl.kv { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 7px 14px; margin: 0; font-size: 13px; }
+dl.kv dt { color: var(--faint); } dl.kv dd { margin: 0; }
+.timeline { display: grid; gap: 0; }
+.timeline > div { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 11px; position: relative; padding-bottom: 16px; font-size: 13px; }
+.timeline > div::after { content: ""; position: absolute; left: 16px; top: 36px; bottom: 2px; width: 2px; background: var(--line); }
+.timeline > div:last-child::after { display: none; }
+.timeline small { color: var(--faint); display: block; font-size: 11.5px; }
+.timeline q { display: block; margin-top: 6px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); padding: 7px 10px; border-radius: 10px; quotes: none; }
+.action { border: 1px solid rgba(246, 196, 106, .45); background: radial-gradient(400px 200px at 100% 0%, rgba(246, 196, 106, .14), transparent 70%), var(--panel); }
+.checks { display: grid; gap: 9px; }
+.checks label { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; cursor: pointer; }
+.checks input { margin-top: 2px; width: 17px; height: 17px; accent-color: var(--ok); flex: none; padding: 0; }
+.checkrow { display: flex; gap: 9px; font-size: 13px; align-items: flex-start; }
+.checkrow .ic { width: 19px; height: 19px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none; margin-top: 1px; }
+.checkrow .ic.y { background: var(--ok-soft); color: var(--ok); } .checkrow .ic.n { background: var(--bad-soft); color: var(--bad); }
+.opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.opts label { display: inline-flex; gap: 7px; align-items: center; border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--ink); font-weight: 500; line-height: 1.3; }
+.opts label:has(input:checked) { background: rgba(79, 211, 139, .12); border-color: var(--ok); }
+.opts input, .field .opts input { accent-color: var(--ok); margin: 0; width: auto; padding: 0; flex: none; }
+.subcard { border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 12px; background: rgba(0, 0, 0, .18); }
+.subcard h3 { font-size: 14px; }
+.drop { border: 1.5px dashed var(--line-2); border-radius: 18px; padding: 28px 18px; text-align: center; display: grid; gap: 8px; justify-items: center; cursor: pointer; transition: border-color .2s, background .2s, transform .2s;
+  background: radial-gradient(300px 160px at 50% 0%, rgba(155, 227, 182, .08), transparent 70%), rgba(0, 0, 0, .18); }
+.drop:hover, .drop.over { border-color: var(--mint); transform: translateY(-1px); }
+.drop b { font-size: 17px; font-family: var(--font-display); }
+.drop .ico { width: 58px; height: 58px; border-radius: 18px; display: grid; place-items: center; background: linear-gradient(140deg, #2f9a66, #0f3d2a); box-shadow: 0 12px 30px rgba(0, 0, 0, .35); }
+.formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.formgrid .full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .formgrid { grid-template-columns: minmax(0, 1fr); } }
+.steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.steps span { display: inline-flex; gap: 7px; align-items: center; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px 4px 5px; }
+.steps i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--raise); font-weight: 800; font-size: 11px; color: var(--ink); }
+.banner { border-radius: 12px; padding: 11px 14px; font-size: 13.5px; border: 1px solid; }
+.banner.r { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.banner.i { background: var(--info-soft); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+.banner.a { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 440px) { .tiles { grid-template-columns: minmax(0, 1fr); } }
+.tile { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; text-align: left; padding: 14px; border-radius: 14px; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .2); color: var(--ink); cursor: pointer; transition: transform .2s, border-color .2s, box-shadow .2s; }
+.tile:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow); }
+.tile .ti { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; font-weight: 800; }
+.tile b { display: block; font-family: var(--font-display); font-size: 14.5px; }
+.tile small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.tile.go { border-color: color-mix(in srgb, var(--ok) 50%, transparent); } .tile.go .ti { background: linear-gradient(140deg, #4fd38b, #1a7a48); color: #03210f; }
+.tile.warn { border-color: rgba(246, 196, 106, .5); } .tile.warn .ti { background: linear-gradient(140deg, #ffd88a, #f0a52a); color: #2a1a00; }
+.tile.back .ti { background: var(--info-soft); color: var(--info); }
+.tile.stop .ti { background: var(--bad-soft); color: var(--bad); }
+.tile:disabled { opacity: .4; cursor: not-allowed; }
+.tile.busy { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(246, 196, 106, .25); }
+#bigmap, #big3d { height: min(74vh, 760px); min-height: 420px; border-radius: 18px; overflow: hidden; position: relative; border: 1px solid var(--line); }
+#bigmap { background: var(--deep); }
+#big3d { background: radial-gradient(700px 400px at 70% 10%, #164a31, transparent 60%), #050e0a; }
+.leaflet-container { background: var(--deep); font-family: var(--font-ui); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); }
+.leaflet-bar a { background: var(--panel-2); color: var(--ink); border-color: var(--line-2); }
+.leaflet-control-scale-line { background: rgba(4, 11, 8, .7); color: var(--ink); border-color: var(--muted); }
+.leaflet-tooltip { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); }
+.rlabel { font-family: var(--font-display); font-weight: 700; font-size: 13px; color: #fff; text-shadow: 0 1px 4px #000, 0 0 10px #000; white-space: nowrap; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--night); padding: 11px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; z-index: 2000; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
+.foot { color: var(--faint); font-size: 12px; text-align: center; padding-block: 8px 28px; }
+.foot b { font-family: var(--font-display); color: var(--muted); }
+.flowcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 860px) { .flowcards { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+/*LEAFLET_CSS*/
+</style>
+
+<div id="app" aria-live="polite"></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   VanDrishti · Sub-division 2, Sabarkantha Forest Division, Himatnagar.
+   RFO of each range proposes and certifies -> ACF scrutinises -> DCF
+   approves. Every KML is checked against FRPIM Maps 1-3 (5,089 blocks).
+   Decision support: the officers decide.
+   ===================================================================== */
+const APP = { name: "VanDrishti", deva: "वनदृष्टि", sub: "FRPIM Works Portal", org: "Sabarkantha Forest Division, Himatnagar", unit: "Sub-division 2", tagline: "Right land. Right treatment. Right order.", model: "FRPIM v2.2 (Sub-division 2 run, Nov 2026)" };
+const RMETA = [
+  { key: "Poshina", code: "POS", name: "Poshina", colour: "#f6c46a", rfo: "rfo.poshina" },
+  { key: "Rdf Poshina", code: "RPO", name: "RDF Poshina", colour: "#7cc6ff", rfo: "rfo.rdfposhina" },
+  { key: "Rdf Khedbrahma", code: "RKB", name: "RDF Khedbrahma", colour: "#9be3b6", rfo: "rfo.rdfkhedbrahma" },
+  { key: "Vadali", code: "VAD", name: "Vadali", colour: "#c3a6ff", rfo: "rfo.vadali" }
+];
+const ROLES = {
+  RFO: { title: "Range Forest Officer", short: "RFO", colour: "#2f9a66", can: "Proposes works, uploads the KML, certifies the site and SMC" },
+  ACF: { id: "acf.subdivision2", title: "Assistant Conservator of Forests", short: "ACF", office: "Sub-division 2", colour: "#3f7fd6", can: "Scrutinises all four ranges and recommends to the DCF" },
+  DCF: { id: "dcf.sabarkantha", title: "Deputy Conservator of Forests", short: "DCF", office: "Sabarkantha Forest Division", colour: "#d2861a", can: "Final approval authority" }
+};
+const DEMO_PASSWORD = "demo@123";
+const STATUS = {
+  DRAFT: ["Draft", "c-s"], ACF: ["With ACF for scrutiny", "c-i"], RET_RFO: ["Returned to RFO", "c-r"], DCF: ["With DCF for approval", "c-x"],
+  RET_ACF: ["Returned to ACF", "c-r"], APPROVED: ["Approved", "c-g"], APPROVED_DEV: ["Approved with recorded deviation", "c-g"], REJECTED: ["Not approved", "c-r"]
+};
+const INBOX = { RFO: ["DRAFT", "RET_RFO"], ACF: ["ACF", "RET_ACF"], DCF: ["DCF"] };
+const PHASE = { 1: ["Phase 1", "#d7263d"], 2: ["Phase 2", "#f46036"], 3: ["Phase 3", "#fbb13c"], 4: ["Phase 4", "#ffe066"], 5: ["Phase 5", "#fff6c2"], 6: ["Protected", "#2bb673"], 7: ["Excluded", "#6f7f76"] };
+const NEED = { 1: ["Very low", "#fff3b0"], 2: ["Low", "#fcc45c"], 3: ["Moderate", "#f9844a"], 4: ["High", "#e63946"], 5: ["Very high", "#9d0208"], 6: PHASE[6], 7: PHASE[7] };
+const FEAS = { 1: ["Very low", "#a0522d"], 2: ["Low", "#e0b36a"], 3: ["Moderate", "#d9f0e3"], 4: ["High", "#56c1a7"], 5: ["Very high", "#1f78c8"], 6: PHASE[6], 7: PHASE[7] };
+const OUTSIDE = ["Outside the FRPIM blocks", "#ffffff"];
+const RX = { S: "SMC + drought-hardy planting", B: "Blank-area plantation", A: "ANR + gap planting", T: "Soil stabilisation first", H: "Hydro-compatible (riparian) planting",
+  I: "Clear invasives, then plant", F: "Fire protection first", M: "Mixed native planting", R: "Rocky-microsite planting", P: "Protect dense forest", X: "Not plantable" };
+const SG = { D: "Drought-hardy (khair, ber, desi babul, guggal, hingor)", M: "Medium (teak, dhavdo, timru, khakhro, neem, sadad)", W: "Moist / deep (mahudo, bamboo, jambu, karanj, amla)",
+  R: "Riparian (arjun, jambu, karanj)", G: "Native grasses and shrubs first, then khair and ber" };
+const TREAT = { PLANT_SMC: "Plantation with SMC", BLANK: "Blank-area plantation", ANR: "ANR / gap planting", SMC: "Soil-moisture conservation only", OTHER: "Fire protection / other" };
+const TREAT_MATCH = { PLANT_SMC: ["S", "B", "T", "M", "R"], BLANK: ["B", "S", "M"], ANR: ["A"], SMC: ["S", "T"], OTHER: null };
+const SCHEMES = ["CAMPA", "State plan", "MGNREGA", "Nagar Van", "Other"];
+const VERDICT = { g: ["Green", "Matches FRPIM priority"], a: ["Amber", "Partly matches: review before approval"], r: ["Red", "Does not match: justify or revise"] };
+const RFO_CHECKS = [
+  "Site visited and treatment boundary walked with GPS",
+  "Area in the estimate agrees with the KML area",
+  "No encroachment, FRA claim or legal dispute on the site",
+  "Protected dense forest and excluded land kept out of the boundary",
+  "Species chosen suit the soil and moisture of the site"
+];
+const SMC_SUIT = ["Suitable", "Partly suitable", "Not needed", "Not suitable"];
+const SMC_WORKS = ["Continuous contour trenches (CCT)", "Staggered trenches", "Pits with saucers", "Gully plugs / loose boulder checks", "Earthen bunds", "Percolation pits / farm ponds"];
+const WATER = ["Tank / check dam within 1 km", "Well or borewell", "Tanker only", "Rain-fed only"];
+const ACF_CHECKS = ["RFO field certification and SMC assessment reviewed", "Cost estimate checked against approved rates and norms", "Scheme guidelines and convergence checked"];
+
+/* ---------------- helpers ---------------- */
+const $ = (s, r) => (r || document).querySelector(s);
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else if (k === "style") e.setAttribute("style", v);
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
+}
+const svgEl = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
+const ha = (x) => (x == null ? "-" : x >= 1000 ? Math.round(x).toLocaleString("en-IN") : x >= 100 ? x.toFixed(0) : x.toFixed(1));
+const pct = (a, b) => (b > 0 ? (100 * a) / b : 0);
+const fp = (x) => (x == null ? "-" : (x >= 10 || x === 0 ? x.toFixed(0) : x.toFixed(1)) + " %");
+const dt = (iso) => { try { return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return iso; } };
+const dd = (iso) => { try { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch (e) { return iso; } };
+const daysAgo = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 864e5));
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const dispId = (id) => id.replace(/^([A-Z]+)-(\d{4}-\d{2})-(\d+)$/, "$1/$2/$3");
+const rOf = (w) => RMETA[w.r] || RMETA[0];
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 3200); }
+async function useCap(name) { try { return window.claude && window.claude.use ? await window.claude.use(name) : null; } catch (e) { return null; } }
+const ss = { get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+function fyNow() { const d = new Date(), y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return y + "-" + String(y + 1).slice(2); }
+function fyList() { const y0 = parseInt(fyNow()); const out = []; for (let y = y0 - 1; y <= y0 + 2; y++) out.push(y + "-" + String(y + 1).slice(2)); return out; }
+const reduceMotion = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function userOf(role, r) { return role === "RFO" ? RMETA[r].rfo : ROLES[role].id; }
+function officeOf(role, r) { return role === "RFO" ? RMETA[r].name + " Range" : ROLES[role].office; }
+function avatar(role, cls) { return el("div", { class: cls || "av", style: "background:linear-gradient(140deg," + ROLES[role].colour + ",#06140d)", text: role }); }
+
+/* ---------------- data store: shared database, else this browser ---------------- */
+const Store = {
+  docs: new Map(), mode: "memory", db: null, subs: [], ready: false,
+  async init() {
+    this.db = await useCap("db");
+    if (this.db) {
+      this.mode = "db";
+      await new Promise((resolve) => {
+        const t = setTimeout(() => { resolve(); }, 10000);
+        this.db.collection("works").onSnapshot((snap) => {
+          this.docs.clear(); snap.docs.forEach((d) => this.docs.set(d.id, d.data()));
+          clearTimeout(t); this.ready = true; resolve(); this.emit();
+        }, () => { clearTimeout(t); this.db = null; this.mode = "local"; this.loadLocal(); resolve(); this.emit(); });
+      });
+    } else { this.mode = "local"; this.loadLocal(); }
+    this.ready = true;
+  },
+  loadLocal() { try { const raw = localStorage.getItem("vd_sd2_works_v1"); if (raw) JSON.parse(raw).forEach((d) => this.docs.set(d.id, d)); } catch (e) { /* none */ } },
+  saveLocal() { try { localStorage.setItem("vd_sd2_works_v1", JSON.stringify(Array.from(this.docs.values()))); } catch (e) { /* storage unavailable */ } },
+  on(fn) { this.subs.push(fn); }, emit() { this.subs.forEach((f) => f()); },
+  all() { return Array.from(this.docs.values()); },
+  get(id) { return this.docs.get(id); },
+  async put(doc) {
+    const clean = JSON.parse(JSON.stringify(doc));
+    if (this.mode === "db") await this.db.doc("works/" + doc.id).set(clean);
+    this.docs.set(doc.id, clean);
+    if (this.mode !== "db") this.saveLocal();
+    this.emit();
+  },
+  async remove(id) {
+    if (this.mode === "db") await this.db.doc("works/" + id).delete();
+    this.docs.delete(id); if (this.mode !== "db") this.saveLocal(); this.emit();
+  }
+};
+function nextId(r, year) {
+  const pre = RMETA[r].code + "-" + year + "-";
+  const n = Store.all().filter((d) => !d.demo && d.id.startsWith(pre)).map((d) => parseInt(d.id.slice(pre.length)) || 0);
+  return pre + String((n.length ? Math.max(...n) : 0) + 1).padStart(3, "0");
+}
+
+/* ---------------- FRPIM blocks, ranges and the check ---------------- */
+let BLOCKS = [], RANGES = [], SAMPLES = [], SD = null;
+async function loadData() {
+  const [bl, rg, sm] = await Promise.all(["blocks.json", "ranges.json", "samples.json"].map((f) => fetch(f).then((r) => { if (!r.ok) throw new Error(f); return r.json(); })));
+  BLOCKS = bl.map((b) => { const geom = { type: b.t === "M" ? "MultiPolygon" : "Polygon", coordinates: b.c };
+    const feature = { type: "Feature", properties: {}, geometry: geom }; return Object.assign(b, { geom, feature, bbox: turf.bbox(feature) }); });
+  RANGES = rg; SAMPLES = sm;
+  const sum = (k) => RANGES.reduce((s, r) => s + r[k], 0);
+  SD = { gross: sum("gross"), net: sum("net"), blocks: sum("blocks"), p12: RANGES.reduce((s, r) => s + r.phase[1] + r.phase[2], 0), robust: sum("robust"), p12n: sum("p12n") };
+}
+function parseCoords(text) { const out = []; for (const tup of text.trim().split(/\s+/)) { const p = tup.split(",").map(Number); if (p.length >= 2 && isFinite(p[0]) && isFinite(p[1])) out.push([p[0], p[1]]); } return out; }
+function closeRing(r) { if (r.length && (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1])) r.push([r[0][0], r[0][1]]); return r; }
+const kids = (n, name) => Array.from(n.children).filter((c) => c.localName === name);
+const desc = (n, name) => n.getElementsByTagNameNS("*", name)[0] || null;
+function parseKML(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("This file is not a valid KML file.");
+  const feats = [], notes = { points: 0, lines: 0, closedLines: 0 };
+  Array.from(doc.getElementsByTagNameNS("*", "Placemark")).forEach((pm, i) => {
+    const nm = kids(pm, "name")[0], name = nm ? nm.textContent.trim() : "Polygon " + (i + 1);
+    for (const poly of Array.from(pm.getElementsByTagNameNS("*", "Polygon"))) {
+      const ob = kids(poly, "outerBoundaryIs")[0]; const oc = ob && desc(ob, "coordinates"); if (!oc) continue;
+      const rings = [closeRing(parseCoords(oc.textContent))];
+      for (const ib of kids(poly, "innerBoundaryIs")) { const ic = desc(ib, "coordinates"); if (ic) rings.push(closeRing(parseCoords(ic.textContent))); }
+      if (rings[0].length >= 4) feats.push({ type: "Feature", properties: { name }, geometry: { type: "Polygon", coordinates: rings } });
+    }
+    for (const ls of Array.from(pm.getElementsByTagNameNS("*", "LineString"))) {
+      const c = desc(ls, "coordinates"); if (!c) continue; const pts = parseCoords(c.textContent);
+      if (pts.length >= 4 && turf.distance(pts[0], pts[pts.length - 1], { units: "meters" }) <= 30) { notes.closedLines++; feats.push({ type: "Feature", properties: { name }, geometry: { type: "Polygon", coordinates: [closeRing(pts)] } }); }
+      else notes.lines++;
+    }
+    notes.points += pm.getElementsByTagNameNS("*", "Point").length;
+  });
+  return { features: feats, notes };
+}
+function parseGeoJSON(text) {
+  const g = JSON.parse(text), feats = [], notes = { points: 0, lines: 0, closedLines: 0 };
+  const list = g.type === "FeatureCollection" ? g.features : g.type === "Feature" ? [g] : [{ type: "Feature", properties: {}, geometry: g }];
+  list.forEach((f, i) => { const t = f.geometry && f.geometry.type, name = (f.properties && (f.properties.name || f.properties.Name)) || "Polygon " + (i + 1);
+    if (t === "Polygon") feats.push({ type: "Feature", properties: { name }, geometry: f.geometry });
+    else if (t === "MultiPolygon") f.geometry.coordinates.forEach((c) => feats.push({ type: "Feature", properties: { name }, geometry: { type: "Polygon", coordinates: c } }));
+    else if (t && t.includes("Point")) notes.points++; else if (t) notes.lines++; });
+  return { features: feats, notes };
+}
+async function readFile(file) {
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".kmz")) {
+    const zip = await JSZip.loadAsync(file); const kmls = Object.keys(zip.files).filter((k) => k.toLowerCase().endsWith(".kml"));
+    if (!kmls.length) throw new Error("The KMZ file holds no KML document.");
+    return parseKML(await zip.file(kmls.find((k) => k.toLowerCase().endsWith("doc.kml")) || kmls[0]).async("string"));
+  }
+  const text = await file.text();
+  if (n.endsWith(".geojson") || n.endsWith(".json") || text.trim().startsWith("{")) return parseGeoJSON(text);
+  return parseKML(text);
+}
+function cleanPolys(f) { const g = turf.cleanCoords(turf.truncate(f, { precision: 7, coordinates: 2 })); return turf.kinks(g).features.length ? turf.unkinkPolygon(g).features : [g]; }
+function analyse(features) {
+  let u = null, failed = false;
+  for (const f of features) for (const g of cleanPolys(f)) { if (!u) { u = g; continue; } try { const r = turf.union(u, g); if (r) u = r; } catch (e) { failed = true; } }
+  if (!u) throw new Error("No usable polygon was found in the file.");
+  const total = turf.area(u) / 1e4, [minX, minY, maxX, maxY] = turf.bbox(u);
+  const byPhase = {}, byNeed = {}, byFeas = {}, byRx = {}, bySg = {}, byRange = {}, byBeat = {}; let inside = 0, smcHa = 0, rniW = 0, rfiW = 0, retained = 0; const touched = [];
+  for (const b of BLOCKS) {
+    const bb = b.bbox; if (bb[2] < minX || bb[0] > maxX || bb[3] < minY || bb[1] > maxY) continue;
+    let inter = null; try { inter = turf.intersect(u, b.feature); } catch (e) { inter = null; }
+    if (!inter) continue; const a = turf.area(inter) / 1e4; if (a < 0.005) continue;
+    inside += a; byPhase[b.p] = (byPhase[b.p] || 0) + a; byRange[b.r] = (byRange[b.r] || 0) + a; byBeat[b.bt] = (byBeat[b.bt] || 0) + a;
+    const nk = b.p >= 6 ? b.p : b.n, fk = b.p >= 6 ? b.p : b.f;
+    byNeed[nk] = (byNeed[nk] || 0) + a; byFeas[fk] = (byFeas[fk] || 0) + a; byRx[b.rx] = (byRx[b.rx] || 0) + a;
+    if (b.p <= 5) { retained += a; rniW += b.rni * a; rfiW += b.rfi * a; if (b.smc) smcHa += a; if (b.sg in SG) bySg[b.sg] = (bySg[b.sg] || 0) + a; }
+    touched.push({ id: b.id, ha: +a.toFixed(2), p: b.p });
+  }
+  touched.sort((a, b) => a.p - b.p || b.ha - a.ha);
+  const r2 = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, +v.toFixed(3)]));
+  const topBeat = Object.entries(byBeat).sort((a, b) => b[1] - a[1])[0];
+  return { total: +total.toFixed(3), inside: +inside.toFixed(3), outside: +Math.max(0, total - inside).toFixed(3), byPhase: r2(byPhase), byNeed: r2(byNeed), byFeas: r2(byFeas), byRx: r2(byRx), bySg: r2(bySg), byRange: r2(byRange),
+    topBeat: topBeat ? topBeat[0] : "", smcHa: +smcHa.toFixed(3), retained: +retained.toFixed(3), rni: retained ? +(rniW / retained).toFixed(4) : null, rfi: retained ? +(rfiW / retained).toFixed(4) : null, touched: touched.slice(0, 300), unionFailed: failed };
+}
+function verdictOf(r, treat, claimed, rIdx) {
+  const p = (k) => r.byPhase[k] || 0;
+  const s12 = pct(p(1) + p(2), r.total), s45 = pct(p(4) + p(5), r.total), sPE = pct(p(6) + p(7), r.total), sOut = pct(r.outside, r.total);
+  const own = rIdx == null ? r.inside : (r.byRange || {})[rIdx] || 0, sOther = pct(Math.max(0, r.inside - own), r.total);
+  const reasons = []; let v;
+  if (sOut > 50) { v = "r"; reasons.push(fp(sOut) + " of the area lies outside the FRPIM blocks of Sub-division 2"); }
+  else if (sOther > 50) { v = "r"; reasons.push(fp(sOther) + " of the area lies in another range, not " + RMETA[rIdx].name); }
+  else if (sPE > 20) { v = "r"; reasons.push(fp(sPE) + " falls on Protected dense forest or Excluded land"); }
+  else if (s45 > 50) { v = "r"; reasons.push(fp(s45) + " is in Phase 4-5 (low priority)"); }
+  else if (s12 >= 60 && sPE <= 5) { v = "g"; reasons.push(fp(s12) + " of the area is in Phase 1-2"); }
+  else { v = "a"; reasons.push(fp(s12) + " in Phase 1-2, " + fp(s45) + " in Phase 4-5"); }
+  if (v !== "r" && sPE > 0.5) reasons.push(fp(sPE) + " on Protected or Excluded land: keep it out of the estimate");
+  if (v !== "r" && sOut > 2) reasons.push(fp(sOut) + " lies outside the FRPIM blocks");
+  if (v !== "r" && sOther > 2) reasons.push(fp(sOther) + " lies in a neighbouring range");
+  const m = TREAT_MATCH[treat]; let matchPct = null;
+  if (m && r.retained > 0) { matchPct = pct(m.reduce((s, k) => s + (r.byRx[k] || 0), 0), r.retained); if (matchPct < 50) reasons.push("FRPIM recommends a different treatment on " + fp(100 - matchPct) + " of the plantable area"); }
+  if (claimed > 0 && Math.abs(claimed - r.total) / r.total > 0.10) reasons.push("Estimate area " + claimed.toFixed(2) + " ha differs from the KML area " + r.total.toFixed(2) + " ha by more than 10 %");
+  return { v, reasons, s12: +s12.toFixed(2), s45: +s45.toFixed(2), sPE: +sPE.toFixed(2), sOut: +sOut.toFixed(2), sOther: +sOther.toFixed(2), matchPct: matchPct == null ? null : +matchPct.toFixed(1) };
+}
+function simplifyFC(fc) {
+  let tol = 0.00002;
+  for (let i = 0; i < 8; i++) { const g = turf.truncate(turf.simplify(fc, { tolerance: tol, highQuality: false }), { precision: 6, coordinates: 2 }); if (JSON.stringify(g).length < 150000) return g; tol *= 2; }
+  return null;
+}
+
+/* ---------------- static SVG maps (Need, Feasibility, Priority) ---------------- */
+function mapSVG(geom, layer, opts) {
+  const o = Object.assign({ w: 420, h: 320, paper: false }, opts || {}), W = o.w, H = o.h;
+  const [x0, y0, x1, y1] = turf.bbox(geom);
+  const padX = (x1 - x0) * 0.35 + 0.003, padY = (y1 - y0) * 0.35 + 0.003;
+  let bx = [x0 - padX, y0 - padY, x1 + padX, y1 + padY]; const k = Math.cos(((y0 + y1) / 2) * Math.PI / 180);
+  const s = Math.min(W / ((bx[2] - bx[0]) * k), H / (bx[3] - bx[1]));
+  const cx = (bx[0] + bx[2]) / 2, cy = (bx[1] + bx[3]) / 2; bx = [cx - W / s / k / 2, cy - H / s / 2, cx + W / s / k / 2, cy + H / s / 2];
+  const tx = (x) => ((x - bx[0]) * k * s).toFixed(1), ty = (y) => (H - (y - bx[1]) * s).toFixed(1);
+  const path = (g) => { const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : []; return polys.map((p) => p.map((r) => "M" + r.map((c) => tx(c[0]) + " " + ty(c[1])).join("L") + "Z").join("")).join(""); };
+  const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE;
+  const bg = o.paper ? "#eef1ec" : "#0a1a12", gap = o.paper ? "#ffffff" : "#0a1a12", ink = o.paper ? "#111" : "#ffffff", halo = o.paper ? "#ffffff" : "#000000";
+  let out = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + (layer === "n" ? "Need" : layer === "f" ? "Feasibility" : "Priority") + ' map with the treatment boundary">';
+  out += '<rect width="' + W + '" height="' + H + '" fill="' + bg + '"/>';
+  for (const b of BLOCKS) { const bb = b.bbox; if (bb[2] < bx[0] || bb[0] > bx[2] || bb[3] < bx[1] || bb[1] > bx[3]) continue;
+    const code = b.p >= 6 ? b.p : layer === "n" ? b.n : layer === "f" ? b.f : b.p;
+    out += '<path d="' + path(b.geom) + '" fill="' + tbl[code][1] + '" stroke="' + gap + '" stroke-width="0.7"/>'; }
+  const feats = geom.type === "FeatureCollection" ? geom.features.map((f) => f.geometry) : [geom.geometry || geom];
+  for (const g of feats) out += '<path d="' + path(g) + '" fill="rgba(0,0,0,0.12)" stroke="' + halo + '" stroke-width="5" stroke-linejoin="round" stroke-opacity="0.85"/><path d="' + path(g) + '" fill="none" stroke="' + ink + '" stroke-width="2.2" stroke-linejoin="round"/>';
+  const mPerPx = 111320 / s, target = W * 0.22 * mPerPx, steps = [100, 200, 250, 500, 1000, 2000, 5000];
+  const L = steps.find((v) => v >= target) || 5000, Lpx = L / mPerPx;
+  out += '<rect x="10" y="' + (H - 28) + '" width="' + (Lpx + 16).toFixed(0) + '" height="20" fill="' + (o.paper ? "#fff" : "#000") + '" opacity="0.7" rx="4"/><rect x="18" y="' + (H - 16) + '" width="' + Lpx.toFixed(1) + '" height="4" fill="' + ink + '"/><text x="18" y="' + (H - 19) + '" font-size="10" font-family="sans-serif" fill="' + ink + '">' + (L >= 1000 ? L / 1000 + " km" : L + " m") + "</text>";
+  out += '<g transform="translate(' + (W - 22) + ',12)"><path d="M0 0 L7 18 L0 14 L-7 18 Z" fill="' + ink + '"/><text x="0" y="30" text-anchor="middle" font-size="10" font-family="sans-serif" font-weight="700" fill="' + ink + '">N</text></g>';
+  return out + "</svg>";
+}
+function legendRow(tbl, keys) { return el("div", { class: "legend" }, keys.map((k) => el("span", null, el("i", { style: "background:" + tbl[k][1] }), tbl[k][0]))); }
+function maps3(geom) {
+  const wrap = el("div", { class: "maps3" });
+  [["n", "Map 1 · Restoration need", NEED, [1, 2, 3, 4, 5]], ["f", "Map 2 · Feasibility", FEAS, [1, 2, 3, 4, 5]], ["p", "Map 3 · Priority phase", PHASE, [1, 2, 3, 4, 5, 6, 7]]].forEach(([k, t, tbl, keys]) =>
+    wrap.append(el("figure", null, el("figcaption", { text: t }), svgEl(mapSVG(geom, k)), legendRow(tbl, keys))));
+  return wrap;
+}
+function verdictBox(w) {
+  const v = VERDICT[w.verdict];
+  return el("div", { class: "verdict " + w.verdict, role: "status" }, el("b", { text: "FRPIM check: " + v[0] + " · " + v[1] }), el("ul", null, (w.reasons || []).map((x) => el("li", { text: x }))));
+}
+function miniKpis(w) {
+  return el("div", { class: "mini" },
+    el("div", null, el("b", { text: w.result.total.toFixed(2) }), el("span", { text: "ha in the KML" })),
+    el("div", null, el("b", { text: fp(w.s12) }), el("span", { text: "in Phase 1-2" })),
+    el("div", null, el("b", { text: fp(w.sPE) }), el("span", { text: "Protected or Excluded" })),
+    el("div", null, el("b", { text: w.matchPct == null ? "-" : fp(w.matchPct) }), el("span", { text: "treatment agrees with FRPIM" })));
+}
+function classTable(title, tbl, data, total, keys) {
+  const tb = el("tbody");
+  for (const k of keys) { const a = data[k] || 0; if (a <= 0) continue; const [nm, col] = k === "out" ? OUTSIDE : tbl[k];
+    tb.append(el("tr", null, el("td", null, el("i", { class: "sw", style: "background:" + col }), nm), el("td", { class: "n", text: ha(a) }), el("td", { class: "n", text: fp(pct(a, total)) }))); }
+  return el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, el("th", { text: title }), el("th", { class: "n", text: "ha" }), el("th", { class: "n", text: "%" }))), tb));
+}
+function phaseStack(byPhase, outside, total, tall) {
+  return el("div", { class: "stack" + (tall ? " tall" : ""), role: "img", "aria-label": "Share of area by priority phase" },
+    [1, 2, 3, 4, 5, 6, 7].map((k) => (byPhase[k] > 0 ? el("div", { style: "width:" + pct(byPhase[k], total) + "%;background:" + PHASE[k][1], title: PHASE[k][0] + " " + ha(byPhase[k]) + " ha" }) : null)),
+    outside > 0 ? el("div", { style: "width:" + pct(outside, total) + "%;background:repeating-linear-gradient(45deg,#8a978e 0 2px,transparent 2px 6px)", title: OUTSIDE[0] }) : null);
+}
+function findings(w) {
+  const r = w.result, box = el("div", { class: "grid", style: "gap:14px" });
+  box.append(verdictBox(w), miniKpis(w), phaseStack(r.byPhase, r.outside, r.total, true));
+  box.append(el("div", { class: "grid g3", style: "gap:12px" },
+    classTable("Priority (Map 3)", PHASE, Object.assign({}, r.byPhase, { out: r.outside }), r.total, [1, 2, 3, 4, 5, 6, 7, "out"]),
+    classTable("Need (Map 1)", NEED, r.byNeed, r.total, [5, 4, 3, 2, 1, 6, 7]),
+    classTable("Feasibility (Map 2)", FEAS, r.byFeas, r.total, [5, 4, 3, 2, 1, 6, 7])));
+  const rt = el("tbody");
+  for (const k of Object.keys(RX)) if (r.byRx[k] > 0) rt.append(el("tr", null, el("td", { text: RX[k] }), el("td", { class: "n", text: ha(r.byRx[k]) })));
+  if (r.smcHa > 0) rt.append(el("tr", null, el("td", { text: "of which SMC works required" }), el("td", { class: "n", text: ha(r.smcHa) })));
+  for (const k of Object.keys(SG)) if (r.bySg[k] > 0) rt.append(el("tr", null, el("td", { text: "Species: " + SG[k] }), el("td", { class: "n", text: ha(r.bySg[k]) })));
+  box.append(el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, el("th", { text: "What FRPIM recommends on this land" }), el("th", { class: "n", text: "ha" }))), rt)));
+  if (r.rni != null) box.append(el("div", { class: "hint", text: "Area-weighted mean RNI " + r.rni.toFixed(3) + " · RFI " + r.rfi.toFixed(3) + " · " + r.touched.length + " FRPIM blocks touched" + (r.topBeat ? " · mostly in " + r.topBeat + " beat" : "") + (r.unionFailed ? " · some overlapping polygons could not be merged" : "") }));
+  return box;
+}
+
+/* ---------------- 3D pixel field (three.js) ---------------- */
+const F3 = { proj: null, cell: 1 };
+function proj3d() {
+  if (F3.proj) return F3.proj;
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const b of BLOCKS) { x0 = Math.min(x0, b.bbox[0]); y0 = Math.min(y0, b.bbox[1]); x1 = Math.max(x1, b.bbox[2]); y1 = Math.max(y1, b.bbox[3]); }
+  const lon0 = (x0 + x1) / 2, lat0 = (y0 + y1) / 2, k = Math.cos(lat0 * Math.PI / 180);
+  const span = Math.max((x1 - x0) * k * 111320, (y1 - y0) * 110540), s = 100 / span;
+  F3.cell = 316.23 * s; F3.proj = (lon, lat) => [(lon - lon0) * k * 111320 * s, (lat - lat0) * 110540 * s];
+  return F3.proj;
+}
+function heightOf(b, layer) {
+  if (b.p === 6) return 1.5; if (b.p === 7) return 0.06;
+  const v = layer === "n" ? b.n : layer === "f" ? b.f : 6 - b.p;
+  return 0.25 + v * 0.62;
+}
+function colourOf(b, layer) { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE; return tbl[b.p >= 6 ? b.p : layer === "n" ? b.n : layer === "f" ? b.f : b.p][1]; }
+function webglOK() { try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl"))); } catch (e) { return false; } }
+function rangeFrame(r) {
+  const P = proj3d(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const b of BLOCKS) { if (r != null && b.r !== r) continue; const [x, y] = P(b.x, b.y); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, span: Math.max(x1 - x0, y1 - y0) };
+}
+function makeField(host, opts) {
+  if (!window.THREE || !webglOK() || !BLOCKS.length) return null;
+  const o = Object.assign({ layer: "p", focus: null, works: [], interactive: false, zoom: false, rotate: true, onWork: null, onBlock: null, tip: null, elev: 0.72, hs: 1, fitK: 1.35, offsetX: 0 }, opts || {});
+  const reduce = reduceMotion(), P = proj3d(), N = BLOCKS.length;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  host.append(renderer.domElement);
+  const cv = renderer.domElement; cv.style.touchAction = o.interactive ? "none" : "pan-y";
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x050d09, 120, 320);
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 2000);
+  scene.add(new THREE.HemisphereLight(0xe4f5ea, 0x140c04, 1.05));
+  const sun = new THREE.DirectionalLight(0xfff0d2, 1.7); sun.position.set(-70, 140, 90); scene.add(sun);
+  const rim = new THREE.DirectionalLight(0x7cc6ff, 0.45); rim.position.set(90, 50, -80); scene.add(rim);
+  const root = new THREE.Group(); root.rotation.x = -Math.PI / 2; scene.add(root);
+  // ground: soft disc and fine grid
+  const plate = new THREE.Mesh(new THREE.CircleGeometry(95, 72), new THREE.MeshBasicMaterial({ color: 0x0a1f15, transparent: true, opacity: 0.6 }));
+  plate.position.z = -0.04; root.add(plate);
+  const grid = new THREE.GridHelper(190, 76, 0x1f4532, 0x12291d); grid.rotation.x = Math.PI / 2; grid.position.z = -0.02; grid.material.transparent = true; grid.material.opacity = 0.55; root.add(grid);
+  // range outlines in their identity colours
+  for (let i = 0; i < RANGES.length; i++) {
+    const g = RANGES[i].outline, polys = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+    for (const poly of polys) { const pts = poly[0].map((c) => new THREE.Vector3(...P(c[0], c[1]), 0.02));
+      root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: new THREE.Color(RMETA[i].colour), transparent: true, opacity: 0.65 }))); }
+  }
+  // the blocks: one instanced box per 10 ha block
+  const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0, 0.5);
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.06 });
+  const mesh = new THREE.InstancedMesh(box, mat, N); mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); root.add(mesh);
+  const pos = new Float32Array(N * 2), side = new Float32Array(N), from = new Float32Array(N), to = new Float32Array(N), cur = new Float32Array(N), delay = new Float32Array(N);
+  for (let i = 0; i < N; i++) { const b = BLOCKS[i], [x, y] = P(b.x, b.y); pos[2 * i] = x; pos[2 * i + 1] = y; side[i] = F3.cell * 0.88 * Math.min(1, Math.sqrt(Math.max(b.ga, 0.5) / 10)); }
+  const dummy = new THREE.Object3D(), col = new THREE.Color(), dim = new THREE.Color(0x183126);
+  let layer = o.layer, focus = o.focus;
+  function targets() {
+    for (let i = 0; i < N; i++) { const b = BLOCKS[i], on = focus == null || b.r === focus;
+      to[i] = on ? heightOf(b, layer) * o.hs : 0.05; col.set(on ? colourOf(b, layer) : 0); if (!on) col.copy(dim); mesh.setColorAt(i, col); }
+    mesh.instanceColor.needsUpdate = true;
+  }
+  function writeMatrices() {
+    for (let i = 0; i < N; i++) { dummy.position.set(pos[2 * i], pos[2 * i + 1], 0); dummy.scale.set(side[i], side[i], Math.max(0.001, cur[i])); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); }
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+  // floating pixels lifting off the highest-priority blocks of the focus area
+  const FP = 70, fmesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1, emissive: 0x2a0a00, emissiveIntensity: 0.6 }), FP);
+  root.add(fmesh);
+  let fsrc = [];
+  function pickFloaters() {
+    const pool = []; for (let i = 0; i < N; i++) { const b = BLOCKS[i]; if ((focus == null || b.r === focus) && b.p <= 2) pool.push(i); }
+    fsrc = []; for (let k = 0; k < FP; k++) fsrc.push({ i: pool.length ? pool[Math.floor(Math.random() * pool.length)] : 0, ph: Math.random(), sp: 0.05 + Math.random() * 0.06, sz: 1.1 + Math.random() * 1.6 });
+    for (let k = 0; k < FP; k++) { const b = BLOCKS[fsrc[k].i]; col.set(colourOf(b, layer)); fmesh.setColorAt(k, col); }
+    fmesh.instanceColor.needsUpdate = true;
+  }
+  function writeFloaters(t) {
+    for (let k = 0; k < FP; k++) { const f = fsrc[k], i = f.i, ph = (f.ph + t * f.sp) % 1, base = cur[i] + 0.6;
+      const s = F3.cell * f.sz * (1 - ph) * (ph < 0.08 ? ph / 0.08 : 1);
+      dummy.position.set(pos[2 * i], pos[2 * i + 1], base + ph * 9); dummy.rotation.set(ph * 2, ph * 3, 0); dummy.scale.set(s, s, s); dummy.updateMatrix(); fmesh.setMatrixAt(k, dummy.matrix); }
+    dummy.rotation.set(0, 0, 0); fmesh.instanceMatrix.needsUpdate = true;
+  }
+  // works float above as slabs coloured by stage
+  const workObjs = [];
+  const stCol = (s) => (s.startsWith("APPROVED") ? 0x4fd38b : s === "DCF" ? 0xf6c46a : s === "ACF" || s === "RET_ACF" ? 0x74b4ff : s === "REJECTED" ? 0xff6f5e : 0xdedede);
+  const shapesOf = (geom) => { const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates, out = [];
+    for (const poly of polys) { const sh = new THREE.Shape(poly[0].map((c) => new THREE.Vector2(...P(c[0], c[1])))); for (let i = 1; i < poly.length; i++) sh.holes.push(new THREE.Path(poly[i].map((c) => new THREE.Vector2(...P(c[0], c[1]))))); out.push(sh); }
+    return out; };
+  function setWorks(list) {
+    workObjs.forEach((x) => { root.remove(x); x.traverse((c) => { if (c.geometry) c.geometry.dispose(); }); }); workObjs.length = 0;
+    for (const w of list || []) {
+      if (!w.geom || (focus != null && w.r !== focus)) continue;
+      const feats = w.geom.type === "FeatureCollection" ? w.geom.features : [w.geom];
+      const grp = new THREE.Group(); grp.userData = { w }; const c = stCol(w.status);
+      for (const f of feats) {
+        const g = f.geometry || f; if (!g || !/Polygon/.test(g.type)) continue;
+        const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shapesOf(g), { depth: 0.3, bevelEnabled: false }), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85 }));
+        slab.position.z = 6.5; slab.userData = { w }; grp.add(slab);
+        const c0 = turf.centroid(f.geometry ? f : { type: "Feature", geometry: g }).geometry.coordinates, [cx, cy] = P(c0[0], c0[1]);
+        grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(cx, cy, 0), new THREE.Vector3(cx, cy, 6.5)]), new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.8 })));
+      }
+      root.add(grp); workObjs.push(grp);
+    }
+  }
+  // camera framing
+  let fr = rangeFrame(focus), tcx = fr.cx, tcy = fr.cy, tdist = fr.span * o.fitK + 22, ccx = tcx, ccy = tcy, cdist = tdist * 1.25;
+  let az = -0.55, elv = o.elev, raf = 0, alive = true, dragging = false, lx = 0, ly = 0, idle = 0, t0 = performance.now(), anim = 0, user = 1;
+  function startGrow() {
+    for (let i = 0; i < N; i++) { from[i] = cur[i]; const dx = pos[2 * i] - tcx, dy = pos[2 * i + 1] - tcy; delay[i] = Math.min(0.55, Math.sqrt(dx * dx + dy * dy) / 120); }
+    t0 = performance.now(); anim = reduce ? 1 : 0;
+    if (reduce) { for (let i = 0; i < N; i++) cur[i] = to[i]; writeMatrices(); }
+  }
+  targets(); startGrow(); pickFloaters(); setWorks(o.works); writeMatrices();
+  function size() { const w = host.clientWidth || 600, h = host.clientHeight || 400; renderer.setSize(w, h, false); cv.style.width = w + "px"; cv.style.height = h + "px"; camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  const ro = new ResizeObserver(size); ro.observe(host); size();
+  function frame(now) {
+    if (!alive) return;
+    raf = requestAnimationFrame(frame);
+    if (document.hidden) return;
+    if (anim < 1) { anim = Math.min(1, (now - t0) / 1500);
+      for (let i = 0; i < N; i++) { const d = Math.min(1, Math.max(0, (anim * 1.6 - delay[i]) / 1)); const e = 1 - Math.pow(1 - d, 3); cur[i] = from[i] + (to[i] - from[i]) * e; }
+      writeMatrices(); }
+    if (!reduce) writeFloaters(now / 1000);
+    if (o.rotate && !reduce && !dragging && now - idle > 2500) az += 0.0016;
+    const k = reduce ? 1 : 0.06; ccx += (tcx - ccx) * k; ccy += (tcy - ccy) * k; cdist += (tdist * user - cdist) * k;
+    const target = new THREE.Vector3(ccx, 0, -ccy);
+    camera.position.set(target.x + Math.sin(az) * Math.cos(elv) * cdist, Math.sin(elv) * cdist, target.z + Math.cos(az) * Math.cos(elv) * cdist);
+    camera.lookAt(target);
+    if (o.offsetX) { camera.setViewOffset(cv.width, cv.height, -cv.width * o.offsetX, 0, cv.width, cv.height); }
+    workObjs.forEach((g, i) => { g.children.forEach((c) => { if (c.type === "Mesh") c.position.z = 6.5 + Math.sin(now / 600 + i) * 0.35; }); });
+    renderer.render(scene, camera);
+  }
+  raf = requestAnimationFrame(frame);
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+  function pick(e) {
+    const r = cv.getBoundingClientRect(); ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    const wh = ray.intersectObjects(workObjs, true).find((h) => h.object.userData && h.object.userData.w);
+    if (wh) return { w: wh.object.userData.w };
+    const bh = ray.intersectObject(mesh, false)[0];
+    if (!bh || bh.instanceId == null) return null;
+    const b = BLOCKS[bh.instanceId]; return focus != null && b.r !== focus ? null : { b };
+  }
+  let pending = null;
+  cv.addEventListener("pointerdown", (e) => { dragging = true; lx = e.clientX; ly = e.clientY; if (o.interactive) cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => {
+    if (dragging && (o.interactive || e.pointerType === "mouse")) { az -= (e.clientX - lx) * 0.006; elv = Math.min(1.35, Math.max(0.3, elv + (e.clientY - ly) * 0.004)); lx = e.clientX; ly = e.clientY; idle = performance.now(); return; }
+    if (!o.tip || pending) return;
+    pending = requestAnimationFrame(() => { pending = null;
+      const h = pick(e), r = host.getBoundingClientRect();
+      if (!h) { o.tip.hidden = true; cv.style.cursor = "grab"; return; }
+      o.tip.hidden = false; o.tip.style.left = Math.min(r.width - 230, e.clientX - r.left + 14) + "px"; o.tip.style.top = (e.clientY - r.top + 12) + "px";
+      if (h.w) { o.tip.textContent = dispId(h.w.id) + " · " + h.w.name + " · " + STATUS[h.w.status][0]; cv.style.cursor = "pointer"; }
+      else { const b = h.b; o.tip.textContent = RMETA[b.r].name + " · " + b.bt + " beat · " + PHASE[b.p][0] + (b.p <= 5 ? " · RNI " + b.rni.toFixed(2) + " · RFI " + b.rfi.toFixed(2) + " · " + RX[b.rx] : ""); cv.style.cursor = "grab"; } });
+  });
+  const end = () => { dragging = false; idle = performance.now(); };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end); cv.addEventListener("pointerleave", () => { end(); if (o.tip) o.tip.hidden = true; });
+  cv.addEventListener("click", (e) => { const h = pick(e); if (h && h.w && o.onWork) o.onWork(h.w); else if (h && h.b && o.onBlock) o.onBlock(h.b); });
+  if (o.zoom) cv.addEventListener("wheel", (e) => { e.preventDefault(); user = Math.min(2.4, Math.max(0.35, user * (1 + Math.sign(e.deltaY) * 0.08))); idle = performance.now(); }, { passive: false });
+  return {
+    setLayer(k) { layer = k; targets(); startGrow(); pickFloaters(); },
+    setFocus(r) { focus = r; fr = rangeFrame(r); tcx = fr.cx; tcy = fr.cy; tdist = fr.span * o.fitK + 22; user = 1; targets(); startGrow(); pickFloaters(); setWorks(o.works); },
+    setWorks(list) { o.works = list; setWorks(list); },
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); box.dispose(); mat.dispose(); setWorks([]); renderer.dispose(); cv.remove(); }
+  };
+}
+function legend3d(layer) {
+  const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE, keys = layer === "p" ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5];
+  return el("div", { class: "legend" }, keys.map((k) => el("span", null, el("i", { style: "background:" + tbl[k][1] }), (layer === "p" ? "" : layer === "n" ? "Need " : "Feas. ") + tbl[k][0].toLowerCase().replace(/^phase/, "Phase").replace(/^protected/, "Protected").replace(/^excluded/, "Excluded"))));
+}
+function seg3(onPick, initial) {
+  const s = el("div", { class: "seg", role: "group", "aria-label": "FRPIM layer" });
+  [["p", "Priority"], ["n", "Need"], ["f", "Feasibility"]].forEach(([k, t]) => s.append(el("button", { type: "button", "aria-pressed": String(k === (initial || "p")), text: t,
+    onclick: (e) => { s.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget))); onPick(k); } })));
+  return s;
+}
+function logoMark(size) { return svgEl('<svg viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true"><rect x="5" y="17" width="5" height="9" rx="1" fill="#2bb673"/><rect x="11" y="11" width="5" height="15" rx="1" fill="#f46036"/><rect x="17" y="6" width="5" height="20" rx="1" fill="#d7263d"/><rect x="23" y="13" width="5" height="13" rx="1" fill="#fbb13c"/><rect x="20" y="1.5" width="3" height="3" rx=".6" fill="#f6c46a"/></svg>'); }
+
+/* ---------------- session and routing ---------------- */
+let ROLE = null, RIDX = null, VIEW = { v: "dash" }, bigmap = null, SCENES = [], ANIMATE = true;
+function killScenes() { SCENES.forEach((s) => s && s.destroy()); SCENES = []; if (bigmap) { bigmap.remove(); bigmap = null; } }
+function go(v) { VIEW = v; ANIMATE = true; render(); window.scrollTo(0, 0); }
+function me() { return userOf(ROLE, RIDX); }
+function trail(w, action, note) { (w.trail = w.trail || []).push({ at: new Date().toISOString(), role: ROLE, user: me(), action, note: note || "" }); w.updatedAt = new Date().toISOString(); }
+function scoped() { return ROLE === "RFO" ? Store.all().filter((w) => w.r === RIDX) : Store.all(); }
+function inboxOf(role) { return scoped().filter((w) => INBOX[role].includes(w.status)); }
+function sumHa(list) { return list.reduce((s, w) => s + (w.result ? w.result.total : 0), 0); }
+function render() {
+  killScenes();
+  const app = $("#app"); app.replaceChildren();
+  if (!ROLE) { app.append(loginView()); ANIMATE = false; return; }
+  app.append(shell());
+  const main = el("main", { class: "gut" + (ANIMATE ? " rise" : "") }); app.append(main);
+  if (!Store.ready || !BLOCKS.length) { main.append(el("div", { class: "card" }, el("b", { text: "Loading the FRPIM blocks and the register…" }))); return; }
+  const v = VIEW.v;
+  if (v === "dash") (ROLE === "RFO" ? rangeDesk(main, RIDX, false) : commandView(main));
+  else if (v === "range") rangeDesk(main, VIEW.r, true);
+  else if (v === "inbox") inboxView(main); else if (v === "works") worksView(main);
+  else if (v === "map") mapView(main); else if (v === "new") editView(main, VIEW.id); else if (v === "work") workView(main, VIEW.id); else if (v === "help") helpView(main);
+  app.append(el("div", { class: "foot gut" }, el("b", { text: APP.name }), " · " + APP.sub + " · " + APP.unit + ", " + APP.org + " · " + APP.model + " · " + (Store.mode === "db" ? "shared register" : "register kept in this browser") + " · decision support: the final decision rests with the ACF and the DCF"));
+  placePill(); wireTilt(main);
+  if (ANIMATE) countUp(main);
+  ANIMATE = false;
+}
+function placePill() {
+  const nav = $(".navwrap"); if (!nav) return; const pill = nav.querySelector(".pill"), cur = nav.querySelector('[aria-current="page"]');
+  if (!cur) { pill.style.width = "0px"; return; }
+  pill.style.left = cur.offsetLeft + "px"; pill.style.width = cur.offsetWidth + "px";
+}
+function wireTilt(root) {
+  if (reduceMotion() || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)) return;
+  root.querySelectorAll(".kpi").forEach((k) => {
+    k.addEventListener("pointermove", (e) => { const r = k.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      k.style.transform = "rotateX(" + ((0.5 - y) * 9).toFixed(2) + "deg) rotateY(" + ((x - 0.5) * 11).toFixed(2) + "deg) translateZ(6px)"; k.style.setProperty("--mx", x * 100 + "%"); k.style.setProperty("--my", y * 100 + "%"); });
+    k.addEventListener("pointerleave", () => { k.style.transform = ""; });
+  });
+}
+function countUp(root) {
+  if (reduceMotion()) return;
+  root.querySelectorAll("[data-count]").forEach((n) => {
+    const target = parseFloat(n.dataset.count), dec = parseInt(n.dataset.dec || "0"), suf = n.dataset.suf || "", t0 = performance.now(), loc = n.dataset.loc === "1";
+    if (!isFinite(target)) return;
+    const fmt = (v) => (loc ? Math.round(v).toLocaleString("en-IN") : v.toFixed(dec)) + suf;
+    const step = (t) => { const p = Math.min(1, (t - t0) / 1000), e = 1 - Math.pow(1 - p, 3); n.textContent = fmt(target * e); if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+const big = (v, suf, dec) => el("b", { "data-count": String(v), "data-dec": String(dec || 0), "data-suf": suf || "", "data-loc": v >= 1000 && !dec ? "1" : "0", text: v >= 1000 && !dec ? Math.round(v).toLocaleString("en-IN") + (suf || "") : (+v).toFixed(dec || 0) + (suf || "") });
+
+/* ---------------- login ---------------- */
+function loginView() {
+  let role = "RFO", r = null, scene = null;
+  const idIn = el("input", { id: "lg-id", autocomplete: "username", placeholder: "Choose your office above" });
+  const pwIn = el("input", { id: "lg-pw", type: "password", autocomplete: "current-password", value: DEMO_PASSWORD });
+  const msg = el("div", { class: "err", role: "alert" });
+  const roleBox = el("div", { class: "roles" });
+  const rangeWrap = el("div", { class: "grid", style: "gap:8px" });
+  const rangeBox = el("div", { class: "rangepick" });
+  rangeWrap.append(el("div", { class: "steplabel", text: "2 · Your range" }), rangeBox);
+  function sync() {
+    roleBox.querySelectorAll(".rolebtn").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.role === role)));
+    rangeBox.querySelectorAll(".rangebtn").forEach((c) => c.setAttribute("aria-pressed", String(+c.dataset.r === r)));
+    rangeWrap.hidden = role !== "RFO";
+    idIn.value = role === "RFO" ? (r == null ? "" : RMETA[r].rfo) : ROLES[role].id;
+    if (scene) scene.setFocus(role === "RFO" ? r : null);
+  }
+  for (const k of ["RFO", "ACF", "DCF"]) roleBox.append(el("button", { type: "button", class: "rolebtn", "data-role": k, onclick: () => { role = k; if (k !== "RFO") r = null; sync(); } },
+    el("div", { class: "av", style: "background:linear-gradient(140deg," + ROLES[k].colour + ",#06140d)", text: k }), el("b", { text: k === "RFO" ? "Range" : k === "ACF" ? "Sub-division" : "Division" }), el("small", { text: ROLES[k].title })));
+  RANGES.forEach((R, i) => rangeBox.append(el("button", { type: "button", class: "rangebtn", "data-r": String(i), style: "--rc:" + RMETA[i].colour, onclick: () => { r = i; sync(); } },
+    el("b", { text: RMETA[i].name }), el("small", { text: ha(R.net) + " ha plantable · " + ha(R.phase[1] + R.phase[2]) + " ha in Phase 1-2" }))));
+  const form = el("form", { class: "signin", onsubmit: (e) => {
+    e.preventDefault(); const id = idIn.value.trim().toLowerCase();
+    const ri = RMETA.findIndex((m) => m.rfo === id), rk = ri >= 0 ? "RFO" : Object.keys(ROLES).find((k) => ROLES[k].id === id);
+    if (!rk || pwIn.value !== DEMO_PASSWORD) { msg.textContent = role === "RFO" && r == null ? "Choose your range first." : "User ID or password is not correct."; return; }
+    ROLE = rk; RIDX = ri >= 0 ? ri : null; ss.set("vd_sd2_role", ROLE); ss.set("vd_sd2_r", RIDX == null ? null : String(RIDX)); go({ v: "dash" }); } },
+    el("div", null, el("div", { class: "eyebrow", text: APP.unit + " · mock drill" }), el("h2", { style: "margin-top:6px", text: "Sign in to " + APP.name })),
+    el("div", { class: "steplabel", text: "1 · Your office" }), roleBox, rangeWrap,
+    el("div", { class: "creds" }, el("label", { class: "field" }, "User ID", idIn), el("label", { class: "field" }, "Password", pwIn)), msg,
+    el("button", { class: "go", type: "submit", text: "Sign in  →" }),
+    el("div", { class: "hint", text: "Six mock-drill accounts: one RFO for each range, the ACF and the DCF. The password for all is " + DEMO_PASSWORD + "." }));
+  const host = el("div", { id: "field-login", "aria-hidden": "true" });
+  const view = el("div", { class: "login" }, host, el("div", { class: "veil" }),
+    el("div", { class: "inner gut" },
+      el("div", { class: "brandblock" },
+        el("div", { class: "wordmark" }, el("div", { class: "logo" }, logoMark(30)), el("div", null, el("b", { text: APP.name }), el("span", null, el("span", { class: "deva", text: APP.deva }), " · " + APP.sub))),
+        el("div", { class: "grid", style: "gap:16px" }, el("div", { class: "eyebrow", text: APP.org + " · " + APP.unit }),
+          el("h1", null, "Right land. Right treatment. ", el("span", { class: "grad", text: "Right order." })),
+          el("p", { text: "Every restoration work in Poshina, RDF Poshina, RDF Khedbrahma and Vadali is checked against the FRPIM need, feasibility and priority maps before a single pit is dug. The RFO proposes and certifies the site, the ACF scrutinises, the DCF approves." })),
+        el("div", { class: "statsrow" }, el("div", null, big(SD.gross), "ha of forest mapped"), el("div", null, big(SD.blocks), "blocks of 10 ha"), el("div", null, big(SD.p12), "ha in Phase 1-2"), el("div", null, big(4), "ranges")),
+        el("div", { class: "flow3" }, el("span", null, el("i", { style: "background:" + ROLES.RFO.colour, text: "RFO" }), "Proposes + certifies"), el("b", { class: "arrow", text: "→" }),
+          el("span", null, el("i", { style: "background:" + ROLES.ACF.colour, text: "ACF" }), "Scrutinises"), el("b", { class: "arrow", text: "→" }),
+          el("span", null, el("i", { style: "background:" + ROLES.DCF.colour, text: "DCF" }), "Approves")),
+        el("div", { class: "legend" }, legend3d("p"), el("span", { text: "· column height: priority" }))),
+      form));
+  requestAnimationFrame(() => { const narrow = window.innerWidth < 980;
+    scene = makeField(host, { layer: "p", works: Store.all(), rotate: true, elev: 0.58, hs: 1, fitK: narrow ? 1.25 : 0.78, offsetX: narrow ? 0 : 0.04 });
+    if (scene) SCENES.push(scene); sync(); countUp(view); });
+  sync();
+  return view;
+}
+
+/* ---------------- shell ---------------- */
+function shell() {
+  const n = inboxOf(ROLE).length;
+  const nav = [["dash", ROLE === "RFO" ? "Range desk" : "Command centre"], ["inbox", ROLE === "RFO" ? "Drafts & returns" : "Inbox"], ["works", "Register"], ["map", "Maps"]];
+  if (ROLE === "RFO") nav.splice(1, 0, ["new", "New proposal"]);
+  nav.push(["help", "How it works"]);
+  const cur = VIEW.v === "work" || VIEW.v === "range" ? (VIEW.v === "range" ? "dash" : null) : VIEW.v;
+  return el("header", { class: "top" },
+    el("div", { class: "bar gut" },
+      el("div", { class: "brand" }, el("div", { class: "logo" }, logoMark(24)), el("div", null, el("b", null, APP.name, el("span", { class: "deva", text: APP.deva })), el("small", { text: ROLE === "DCF" ? APP.org : ROLE === "ACF" ? APP.unit + " · " + APP.org : RMETA[RIDX].name + " Range · " + APP.unit }))),
+      el("nav", { class: "navwrap", "aria-label": "Main" }, el("span", { class: "pill", "aria-hidden": "true" }), nav.map(([k, t]) => el("button", { type: "button", "aria-current": cur === k ? "page" : null,
+        onclick: () => go({ v: k }) }, t, k === "inbox" && n ? el("span", { class: "count", text: String(n) }) : null))),
+      el("div", { class: "who" }, avatar(ROLE), el("div", null, el("b", { text: ROLE === "RFO" ? "RFO · " + RMETA[RIDX].name : ROLES[ROLE].title }), el("small", { text: me() })),
+        el("button", { class: "ghostbtn", type: "button", onclick: () => { ROLE = null; RIDX = null; ss.set("vd_sd2_role", null); ss.set("vd_sd2_r", null); go({ v: "dash" }); }, text: "Sign out" }))));
+}
+
+/* ---------------- shared dashboard pieces ---------------- */
+function kpiTile(label, value, dec, suf, sub, hl, extra) {
+  const num = big(value, suf, dec);
+  return el("div", { class: "kpi" + (hl ? " hl" : "") }, el("span", { text: label }), extra ? el("div", { class: "kpirow" }, num, extra) : num, el("small", { text: sub }));
+}
+function ring(p) {
+  const c = 2 * Math.PI * 17, off = c * (1 - Math.max(0, Math.min(100, p)) / 100);
+  const s = svgEl('<svg class="ring" viewBox="0 0 42 42" aria-hidden="true"><circle class="tr" cx="21" cy="21" r="17"/><circle class="fg" cx="21" cy="21" r="17" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + c.toFixed(1) + '" transform="rotate(-90 21 21)"/></svg>');
+  requestAnimationFrame(() => requestAnimationFrame(() => { s.querySelector(".fg").setAttribute("stroke-dashoffset", off.toFixed(1)); }));
+  return s;
+}
+function approvedOf(list) { return list.filter((w) => w.status === "APPROVED" || w.status === "APPROVED_DEV"); }
+function alignOf(list) { const a = approvedOf(list), h = sumHa(a); return h ? pct(a.reduce((s, w) => s + (w.result.byPhase[1] || 0) + (w.result.byPhase[2] || 0), 0), h) : 0; }
+function kpiRow(all) {
+  const mine = all.filter((w) => INBOX[ROLE].includes(w.status)), ap = approvedOf(all), align = alignOf(all);
+  return el("div", { class: "kpis" },
+    kpiTile("Pending with you", mine.length, 0, "", ROLE === "RFO" ? "drafts and returned works" : "awaiting your action", mine.length > 0),
+    kpiTile("Works proposed", all.length, 0, "", ha(sumHa(all)) + " ha in all"),
+    kpiTile("Approved area", sumHa(ap), 1, " ha", ap.length + " works approved"),
+    kpiTile("FRPIM alignment", align, 0, " %", "of approved area in Phase 1-2", false, ring(align)),
+    kpiTile("Green checks", all.filter((w) => w.verdict === "g").length, 0, "", "of " + all.length + " treatment maps"));
+}
+function pipeline(all) {
+  const stages = [["Draft / returned", ["DRAFT", "RET_RFO"], "#8a978e"], ["With ACF", ["ACF", "RET_ACF"], ROLES.ACF.colour], ["With DCF", ["DCF"], ROLES.DCF.colour], ["Approved", ["APPROVED", "APPROVED_DEV"], "#4fd38b"], ["Not approved", ["REJECTED"], "#ff6f5e"]];
+  const pipe = el("div", { class: "pipe" });
+  stages.forEach(([t, sts, col], i) => { const l = all.filter((w) => sts.includes(w.status));
+    pipe.append(el("button", { type: "button", onclick: () => go({ v: "works", status: sts.join(",") }) }, el("span", { text: t }), big(l.length), el("small", { text: ha(sumHa(l)) + " ha" }), el("div", { class: "bar", style: "background:" + col + ";animation-delay:" + i * 0.08 + "s" }))); });
+  return el("div", { class: "card" }, el("h2", null, "Approval pipeline", el("small", { text: "click a stage to open its works" })), pipe);
+}
+function activity(all, n) {
+  const ev = []; all.forEach((w) => (w.trail || []).forEach((t) => ev.push([t, w])));
+  ev.sort((a, b) => b[0].at.localeCompare(a[0].at));
+  const feed = el("div", { class: "feed" });
+  if (!ev.length) feed.append(el("div", { class: "hint", text: "No activity yet." }));
+  ev.slice(0, n || 7).forEach(([t, w]) => feed.append(el("div", null, avatar(t.role), el("div", null, el("b", { text: t.action }), " · ", el("a", { href: "#", onclick: (e) => { e.preventDefault(); go({ v: "work", id: w.id }); }, text: dispId(w.id) }), el("small", { text: rOf(w).name + " · " + w.name + " · " + dt(t.at) })))));
+  return el("div", { class: "card" }, el("h2", { text: "Recent activity" }), feed);
+}
+function checkMix(all) {
+  const vb = el("div", { class: "hbars" }), maxV = Math.max(1, ...["g", "a", "r"].map((v) => sumHa(all.filter((w) => w.verdict === v))));
+  [["g", "var(--ok)"], ["a", "var(--warn)"], ["r", "var(--bad)"]].forEach(([v, c], i) => { const l = all.filter((w) => w.verdict === v), h = sumHa(l);
+    vb.append(el("div", { class: "hbar" }, el("span", { text: VERDICT[v][0] + " (" + l.length + ")" }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(h, maxV) + "%;background:" + c + ";animation-delay:" + i * 0.1 + "s" })), el("span", { class: "v", text: ha(h) + " ha" }))); });
+  return el("div", { class: "card" }, el("h2", null, "Proposed area by FRPIM check", el("small", { text: "Green: ≥ 60 % in Phase 1-2" })), vb,
+    el("div", { class: "hint", text: "Red: mostly low priority, protected or excluded land, or outside the range." }));
+}
+function emptyWorks() {
+  return el("div", { class: "card" }, el("div", { class: "empty" }, el("b", { text: "No works in the register yet" }),
+    el("span", { text: ROLE === "RFO" ? "Create a proposal and upload its treatment KML, or load the mock-drill set to see every stage across the four ranges." : "Proposals from the four RFOs appear here. For the mock drill, load the example set: two works in each range, at different stages." }),
+    el("div", { class: "btns" }, ROLE === "RFO" ? el("button", { class: "btn gold", type: "button", onclick: () => go({ v: "new" }), text: "+ New proposal" }) : null,
+      el("button", { class: "btn ghost", type: "button", onclick: loadDemo, text: "Load mock-drill examples" }))));
+}
+function heroScene(focus, all, layerHost) {
+  const tip = el("div", { class: "tip3d", hidden: true }), host = el("div"), legendBox = el("div", { class: "legend" }, legend3d("p"));
+  let scene = null;
+  const chips = el("div", { class: "rangechips" });
+  if (focus === "all") {
+    const btn = (label, r, colour) => el("button", { type: "button", "aria-pressed": String(r == null), onclick: (e) => { chips.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.currentTarget))); scene && scene.setFocus(r); } },
+      colour ? el("i", { class: "rdot", style: "background:" + colour }) : null, label);
+    chips.append(btn("All ranges", null, null)); RMETA.forEach((m, i) => chips.append(btn(m.name, i, m.colour)));
+  }
+  const wrap = el("div", { class: "scene" }, host, el("div", { class: "overlay-tl" }, seg3((k) => { scene && scene.setLayer(k); legendBox.replaceChildren(legend3d(k)); }), chips), el("div", { class: "overlay-bl" }, legendBox), tip);
+  requestAnimationFrame(() => { scene = makeField(host, { layer: "p", focus: focus === "all" ? null : focus, works: all, tip, onWork: (w) => go({ v: "work", id: w.id }), elev: 0.7, fitK: focus === "all" ? 0.95 : 0.85 });
+    if (scene) SCENES.push(scene); else host.append(el("div", { style: "display:grid;place-items:center;height:100%;color:var(--muted)", text: "The 3D view needs WebGL; the rest of the portal works without it." })); });
+  return wrap;
+}
+
+/* ---------------- RFO range desk (also ACF / DCF drill-down) ---------------- */
+function rangeDesk(main, r, drill) {
+  const R = RANGES[r], M = RMETA[r], all = Store.all().filter((w) => w.r === r), mine = all.filter((w) => INBOX[ROLE].includes(w.status));
+  const p12 = R.phase[1] + R.phase[2];
+  if (drill) main.append(el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => go({ v: "dash" }), text: "← Command centre" }),
+    RMETA.map((m, i) => i === r ? null : el("button", { class: "btn ghost", type: "button", onclick: () => go({ v: "range", r: i }) }, el("i", { class: "rdot", style: "background:" + m.colour + ";margin-right:7px" }), m.name))));
+  const hero = el("section", { class: "hero", style: "--rc:" + M.colour },
+    el("div", { class: "txt" }, el("div", { class: "eyebrow", text: (drill ? "Range view · " : "Range desk · ") + APP.unit + " · FY " + fyNow() }),
+      el("h1", null, el("span", { class: "rn", text: M.name }), " Range"),
+      el("p", { text: drill ? "What FRPIM says about this range and every work its RFO has proposed. Hover a column for its block, click a floating slab to open a work." :
+        mine.length ? mine.length + " work" + (mine.length > 1 ? "s are" : " is") + " waiting for you. FRPIM points first to the Phase 1-2 blocks: the tallest red columns." : "FRPIM points first to the Phase 1-2 blocks: the tallest red columns. Upload a treatment KML to check a proposal against them." }),
+      el("div", { class: "facts" },
+        el("div", { class: "fact" }, big(R.net), el("span", { text: "ha net plantable" })), el("div", { class: "fact" }, big(p12), el("span", { text: "ha in Phase 1-2" })),
+        el("div", { class: "fact" }, big(R.blocks), el("span", { text: "blocks of 10 ha" })), el("div", { class: "fact" }, big(R.p12n ? Math.round(100 * R.robust / R.p12n) : 0, " %"), el("span", { text: "Phase 1-2 blocks robust (> 80 % of 500 runs)" }))),
+      el("div", { class: "btns" }, ROLE === "RFO" && !drill ? el("button", { class: "btn gold big", type: "button", onclick: () => go({ v: "new" }), text: "+ New proposal" }) : null,
+        !drill ? el("button", { class: "btn ghost big", type: "button", onclick: () => go({ v: "inbox" }), text: (ROLE === "RFO" ? "Drafts & returns" : "Inbox") + (mine.length ? " (" + mine.length + ")" : "") }) : null,
+        el("button", { class: "btn ghost big", type: "button", onclick: () => go({ v: "map", r }), text: "Open range map" }))),
+    heroScene(r, all));
+  main.append(hero);
+  // where FRPIM points first
+  const tot = R.net + R.prot + R.excl, ph = Object.assign({}, R.phase, { 6: R.prot, 7: R.excl });
+  const beats = el("div", { class: "beats" }), mx = R.beats.length ? R.beats[0][1] : 1;
+  R.beats.forEach(([b, v], i) => beats.append(el("div", { class: "beat" }, el("span", { text: b }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(v, mx) + "%;animation-delay:" + i * 0.06 + "s" })), el("span", { class: "v", text: ha(v) + " ha" }))));
+  main.append(el("div", { class: "grid g2" },
+    el("div", { class: "card" }, el("h2", null, "The range by priority phase", el("small", { text: "Phase 1-5 net plantable ha · Protected and Excluded gross ha" })), phaseStack(ph, 0, tot, true),
+      el("div", { class: "tw" }, el("table", { class: "t" }, el("tbody", null, [1, 2, 3, 4, 5, 6, 7].map((k) => el("tr", null, el("td", null, el("i", { class: "sw", style: "background:" + PHASE[k][1] }), PHASE[k][0]), el("td", { class: "n", text: ha(ph[k]) + " ha" }), el("td", { class: "n", text: fp(pct(ph[k], tot)) }))))))),
+    el("div", { class: "card" }, el("h2", null, "Where to start: beats with most Phase 1-2 land", el("small", { text: "net plantable ha" })), beats,
+      el("div", { class: "hint", text: "Proposals on these beats are most likely to pass the FRPIM check Green." }))));
+  if (!all.length) { main.append(emptyWorks()); return; }
+  main.append(kpiRow(all), pipeline(all));
+  main.append(el("div", { class: "grid g2" }, checkMix(all), activity(all)));
+  if (mine.length && !drill) main.append(el("div", { class: "card" }, el("h2", null, ROLE === "RFO" ? "Waiting for you" : "Your inbox", el("small", { text: mine.length + " works" })), workList(mine.slice(0, 6))));
+  if (drill) main.append(el("div", { class: "card" }, el("h2", null, "Works in " + M.name, el("small", { text: all.length + " works" })), workList(all)));
+  demoCard(main);
+}
+
+/* ---------------- ACF / DCF command centre ---------------- */
+function commandView(main) {
+  const all = Store.all(), mine = inboxOf(ROLE);
+  const hero = el("section", { class: "hero" },
+    el("div", { class: "txt" }, el("div", { class: "eyebrow", text: (ROLE === "ACF" ? "Sub-division command centre" : "Division review") + " · FY " + fyNow() }),
+      el("h1", null, "Sub-division 2", el("br"), el("span", { class: "grad", text: "in one view" })),
+      el("p", { text: (mine.length ? mine.length + " work" + (mine.length > 1 ? "s are" : " is") + " waiting for your " + (ROLE === "ACF" ? "scrutiny" : "decision") + ". " : "Nothing is waiting for you right now. ") + "Pick a range on the map to fly to it; the works float above their land, coloured by stage." }),
+      el("div", { class: "facts" },
+        el("div", { class: "fact" }, big(SD.gross), el("span", { text: "ha of forest, 4 ranges" })), el("div", { class: "fact" }, big(SD.net), el("span", { text: "ha net plantable" })),
+        el("div", { class: "fact" }, big(SD.p12), el("span", { text: "ha in Phase 1-2" })), el("div", { class: "fact" }, big(Math.round(100 * SD.robust / SD.p12n), " %"), el("span", { text: "Phase 1-2 blocks robust" }))),
+      el("div", { class: "btns" }, el("button", { class: "btn gold big", type: "button", onclick: () => go({ v: "inbox" }), text: "Open inbox" + (mine.length ? " (" + mine.length + ")" : "") }),
+        el("button", { class: "btn ghost big", type: "button", onclick: () => go({ v: "works" }), text: "Register" }))),
+    heroScene("all", all));
+  main.append(hero);
+  // range cards
+  const cards = el("div", { class: "rcards" });
+  RANGES.forEach((R, i) => {
+    const l = all.filter((w) => w.r === i), pend = l.filter((w) => INBOX[ROLE].includes(w.status)).length, ph = Object.assign({}, R.phase, { 6: R.prot, 7: R.excl }), tot = R.net + R.prot + R.excl;
+    cards.append(el("button", { type: "button", class: "rcard", style: "--rc:" + RMETA[i].colour, onclick: () => go({ v: "range", r: i }) },
+      el("div", { class: "nm" }, el("b", { text: RMETA[i].name }), pend ? el("span", { class: "chip c-x", text: pend + " for you" }) : el("span", { class: "hint", text: RMETA[i].rfo })),
+      phaseStack(ph, 0, tot),
+      el("dl", null, el("div", null, el("dt", { text: "Phase 1-2 ha" }), el("dd", { text: ha(R.phase[1] + R.phase[2]) })), el("div", null, el("dt", { text: "Works" }), el("dd", { text: String(l.length) })),
+        el("div", null, el("dt", { text: "Approved ha" }), el("dd", { text: ha(sumHa(approvedOf(l))) }))),
+      el("div", { class: "hint", text: "Top beat: " + (R.beats[0] ? R.beats[0][0] + " (" + ha(R.beats[0][1]) + " ha in Phase 1-2)" : "-") })));
+  });
+  main.append(cards);
+  if (!all.length) { main.append(emptyWorks()); return; }
+  main.append(kpiRow(all), pipeline(all));
+  // range league
+  const tb = el("tbody");
+  let T = { n: 0, ha: 0, g: 0, ap: 0, pend: 0 };
+  RANGES.forEach((R, i) => { const l = all.filter((w) => w.r === i), g = l.filter((w) => w.verdict === "g").length, ap = sumHa(approvedOf(l)), open = l.filter((w) => !["APPROVED", "APPROVED_DEV", "REJECTED"].includes(w.status));
+    const age = open.length ? Math.round(open.reduce((s, w) => s + daysAgo(w.updatedAt || w.createdAt), 0) / open.length) : null;
+    T.n += l.length; T.ha += sumHa(l); T.g += g; T.ap += ap; T.pend += open.length;
+    tb.append(el("tr", { class: "click", tabindex: "0", onclick: () => go({ v: "range", r: i }), onkeydown: (e) => { if (e.key === "Enter") go({ v: "range", r: i }); } },
+      el("td", null, el("i", { class: "sw", style: "background:" + RMETA[i].colour }), el("b", { text: RMETA[i].name })), el("td", { class: "n", text: String(l.length) }), el("td", { class: "n", text: ha(sumHa(l)) }),
+      el("td", { class: "n", text: l.length ? fp(pct(g, l.length)) : "-" }), el("td", { class: "n", text: ha(ap) }), el("td", { class: "n", text: l.length ? fp(alignOf(l)) : "-" }), el("td", { class: "n", text: String(open.length) }), el("td", { class: "n", text: age == null ? "-" : age + " d" }))); });
+  main.append(el("div", { class: "card" }, el("h2", null, "Range league", el("small", { text: "click a range to open it" })),
+    el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, ["Range", "Works", "ha proposed", "Green", "ha approved", "Approved in P1-2", "Open", "Avg. age"].map((h, i) => el("th", { class: i ? "n" : null, text: h })))), tb,
+      el("tfoot", null, el("tr", null, el("td", { text: "Sub-division 2" }), el("td", { class: "n", text: String(T.n) }), el("td", { class: "n", text: ha(T.ha) }), el("td", { class: "n", text: T.n ? fp(pct(T.g, T.n)) : "-" }), el("td", { class: "n", text: ha(T.ap) }), el("td", { class: "n", text: fp(alignOf(all)) }), el("td", { class: "n", text: String(T.pend) }), el("td")))))));
+  main.append(el("div", { class: "grid g2" }, checkMix(all), activity(all)));
+  if (mine.length) main.append(el("div", { class: "card action" }, el("h2", null, "Your inbox", el("small", { text: mine.length + " works waiting" })), workList(mine.slice(0, 6))));
+  demoCard(main);
+}
+function demoCard(main) {
+  if (!Store.all().some((w) => w.demo)) return;
+  main.append(el("div", { class: "card" }, el("h2", { text: "Mock-drill data" }), el("div", { class: "hint", text: "Works numbered 901 onwards are examples loaded for the mock drill. Remove them before real use; real works are numbered separately." }),
+    el("div", { class: "btns" }, confirmButton("Remove mock-drill examples", "Remove all example works from the register?", async () => { for (const w of Store.all().filter((x) => x.demo)) await Store.remove(w.id); toast("Examples removed"); go({ v: "dash" }); }))));
+}
+
+/* ---------------- lists, inbox, register ---------------- */
+function confirmButton(label, question, fn) {
+  const wrap = el("span", { class: "btns" });
+  const b = el("button", { class: "btn bad", type: "button", text: label, onclick: () => wrap.replaceChildren(el("span", { text: question }),
+    el("button", { class: "btn bad", type: "button", text: "Yes", onclick: fn }), el("button", { class: "btn ghost", type: "button", text: "Cancel", onclick: () => wrap.replaceChildren(b) })) });
+  wrap.append(b); return wrap;
+}
+function workList(list) {
+  if (!list.length) return el("div", { class: "empty" }, el("b", { text: "Nothing here" }), el("span", { text: "Works waiting for this office appear here." }));
+  const box = el("div", { class: "list" });
+  list.slice().sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")).forEach((w) => {
+    const st = STATUS[w.status], col = w.verdict === "g" ? "var(--ok)" : w.verdict === "a" ? "var(--warn)" : "var(--bad)";
+    box.append(el("button", { type: "button", class: "item", onclick: () => go({ v: "work", id: w.id }) }, el("div", { class: "st", style: "background:" + col }),
+      el("div", null, el("div", { class: "t", text: w.name }), el("div", { class: "m" }, el("i", { class: "rdot", style: "background:" + rOf(w).colour + ";margin-right:6px" }), rOf(w).name + " · " + dispId(w.id) + " · " + [w.beat, w.scheme, TREAT[w.treat]].filter(Boolean).join(" · ")),
+        el("div", { class: "m", text: "Updated " + dd(w.updatedAt) + " (" + daysAgo(w.updatedAt) + " days)" + (w.demo ? " · example" : "") })),
+      el("div", { class: "r" }, el("span", { class: "chip " + st[1], text: st[0] }), el("span", { class: "chip c-" + w.verdict, text: VERDICT[w.verdict][0] + " · " + fp(w.s12) + " P1-2" }), el("span", { class: "m num", text: ha(w.result.total) + " ha" }))));
+  });
+  return box;
+}
+function inboxView(main) {
+  const list = inboxOf(ROLE);
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: officeOf(ROLE, RIDX) }), el("h1", { text: ROLE === "RFO" ? "Drafts and returned works" : "Inbox" }),
+    el("p", { text: ROLE === "RFO" ? "Complete your drafts and revise the works the ACF returned." : ROLE === "ACF" ? "Proposals from the four RFOs waiting for your scrutiny and recommendation." : "Proposals recommended by the ACF, waiting for your decision." }))));
+  if (ROLE !== "RFO") { const by = el("div", { class: "rcards" });
+    RMETA.forEach((m, i) => { const l = list.filter((w) => w.r === i); by.append(el("div", { class: "rcard", style: "--rc:" + m.colour + ";cursor:default" }, el("div", { class: "nm" }, el("b", { text: m.name }), el("span", { class: "chip " + (l.length ? "c-x" : "c-s"), text: l.length + " waiting" })), el("div", { class: "hint", text: ha(sumHa(l)) + " ha" }))); });
+    main.append(by); }
+  main.append(el("div", { class: "card" }, workList(list)));
+}
+function worksView(main) {
+  const head = el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: officeOf(ROLE, RIDX) }), el("h1", { text: "Register of works" }), el("p", { text: ROLE === "RFO" ? "Every proposal of " + RMETA[RIDX].name + " Range." : "Every proposal of the four ranges of Sub-division 2." })),
+    el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => exportCSV(filtered()), text: "Export register (CSV)" })));
+  main.append(head);
+  const sel = (id, opts, lab) => el("select", { id, "aria-label": lab }, opts.map(([v, t]) => el("option", { value: v, text: t })));
+  const fs = sel("w-status", [["", "All statuses"]].concat(Object.entries(STATUS).map(([k, v]) => [k, v[0]])), "Status");
+  if (VIEW.status && VIEW.status.includes(",")) fs.append(el("option", { value: VIEW.status, text: "Selected stage" }));
+  fs.value = VIEW.status || "";
+  const fr = sel("w-range", [["", "All ranges"]].concat(RMETA.map((m, i) => [String(i), m.name])), "Range");
+  if (ROLE === "RFO") { fr.value = String(RIDX); fr.disabled = true; }
+  const fv = sel("w-verdict", [["", "All FRPIM checks"], ["g", "Green"], ["a", "Amber"], ["r", "Red"]], "FRPIM check");
+  const fsc = sel("w-scheme", [["", "All schemes"]].concat(SCHEMES.map((s) => [s, s])), "Scheme");
+  const fy = sel("w-year", [["", "All years"]].concat(fyList().map((y) => [y, y])), "Year");
+  const q = el("input", { id: "w-q", type: "search", placeholder: "Search name, ID or beat", "aria-label": "Search" });
+  const body = el("div");
+  const filtered = () => scoped().filter((w) => (!fs.value || fs.value.split(",").includes(w.status)) && (!fr.value || String(w.r) === fr.value) && (!fv.value || w.verdict === fv.value) && (!fsc.value || w.scheme === fsc.value) && (!fy.value || w.year === fy.value) &&
+    (!q.value || (w.name + " " + w.id + " " + (w.beat || "")).toLowerCase().includes(q.value.toLowerCase()))).sort((a, b) => a.r - b.r || b.id.localeCompare(a.id));
+  const draw = () => {
+    const list = filtered(), tb = el("tbody");
+    list.forEach((w) => tb.append(el("tr", { class: "click", tabindex: "0", onclick: () => go({ v: "work", id: w.id }), onkeydown: (e) => { if (e.key === "Enter") go({ v: "work", id: w.id }); } },
+      el("td", { class: "num", text: dispId(w.id) }), el("td", null, el("i", { class: "sw", style: "background:" + rOf(w).colour }), rOf(w).name), el("td", null, el("b", { text: w.name }), el("div", { class: "hint", text: [w.beat, TREAT[w.treat]].filter(Boolean).join(" · ") })),
+      el("td", { text: w.scheme }), el("td", { class: "n", text: ha(w.result.total) }), el("td", { class: "n", text: fp(w.s12) }),
+      el("td", null, el("span", { class: "chip c-" + w.verdict, text: VERDICT[w.verdict][0] })), el("td", null, el("span", { class: "chip " + STATUS[w.status][1], text: STATUS[w.status][0] })))));
+    body.replaceChildren(list.length ? el("div", { class: "tw" }, el("table", { class: "t" }, el("thead", null, el("tr", null, ["Work ID", "Range", "Name of work", "Scheme", "ha", "Phase 1-2", "FRPIM check", "Status"].map((h, i) => el("th", { class: i === 4 || i === 5 ? "n" : null, text: h })))), tb),
+      el("div", { class: "hint", style: "margin-top:8px", text: list.length + " works · " + ha(sumHa(list)) + " ha" })) : el("div", { class: "empty" }, el("b", { text: "No works match" }), el("span", { text: "Change the filters, or load the mock-drill examples." })));
+  };
+  [fs, fr, fv, fsc, fy].forEach((s) => s.addEventListener("change", draw)); q.addEventListener("input", draw);
+  main.append(el("div", { class: "card" }, el("div", { class: "filters" }, q, fr, fs, fv, fsc, fy), body));
+  draw();
+}
+
+/* ---------------- maps: 3D field or 2D map ---------------- */
+function mapView(main) {
+  let layer = "p", mode = VIEW.mode || "3d", focus = ROLE === "RFO" ? RIDX : VIEW.r == null ? null : VIEW.r;
+  const legend = el("div", { class: "grid", style: "gap:8px" });
+  const modeSeg = el("div", { class: "seg", role: "group", "aria-label": "View" });
+  [["3d", "3D field"], ["2d", "Map"]].forEach(([k, t]) => modeSeg.append(el("button", { type: "button", "aria-pressed": String(k === mode), text: t, onclick: () => go({ v: "map", mode: k, r: focus }) })));
+  let scene = null, blocksLayer = null;
+  const layerSeg = seg3((k) => { layer = k; if (scene) scene.setLayer(k); if (blocksLayer) blocksLayer.setStyle(style); draw(); });
+  const chips = el("div", { class: "rangechips" });
+  const works = Store.all();
+  const setFocus = (r) => { focus = r; chips.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.r === String(r)))); if (scene) scene.setFocus(r); if (bigmap) fit(); if (blocksLayer) blocksLayer.setStyle(style); };
+  if (ROLE !== "RFO") { chips.append(el("button", { type: "button", "data-r": "null", "aria-pressed": String(focus == null), onclick: () => setFocus(null), text: "All ranges" }));
+    RMETA.forEach((m, i) => chips.append(el("button", { type: "button", "data-r": String(i), "aria-pressed": String(focus === i), onclick: () => setFocus(i) }, el("i", { class: "rdot", style: "background:" + m.colour }), m.name))); }
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: focus == null ? APP.unit : RMETA[focus].name + " Range" }), el("h1", { text: "FRPIM maps and works" }),
+    el("p", { text: mode === "3d" ? "Drag to turn, scroll to zoom. Each column is a 10 ha block; floating slabs are works, coloured by stage. Click a slab to open the work." : "Every block on the FRPIM maps with the works drawn on top. Click a work to open its file, or a block for its values." })),
+    el("div", { class: "btns" }, modeSeg, layerSeg)));
+  if (chips.childElementCount) main.append(chips);
+  const style = (f) => { const b = f.properties, on = focus == null || b.r === focus; return { fillColor: on ? colourOf(b, layer) : "#183126", fillOpacity: on ? 0.92 : 0.5, color: "#0a1a12", weight: 0.3 }; };
+  const draw = () => { const tbl = layer === "n" ? NEED : layer === "f" ? FEAS : PHASE;
+    legend.replaceChildren(legendRow(tbl, layer === "p" ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5]),
+      el("div", { class: "legend" }, [["Approved", "#4fd38b"], ["With DCF", "#f6c46a"], ["With ACF", "#74b4ff"], ["Draft / returned", "#dedede"], ["Not approved", "#ff6f5e"]].map(([t, c]) => el("span", null, el("i", { style: "background:" + c + ";border-radius:50%" }), "Work: " + t))),
+      el("div", { class: "legend" }, RMETA.map((m) => el("span", null, el("i", { style: "background:transparent;border:2px solid " + m.colour }), m.name + " boundary")))); };
+  let fit = () => {};
+  if (mode === "3d") {
+    const host = el("div", { id: "big3d" }), tip = el("div", { class: "tip3d", hidden: true });
+    host.append(tip);
+    main.append(el("div", { class: "card" }, host, legend));
+    requestAnimationFrame(() => { scene = makeField(host, { layer, focus, works, interactive: true, zoom: true, tip, onWork: (w) => go({ v: "work", id: w.id }), elev: 0.75, fitK: 1.05 });
+      if (scene) SCENES.push(scene); else go({ v: "map", mode: "2d", r: focus }); });
+  } else {
+    const mapDiv = el("div", { id: "bigmap" });
+    main.append(el("div", { class: "card" }, mapDiv, legend));
+    bigmap = L.map(mapDiv, { preferCanvas: true, zoomSnap: 0.25, attributionControl: false });
+    const renderer = L.canvas({ padding: 0.3 });
+    blocksLayer = L.geoJSON({ type: "FeatureCollection", features: BLOCKS.map((b) => ({ type: "Feature", properties: b, geometry: b.geom })) },
+      { renderer, style, onEachFeature: (f, l) => l.bindPopup(() => { const b = f.properties; return el("div", { style: "font-size:12.5px;line-height:1.55" }, el("b", { text: RMETA[b.r].name + " · " + b.bt + " beat" }), el("br"), el("span", { class: "num", text: b.id }), el("br"), PHASE[b.p][0],
+        b.p <= 5 ? [el("br"), "Need " + NEED[b.n][0] + " (RNI " + b.rni.toFixed(3) + ")", el("br"), "Feasibility " + FEAS[b.f][0] + " (RFI " + b.rfi.toFixed(3) + ")", el("br"), RX[b.rx] + (b.smc ? " + SMC" : ""), el("br"), "Reliability " + Math.round(b.st * 100) + " %"] : null); }) }).addTo(bigmap);
+    RANGES.forEach((R, i) => { L.geoJSON(R.outline, { renderer, interactive: false, style: { fill: false, color: RMETA[i].colour, weight: 2, dashArray: "6 4" } }).addTo(bigmap);
+      L.marker([R.label[1], R.label[0]], { interactive: false, icon: L.divIcon({ className: "rlabel", html: esc(RMETA[i].name), iconSize: null }) }).addTo(bigmap); });
+    const stCol = (s) => (s.startsWith("APPROVED") ? "#4fd38b" : s === "DCF" ? "#f6c46a" : s === "ACF" || s === "RET_ACF" ? "#74b4ff" : s === "REJECTED" ? "#ff6f5e" : "#dedede");
+    works.forEach((w) => {
+      L.geoJSON(w.geom, { style: { color: "#000", weight: 6, opacity: 0.7, fill: false }, interactive: false }).addTo(bigmap);
+      L.geoJSON(w.geom, { style: { color: stCol(w.status), weight: 3, fillColor: stCol(w.status), fillOpacity: 0.25 } }).bindTooltip(dispId(w.id) + " · " + w.name).on("click", () => go({ v: "work", id: w.id })).addTo(bigmap);
+    });
+    fit = () => { const ll = BLOCKS.filter((b) => focus == null || b.r === focus).map((b) => [b.y, b.x]); bigmap.fitBounds(L.latLngBounds(ll), { padding: [16, 16] }); };
+    fit();
+    L.control.scale({ imperial: false }).addTo(bigmap);
+  }
+  draw();
+}
+
+/* ---------------- new / edit proposal (RFO) ---------------- */
+function radioGroup(name, options, value) {
+  return el("div", { class: "opts", role: "radiogroup" }, options.map((o) => el("label", null, el("input", { type: "radio", name, value: o, checked: o === value ? true : null }), o)));
+}
+function checkGroup(name, options, values) {
+  return el("div", { class: "opts" }, options.map((o) => el("label", null, el("input", { type: "checkbox", name, value: o, checked: (values || []).includes(o) ? true : null }), o)));
+}
+const radioVal = (root, name) => { const x = root.querySelector('input[name="' + name + '"]:checked'); return x ? x.value : ""; };
+const checkVals = (root, name) => Array.from(root.querySelectorAll('input[name="' + name + '"]:checked')).map((x) => x.value);
+function editView(main, id) {
+  const w0 = id ? Store.get(id) : null;
+  if (ROLE !== "RFO") { main.append(el("div", { class: "card", text: "Only the RFO prepares proposals." })); return; }
+  if (w0 && (!["DRAFT", "RET_RFO"].includes(w0.status) || w0.r !== RIDX)) { main.append(el("div", { class: "card", text: "This work is not with you." })); return; }
+  const M = RMETA[RIDX], R = RANGES[RIDX];
+  const st = { parsed: w0 ? { features: w0.geom.features, notes: {} } : null, fileName: w0 ? w0.fileName : "", result: w0 ? w0.result : null };
+  const c0 = (w0 && w0.rfoCert) || {};
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: "RFO · " + M.name + " Range" }), el("h1", { text: w0 ? "Revise " + dispId(w0.id) : "New proposal" }),
+    el("p", { text: "Upload the treatment KML and see at once how it sits on the FRPIM maps. Then fill in the work, certify the site and SMC suitability, and submit it to the ACF." })),
+    el("div", { class: "steps" }, ["Upload KML", "Work details", "Field certification", "Submit"].map((t, i) => el("span", null, el("i", { text: String(i + 1) }), t)))));
+  if (w0 && w0.status === "RET_RFO") { const last = (w0.trail || []).filter((t) => t.action.startsWith("Returned")).pop();
+    main.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the ACF. " }), last ? last.note : "")); }
+  const v = (k, d) => (w0 && w0[k] != null ? w0[k] : d);
+  const name = el("input", { id: "p-name", maxlength: "140", value: v("name", ""), placeholder: "e.g. Plantation with SMC, Compt. 12" });
+  const beat = el("select", { id: "p-beat" }, el("option", { value: "", text: "Choose the beat" }), R.allBeats.map((b) => el("option", { value: b, text: b }))); beat.value = v("beat", "");
+  const scheme = el("select", { id: "p-scheme" }, SCHEMES.map((s) => el("option", { text: s }))); scheme.value = v("scheme", "CAMPA");
+  const year = el("select", { id: "p-year" }, fyList().map((y) => el("option", { text: y }))); year.value = v("year", fyNow());
+  const treat = el("select", { id: "p-treat" }, Object.entries(TREAT).map(([k, t]) => el("option", { value: k, text: t }))); treat.value = v("treat", "PLANT_SMC");
+  const est = el("input", { id: "p-est", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: v("estArea", "") });
+  const cost = el("input", { id: "p-cost", type: "number", min: "0", step: "0.01", inputmode: "decimal", value: v("estCost", "") });
+  const seed = el("input", { id: "p-seed", type: "number", min: "0", step: "1", inputmode: "numeric", value: v("seedlings", "") });
+  const rem = el("textarea", { id: "p-rem", maxlength: "1000" }); rem.value = v("remarks", "");
+  const certBoxes = RFO_CHECKS.map((c, i) => el("input", { type: "checkbox", id: "rc" + i, checked: c0.checks && c0.checks[i] ? true : null }));
+  const cert = el("div", { class: "grid", style: "gap:14px" },
+    el("div", { class: "checks" }, RFO_CHECKS.map((c, i) => el("label", null, certBoxes[i], c))),
+    el("div", { class: "subcard" }, el("h3", { text: "SMC suitability (assessed by the RFO in the field)" }),
+      el("div", { class: "field" }, "Is the site suitable for SMC works?", radioGroup("smcSuit", SMC_SUIT, c0.smcSuit)),
+      el("div", { class: "field" }, "SMC works proposed", checkGroup("smcWorks", SMC_WORKS, c0.smcWorks)),
+      el("div", { class: "field" }, "Water for watering seedlings", radioGroup("water", WATER, c0.water)),
+      el("label", { class: "field" }, "Field observations", el("textarea", { id: "rc-note", maxlength: "800", placeholder: "Slope, gullies, rock, existing rootstock, grazing pressure, anything the ACF should know (optional)" }, c0.note || ""))));
+  const smcHint = el("div", { class: "banner a", hidden: true });
+  const file = el("input", { type: "file", id: "p-file", hidden: true, accept: ".kml,.kmz,.geojson,.json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" });
+  const fmsg = el("div", { class: "hint" }, st.fileName ? "Current KML: " + st.fileName : "");
+  const preview = el("div", { class: "grid", style: "gap:14px" });
+  const drop = el("div", { class: "drop", tabindex: "0", role: "button", "aria-label": "Choose the treatment KML", onclick: () => file.click(),
+    onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } } },
+    el("div", { class: "ico" }, svgEl('<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="#f6c46a" stroke-width="2" fill="none" stroke-linecap="round"/></svg>')),
+    el("b", { text: st.fileName ? "Replace the treatment KML" : "Upload the treatment KML" }), el("span", { class: "hint", text: "Tap to choose a KML or KMZ from your phone or computer, or drop it here. The boundary must be a polygon." }), file);
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+  file.addEventListener("change", () => { if (file.files[0]) onFile(file.files[0]); file.value = ""; });
+  const msg = el("div", { role: "alert" });
+  function smcCompare() {
+    if (!st.result) { smcHint.hidden = true; return; }
+    const s = radioVal(cert, "smcSuit"), frp = pct(st.result.smcHa, st.result.retained || 1);
+    if ((s === "Not needed" || s === "Not suitable") && frp >= 50) { smcHint.hidden = false; smcHint.textContent = "FRPIM finds SMC needed on " + fp(frp) + " of the plantable area, but the field assessment says “" + s + "”. Explain the difference in the field observations."; }
+    else if (s === "Suitable" && frp < 20 && st.result.retained > 0) { smcHint.hidden = false; smcHint.textContent = "FRPIM finds SMC needed on only " + fp(frp) + " of the plantable area. Say why SMC is proposed in the field observations."; }
+    else smcHint.hidden = true;
+  }
+  cert.addEventListener("change", smcCompare);
+  function refresh() {
+    preview.replaceChildren();
+    if (!st.result) return;
+    const vd = verdictOf(st.result, treat.value, parseFloat(est.value) || 0, RIDX);
+    preview.append(el("h2", { text: "FRPIM check of this KML" }), maps3({ type: "FeatureCollection", features: st.parsed.features }), findings(Object.assign({ result: st.result, verdict: vd.v }, vd)));
+    smcCompare();
+  }
+  async function onFile(f) {
+    fmsg.className = "hint"; fmsg.textContent = "Reading " + f.name + "…";
+    try {
+      const parsed = await readFile(f);
+      if (!parsed.features.length) throw new Error("No polygon found in " + f.name + ". " + (parsed.notes.points ? parsed.notes.points + " point(s) " : "") + (parsed.notes.lines ? parsed.notes.lines + " open line(s) " : "") + "cannot be measured. Draw the boundary as a polygon and save the KML again.");
+      st.parsed = parsed; st.fileName = f.name; st.result = analyse(parsed.features);
+      const n = [parsed.features.length + " polygon(s) read from " + f.name + ", " + st.result.total.toFixed(2) + " ha."];
+      if (parsed.notes.closedLines) n.push(parsed.notes.closedLines + " closed GPS line(s) used as boundary."); if (parsed.notes.points) n.push(parsed.notes.points + " point(s) ignored.");
+      fmsg.className = "okm"; fmsg.textContent = n.join(" ");
+      if (!name.value) name.value = f.name.replace(/\.(kml|kmz|geojson|json)$/i, "");
+      if (!est.value) est.value = st.result.total.toFixed(2);
+      if (!beat.value && st.result.topBeat && R.allBeats.includes(st.result.topBeat)) beat.value = st.result.topBeat;
+      refresh();
+    } catch (e) { fmsg.className = "err"; fmsg.textContent = (e && e.message) || "The file could not be read."; }
+  }
+  treat.addEventListener("change", refresh); est.addEventListener("input", refresh);
+  const certData = () => ({ checks: certBoxes.map((b) => b.checked), smcSuit: radioVal(cert, "smcSuit"), smcWorks: checkVals(cert, "smcWorks"),
+    water: radioVal(cert, "water"), note: cert.querySelector("#rc-note").value.trim(), at: new Date().toISOString(), by: me() });
+  async function save(submit) {
+    const d = { name: name.value.trim(), beat: beat.value, scheme: scheme.value, year: year.value, treat: treat.value, estArea: parseFloat(est.value) || null, estCost: parseFloat(cost.value) || null, seedlings: parseInt(seed.value) || null, remarks: rem.value.trim() };
+    const fail = (t, focus) => { msg.className = "err"; msg.textContent = t; if (focus) focus.focus(); };
+    if (!d.name) return fail("Enter the name of the work.", name);
+    if (!st.result) return fail("Upload the treatment KML first.");
+    const c = certData();
+    if (submit) {
+      if (!(d.estArea > 0)) return fail("Enter the area in the estimate before submitting.", est);
+      if (!c.checks.every(Boolean)) return fail("Certify every item of the field certification before submitting.");
+      if (!c.smcSuit) return fail("Record the SMC suitability of the site.");
+      if ((c.smcSuit === "Suitable" || c.smcSuit === "Partly suitable") && !c.smcWorks.length) return fail("Tick the SMC works proposed.");
+      if (!smcHint.hidden && c.note.length < 15) return fail("Your SMC assessment differs from FRPIM. Explain it in the field observations (at least 15 characters).");
+    }
+    const geom = simplifyFC({ type: "FeatureCollection", features: st.parsed.features.map((f) => ({ type: "Feature", properties: { name: String(f.properties.name || "").slice(0, 80) }, geometry: f.geometry })) });
+    if (!geom) return fail("The KML is too detailed to store. Split it into smaller files.");
+    const vd = verdictOf(st.result, d.treat, d.estArea || 0, RIDX);
+    const w = w0 ? JSON.parse(JSON.stringify(w0)) : { id: nextId(RIDX, d.year), r: RIDX, range: M.name, createdAt: new Date().toISOString(), createdBy: me(), trail: [], status: "DRAFT" };
+    Object.assign(w, d, { fileName: st.fileName, geom, result: st.result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, sOther: vd.sOther, matchPct: vd.matchPct, rfoCert: c, model: APP.model });
+    if (!w0) trail(w, "Draft created", "KML " + st.fileName);
+    if (submit) { trail(w, w.status === "RET_RFO" ? "Revised, certified and resubmitted to ACF" : "Certified and submitted to ACF", "FRPIM " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2 · SMC: " + c.smcSuit + (c.smcWorks.length ? " (" + c.smcWorks.join(", ") + ")" : "")); w.status = "ACF"; w.submittedAt = new Date().toISOString(); }
+    else if (w0) trail(w, "Draft updated", "");
+    msg.className = "hint"; msg.textContent = "Saving…";
+    try { await Store.put(w); toast(submit ? dispId(w.id) + " submitted to the ACF" : "Draft saved"); go({ v: "work", id: w.id }); }
+    catch (e) { fail("Could not save: " + ((e && e.message) || "unknown error")); }
+  }
+  main.append(el("div", { class: "grid g-main" },
+    el("div", { class: "grid" }, el("div", { class: "card" }, el("h2", { text: "1 · Treatment KML and FRPIM check" }), drop, fmsg, preview)),
+    el("div", { class: "grid" },
+      el("div", { class: "card" }, el("h2", { text: "2 · Work details" }), el("div", { class: "formgrid" },
+        el("label", { class: "field full" }, "Name of work *", name), el("label", { class: "field" }, "Beat", beat), el("label", { class: "field" }, "Scheme", scheme),
+        el("label", { class: "field" }, "Work year", year), el("label", { class: "field" }, "Treatment proposed", treat), el("label", { class: "field" }, "Area in the estimate (ha) *", est),
+        el("label", { class: "field" }, "Estimated cost (₹ lakh)", cost), el("label", { class: "field full" }, "Seedlings proposed", seed), el("label", { class: "field full" }, "Remarks", rem))),
+      el("div", { class: "card" }, el("h2", null, "3 · Field certification by RFO", el("small", { text: "required to submit" })), cert, smcHint),
+      el("div", { class: "card action" }, el("h2", { text: "4 · Submit" }), el("div", { class: "hint", text: "By submitting, the RFO certifies the site and the SMC assessment. The work goes to the ACF for scrutiny. You can save a draft first." }),
+        el("div", { class: "btns" }, el("button", { class: "btn gold big", type: "button", onclick: () => save(true), text: "Certify and submit to ACF" }), el("button", { class: "btn ghost", type: "button", onclick: () => save(false), text: "Save draft" })), msg))));
+  if (st.result) refresh();
+}
+
+/* ---------------- work file ---------------- */
+function trackBar(w) {
+  const s = w.status, t = w.trail || [];
+  const at = (re) => { const x = t.filter((e) => re.test(e.action)).pop(); return x ? dd(x.at) : ""; };
+  const node = (cls, label, title, sub) => el("div", { class: cls }, el("div", { class: "dot", text: label }), el("b", { text: title }), el("small", { text: sub }));
+  const post = ["DCF", "APPROVED", "APPROVED_DEV", "REJECTED"];
+  return el("div", { class: "track" },
+    node(s === "DRAFT" ? "now" : s === "RET_RFO" ? "back" : "done", "RFO", "Proposal + certification", s === "DRAFT" ? "Draft" : s === "RET_RFO" ? "Returned for revision" : "Submitted " + at(/submitted|resubmitted/i)),
+    node(["ACF", "RET_ACF"].includes(s) ? "now" : post.includes(s) ? "done" : "", "ACF", "Scrutiny", ["ACF", "RET_ACF"].includes(s) ? "In progress" : at(/Recommended/) ? "Recommended " + at(/Recommended/) : "Pending"),
+    node(s === "DCF" ? "now" : ["APPROVED", "APPROVED_DEV"].includes(s) ? "done" : s === "REJECTED" ? "back" : "", "DCF", "Decision", s === "DCF" ? "Awaiting approval" : ["APPROVED", "APPROVED_DEV", "REJECTED"].includes(s) ? STATUS[s][0] + " " + at(/Approved|Not approved/) : "Pending"),
+    node(["APPROVED", "APPROVED_DEV"].includes(s) ? "done" : "", "✓", "Sanctioned", ["APPROVED", "APPROVED_DEV"].includes(s) ? "Ready for execution" : "-"));
+}
+const checkRow = (ok, text) => el("div", { class: "checkrow" }, el("span", { class: "ic " + (ok ? "y" : "n"), text: ok ? "✓" : "✗" }), el("span", { text }));
+function rfoCertCard(w) {
+  const c = w.rfoCert;
+  if (!c) return el("div", { class: "card" }, el("h2", { text: "RFO field certification" }), el("div", { class: "hint", text: "Completed by the RFO when the work is submitted." }));
+  const frp = w.result && w.result.retained ? pct(w.result.smcHa, w.result.retained) : null;
+  const diff = frp != null && (((c.smcSuit === "Not needed" || c.smcSuit === "Not suitable") && frp >= 50) || (c.smcSuit === "Suitable" && frp < 20));
+  return el("div", { class: "card" }, el("h2", null, "RFO field certification", el("small", { text: dd(c.at) })),
+    el("div", { class: "checks" }, RFO_CHECKS.map((t, i) => checkRow(!!(c.checks && c.checks[i]), t))),
+    el("div", { class: "subcard" }, el("h3", { text: "SMC suitability" }),
+      el("dl", { class: "kv" }, el("dt", { text: "Assessment" }), el("dd", null, el("b", { text: c.smcSuit || "-" })),
+        el("dt", { text: "Works proposed" }), el("dd", { text: (c.smcWorks || []).join(", ") || "-" }),
+        el("dt", { text: "Water" }), el("dd", { text: c.water || "-" }),
+        el("dt", { text: "FRPIM view" }), el("dd", { text: frp == null ? "-" : "SMC needed on " + fp(frp) + " of the plantable area" })),
+      diff ? el("div", { class: "banner a", text: "The field assessment differs from FRPIM. The ACF should check the RFO's explanation." }) : null,
+      c.note ? el("div", { class: "banner i", text: c.note }) : null));
+}
+function acfCard(w) {
+  const a = w.acf; if (!a) return null;
+  return el("div", { class: "card" }, el("h2", null, "ACF scrutiny", el("small", { text: dd(a.at) })),
+    el("div", { class: "checks" }, ACF_CHECKS.map((t, i) => checkRow(!!(a.checks && a.checks[i]), t)), a.inspected ? checkRow(true, "Joint / sample site inspection by ACF" + (a.inspectedOn ? " on " + dd(a.inspectedOn) : "")) : null),
+    a.remarks ? el("div", { class: "banner i" }, el("b", { text: "ACF remarks: " }), a.remarks) : null);
+}
+function workView(main, id) {
+  const w = Store.get(id);
+  if (!w || (ROLE === "RFO" && w.r !== RIDX)) { main.append(el("div", { class: "card", text: "This work is not in your register." })); return; }
+  const M = rOf(w);
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow num", text: M.name + " Range · " + dispId(w.id) + (w.demo ? " · mock-drill example" : "") }), el("h1", { text: w.name }),
+    el("div", { class: "btns", style: "margin-top:10px" }, el("span", { class: "chip " + STATUS[w.status][1], text: STATUS[w.status][0] }), el("span", { class: "chip c-" + w.verdict, text: "FRPIM " + VERDICT[w.verdict][0] }), el("span", { class: "chip c-s", text: ha(w.result.total) + " ha" }), el("span", { class: "chip c-s" }, el("i", { class: "rdot", style: "background:" + M.colour }), M.name))),
+    el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: () => saveReport(w), text: "Download report" }), el("button", { class: "btn ghost", type: "button", onclick: () => go({ v: "works" }), text: "Register" }))));
+  main.append(el("div", { class: "card" }, trackBar(w)));
+  const left = el("div", { class: "grid" }), right = el("div", { class: "grid" });
+  left.append(el("div", { class: "card" }, el("h2", null, "Treatment KML on the three FRPIM maps", el("small", { text: w.fileName || "" })), maps3(w.geom)));
+  left.append(el("div", { class: "card" }, el("h2", { text: "FRPIM findings" }), findings(w)));
+  const det = el("dl", { class: "kv" });
+  const kv = (k, v) => { if (v != null && v !== "") det.append(el("dt", { text: k }), el("dd", { text: String(v) })); };
+  kv("Range", M.name); kv("Beat", w.beat); kv("Scheme", w.scheme); kv("Work year", w.year); kv("Treatment proposed", TREAT[w.treat]);
+  kv("Area in estimate", w.estArea ? w.estArea.toFixed(2) + " ha" : "-"); kv("Area in KML", w.result.total.toFixed(2) + " ha");
+  kv("Estimated cost", w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : null); kv("Seedlings", w.seedlings ? w.seedlings.toLocaleString("en-IN") : null);
+  kv("Proposed by", w.createdBy + ", " + dd(w.createdAt)); kv("RFO remarks", w.remarks);
+  const act = actionBox(w); if (act) right.append(act);
+  right.append(el("div", { class: "card" }, el("h2", { text: "Work details" }), det));
+  right.append(rfoCertCard(w));
+  const ac = acfCard(w); if (ac) right.append(ac);
+  if (w.dcf) right.append(el("div", { class: "card" }, el("h2", null, "DCF decision", el("small", { text: dd(w.dcf.at) })), el("div", null, el("span", { class: "chip " + (w.dcf.decision.startsWith("Approved") ? "c-g" : "c-r"), text: w.dcf.decision })), w.dcf.remarks ? el("div", { class: "banner i", text: w.dcf.remarks }) : null));
+  const tl = el("div", { class: "timeline" });
+  (w.trail || []).slice().reverse().forEach((t) => tl.append(el("div", null, avatar(t.role), el("div", null, el("b", { text: t.action }), el("small", { text: ROLES[t.role].title + " (" + t.user + ") · " + dt(t.at) }), t.note ? el("q", { text: t.note }) : null))));
+  right.append(el("div", { class: "card" }, el("h2", { text: "File movement" }), tl));
+  main.append(el("div", { class: "grid g-main" }, left, right));
+}
+function decisionTiles(opts) {
+  const wrap = el("div", { class: "tiles" });
+  for (const o of opts) {
+    const b = el("button", { type: "button", class: "tile " + o.tone, disabled: o.disabled ? true : null },
+      el("span", { class: "ti", text: o.icon }), el("span", null, el("b", { text: o.title }), el("small", { text: o.sub })));
+    b.addEventListener("click", () => { if (b.disabled) return; wrap.querySelectorAll(".tile").forEach((t) => t.classList.remove("busy")); b.classList.add("busy"); o.run(); setTimeout(() => b.classList.remove("busy"), 1500); });
+    wrap.append(b);
+  }
+  return wrap;
+}
+function actionBox(w) {
+  const msg = el("div", { role: "alert" });
+  const fail = (t) => { msg.className = "err"; msg.textContent = t; };
+  async function commit(status, action, note, extra) {
+    const n = JSON.parse(JSON.stringify(w)); Object.assign(n, extra || {}); n.status = status; trail(n, action, note);
+    try { await Store.put(n); toast(action); go({ v: "work", id: w.id }); } catch (e) { fail("Could not save: " + ((e && e.message) || "unknown error")); }
+  }
+  if (ROLE === "RFO" && ["DRAFT", "RET_RFO"].includes(w.status)) {
+    return el("div", { class: "card action" }, el("h2", { text: w.status === "DRAFT" ? "Draft: certify and submit" : "Returned to you for revision" }),
+      el("div", { class: "hint", text: "Open the proposal to change the details, replace the KML or update the field certification, then submit it to the ACF." }),
+      el("div", { class: "btns" }, el("button", { class: "btn gold", type: "button", onclick: () => go({ v: "new", id: w.id }), text: w.status === "DRAFT" ? "Open and submit" : "Revise and resubmit" }),
+        w.status === "DRAFT" ? confirmButton("Delete draft", "Delete this draft?", async () => { await Store.remove(w.id); toast("Draft deleted"); go({ v: "dash" }); }) : null));
+  }
+  if (ROLE === "ACF" && ["ACF", "RET_ACF"].includes(w.status)) {
+    const boxes = ACF_CHECKS.map((c, i) => el("input", { type: "checkbox", id: "ac" + i }));
+    const insp = el("input", { type: "checkbox", id: "ac-insp" }), inspOn = el("input", { type: "date", id: "ac-insp-on", style: "max-width:190px" });
+    const rem = el("textarea", { id: "acf-rem", maxlength: "1000", placeholder: "Optional: your remarks for the DCF, or what the RFO should review" });
+    const acf = () => ({ checks: boxes.map((b) => b.checked), inspected: insp.checked, inspectedOn: insp.checked ? inspOn.value || null : null, remarks: rem.value.trim(), at: new Date().toISOString(), by: ROLES.ACF.id });
+    const box = el("div", { class: "card action" }, el("h2", null, "ACF scrutiny", el("small", { text: "choose one of the two actions" })));
+    if (w.status === "RET_ACF") { const last = (w.trail || []).filter((t) => t.role === "DCF").pop(); if (last) box.append(el("div", { class: "banner r" }, el("b", { text: "Returned by the DCF: " }), last.note || "re-examine the proposal")); }
+    box.append(el("div", { class: "hint", text: "The RFO has certified the site and SMC suitability (below). Tick what you checked and add remarks if you wish; both are optional." }),
+      el("div", { class: "checks" }, ACF_CHECKS.map((c, i) => el("label", null, boxes[i], c)), el("label", null, insp, "Joint / sample site inspection done by ACF")),
+      el("label", { class: "field" }, "Date of inspection", inspOn), el("label", { class: "field" }, "ACF remarks (optional)", rem),
+      decisionTiles([
+        { tone: "go", icon: "→", title: "Send to DCF", sub: "Recommend the work for final approval", run: () => commit("DCF", "Recommended to DCF", rem.value.trim(), { acf: acf() }) },
+        { tone: "back", icon: "↩", title: "Return to RFO", sub: "Send back for further review or revision", run: () => commit("RET_RFO", "Returned to RFO for further review", rem.value.trim(), { acf: acf() }) }
+      ]), msg);
+    return box;
+  }
+  if (ROLE === "DCF" && w.status === "DCF") {
+    const rem = el("textarea", { id: "dcf-rem", maxlength: "1000", placeholder: w.verdict === "g" ? "Remarks (optional for approval)" : "Reason, required to approve although the FRPIM check is " + VERDICT[w.verdict][0] });
+    const green = w.verdict === "g", need = (n, t) => { const r = rem.value.trim(); if (r.length < n) { fail(t); rem.focus(); return null; } return r; };
+    return el("div", { class: "card action" }, el("h2", null, "DCF decision", el("small", { text: "final authority" })),
+      el("div", { class: "hint", text: (green ? "FRPIM check Green." : "FRPIM check " + VERDICT[w.verdict][0] + ": approval is recorded as a deviation with your reason.") + " The RFO certification and ACF scrutiny are below." }),
+      el("label", { class: "field" }, "Remarks", rem), msg,
+      decisionTiles([
+        { tone: "go", icon: "✓", title: "Approve", sub: green ? "Sanction the work as proposed" : "Only for Green works", disabled: !green,
+          run: () => commit("APPROVED", "Approved by DCF", rem.value.trim(), { dcf: { decision: "Approved", remarks: rem.value.trim(), at: new Date().toISOString() } }) },
+        { tone: "warn", icon: "≠", title: "Approve with recorded deviation", sub: "Approve and record why FRPIM is overridden", run: () => { const r = need(15, "Write the reason for the deviation from FRPIM (at least 15 characters)."); if (r) commit("APPROVED_DEV", "Approved by DCF with recorded deviation", r, { dcf: { decision: "Approved with recorded deviation", remarks: r, at: new Date().toISOString() } }); } },
+        { tone: "back", icon: "↩", title: "Return to ACF", sub: "Ask for re-examination", run: () => { const r = need(10, "Write what must be re-examined."); if (r) commit("RET_ACF", "Returned to ACF by DCF", r); } },
+        { tone: "stop", icon: "✕", title: "Not approve", sub: "Close the proposal with reasons", run: () => { const r = need(10, "Write the reason for not approving."); if (r) commit("REJECTED", "Not approved by DCF", r, { dcf: { decision: "Not approved", remarks: r, at: new Date().toISOString() } }); } }
+      ]));
+  }
+  return null;
+}
+
+/* ---------------- how it works ---------------- */
+function helpView(main) {
+  main.append(el("div", { class: "pagehead" }, el("div", null, el("div", { class: "eyebrow", text: APP.tagline }), el("h1", { text: "How " + APP.name + " works" }), el("p", { text: "Decision support: the officers decide, FRPIM informs, and every step is on record." }))));
+  const step = (role, title, body) => el("div", { class: "card" }, el("div", { style: "display:flex;gap:10px;align-items:center" }, avatar(role), el("h2", { text: title })), el("div", { style: "color:#c6d8cc", text: body }));
+  main.append(el("div", { class: "flowcards" },
+    step("RFO", "1 · RFO proposes and certifies", "Each of the four RFOs signs in to their own range. They upload the treatment KML from the phone or computer, see the FRPIM check on all three maps at once, and certify the site: boundary walked, area, legal status, species, and SMC suitability with the works proposed and the water source."),
+    step("ACF", "2 · ACF scrutinises", "The ACF sees all four ranges in one command centre. For each proposal the ACF reviews the RFO's certification and the FRPIM findings, may tick checks and add remarks (both optional), then sends it to the DCF or returns it to the RFO."),
+    step("DCF", "3 · DCF approves", "The DCF takes the final decision: approve, approve with a recorded deviation from FRPIM, return to the ACF, or not approve. Every deviation is documented with the reason, so the record shows when and why the model was overridden.")));
+  main.append(el("div", { class: "grid g2" },
+    el("div", { class: "card" }, el("h2", { text: "The FRPIM check" }), el("div", { class: "list" },
+      el("div", null, el("span", { class: "chip c-g", text: "Green" }), " at least 60 % of the area in Phase 1-2 and no more than 5 % on protected or excluded land."),
+      el("div", null, el("span", { class: "chip c-a", text: "Amber" }), " mixed priority: review in the field before approval."),
+      el("div", null, el("span", { class: "chip c-r", text: "Red" }), " more than 20 % protected or excluded land, more than half in Phase 4-5, or mostly outside the range.")),
+      el("div", { class: "hint", text: "Areas are measured on the " + SD.blocks.toLocaleString("en-IN") + " FRPIM blocks of 10 ha of Sub-division 2. The check also compares the proposed treatment with FRPIM's recommendation, the estimate area with the KML area, and the RFO's SMC assessment with FRPIM's SMC need." })),
+    el("div", { class: "card" }, el("h2", { text: "Mock-drill accounts" }), el("div", { class: "tw" }, el("table", { class: "t" }, el("tbody", null,
+      RMETA.map((m) => el("tr", null, el("td", null, avatar("RFO")), el("td", null, el("b", { text: "RFO · " + m.name }), el("div", { class: "hint", text: m.name + " Range" })), el("td", { class: "num", text: m.rfo }))),
+      ["ACF", "DCF"].map((k) => el("tr", null, el("td", null, avatar(k)), el("td", null, el("b", { text: ROLES[k].title }), el("div", { class: "hint", text: ROLES[k].office })), el("td", { class: "num", text: ROLES[k].id })))))),
+      el("div", { class: "hint", text: "Password for all six: " + DEMO_PASSWORD + ". These accounts demonstrate the workflow; they are not a security system." }),
+      el("div", { class: "btns" }, el("button", { class: "btn ghost", type: "button", onclick: loadDemo, text: "Load mock-drill examples" }),
+        Store.all().some((w) => w.demo) ? confirmButton("Remove examples", "Remove all mock-drill examples?", async () => { for (const w of Store.all().filter((x) => x.demo)) await Store.remove(w.id); toast("Examples removed"); go({ v: "help" }); }) : null))));
+}
+
+/* ---------------- exports ---------------- */
+async function exportCSV(list) {
+  const dl = await useCap("downloads"); if (!dl) { toast("Saving files is not available in this view"); return; }
+  const cols = ["Work ID", "Range", "Name", "Beat", "Scheme", "Year", "Treatment", "Estimate ha", "KML ha", "Phase 1-2 %", "Phase 4-5 %", "Protected/Excluded %", "Treatment agrees %", "FRPIM check", "Status", "Mean RNI", "Mean RFI", "Cost lakh", "Seedlings", "Proposed on", "Last action", "Last action on"];
+  const q = (v) => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = list.map((w) => { const l = (w.trail || []).slice(-1)[0] || {};
+    return [dispId(w.id), rOf(w).name, w.name, w.beat, w.scheme, w.year, TREAT[w.treat], w.estArea, w.result.total.toFixed(2), w.s12, w.s45, w.sPE, w.matchPct, VERDICT[w.verdict][0], STATUS[w.status][0], w.result.rni, w.result.rfi, w.estCost, w.seedlings, dd(w.createdAt), l.action, l.at ? dd(l.at) : ""].map(q).join(","); });
+  const csv = "﻿" + cols.join(",") + "\n" + rows.join("\n") + "\n";
+  try { await dl.save({ filename: "VanDrishti_SD2_register_" + new Date().toISOString().slice(0, 10) + ".csv", data: new Blob([csv], { type: "text/csv" }) }); toast("Register saved"); } catch (e) { toast("The file was not saved"); }
+}
+async function saveReport(w) {
+  const dl = await useCap("downloads"); if (!dl) { toast("Saving files is not available in this view"); return; }
+  const r = w.result, vcol = { g: "#17803a", a: "#a65c00", r: "#b4261c" }[w.verdict], c = w.rfoCert, a = w.acf, M = rOf(w);
+  const rows = (tbl, obj, keys) => keys.filter((k) => (obj[k] || 0) > 0).map((k) => "<tr><td><span style=\"display:inline-block;width:11px;height:11px;background:" + (k === "out" ? "#fff" : tbl[k][1]) + ";border:1px solid #999;margin-right:6px\"></span>" + esc(k === "out" ? OUTSIDE[0] : tbl[k][0]) + "</td><td class=n>" + obj[k].toFixed(2) + "</td><td class=n>" + pct(obj[k], r.total).toFixed(1) + " %</td></tr>").join("");
+  const fig = (k, t) => "<figure><figcaption>" + t + "</figcaption>" + mapSVG(w.geom, k, { paper: true }) + "</figure>";
+  const ck = (ok, t) => "<tr><td style=\"width:24px;color:" + (ok ? "#17803a" : "#b4261c") + "\">" + (ok ? "✓" : "✗") + "</td><td>" + esc(t) + "</td></tr>";
+  const html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + esc(dispId(w.id) + " " + w.name) + "</title><style>body{font-family:Arial,sans-serif;color:#12201a;margin:24px auto;max-width:960px;padding:0 16px}h1{font-size:21px;margin:4px 0}h2{font-size:15px;border-bottom:2px solid #0f3d2a;padding-bottom:4px;margin-top:24px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:5px 7px;text-align:left}.n{text-align:right}.v{border-left:6px solid " + vcol + ";background:#f5f5f5;padding:8px 12px}.m{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}figure{margin:0}figcaption{font-weight:700;font-size:12px;margin-bottom:4px}svg{width:100%;height:auto;border:1px solid #ccc}.muted{color:#586a5f;font-size:12px}.brand{font-weight:800;color:#0f3d2a}</style></head><body>" +
+    "<div class=muted><span class=brand>" + APP.name + "</span> · " + APP.sub + " · " + esc(APP.unit + ", " + APP.org) + " · report generated " + esc(dt(new Date().toISOString())) + "</div><h1>" + esc(dispId(w.id)) + " · " + esc(w.name) + "</h1>" +
+    "<p><b>Range:</b> " + esc(M.name) + " &nbsp; <b>Status:</b> " + esc(STATUS[w.status][0]) + " &nbsp; <b>FRPIM check:</b> <span style=\"color:" + vcol + "\">" + esc(VERDICT[w.verdict][0] + " · " + VERDICT[w.verdict][1]) + "</span></p>" +
+    "<h2>Work details</h2><table><tr><th>Range</th><td>" + esc(M.name) + "</td><th>Beat</th><td>" + esc(w.beat) + "</td></tr><tr><th>Scheme</th><td>" + esc(w.scheme) + "</td><th>Work year</th><td>" + esc(w.year) + "</td></tr><tr><th>Treatment proposed</th><td>" + esc(TREAT[w.treat]) + "</td><th>KML file</th><td>" + esc(w.fileName) + "</td></tr><tr><th>Area in estimate</th><td>" + (w.estArea ? w.estArea.toFixed(2) + " ha" : "-") + "</td><th>Area in KML</th><td>" + r.total.toFixed(2) + " ha</td></tr><tr><th>Estimated cost</th><td>" + (w.estCost ? "₹ " + w.estCost.toFixed(2) + " lakh" : "-") + "</td><th>Seedlings</th><td>" + (w.seedlings || "-") + "</td></tr></table>" +
+    "<h2>Treatment KML on the FRPIM maps</h2><div class=m>" + fig("n", "Map 1 · Restoration need") + fig("f", "Map 2 · Feasibility") + fig("p", "Map 3 · Priority phase") + "</div>" +
+    "<h2>FRPIM findings</h2><div class=v><b>" + esc(VERDICT[w.verdict][1]) + "</b><ul>" + (w.reasons || []).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul></div>" +
+    "<p>" + fp(w.s12) + " in Phase 1-2 · " + fp(w.sPE) + " protected or excluded · treatment agrees with FRPIM on " + (w.matchPct == null ? "-" : fp(w.matchPct)) + " of plantable area" + (r.rni != null ? " · mean RNI " + r.rni.toFixed(3) + ", RFI " + r.rfi.toFixed(3) : "") + "</p>" +
+    "<table><tr><th>Priority (Map 3)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(PHASE, Object.assign({}, r.byPhase, { out: r.outside }), [1, 2, 3, 4, 5, 6, 7, "out"]) + "</table><br>" +
+    "<table><tr><th>Need (Map 1)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(NEED, r.byNeed, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
+    "<table><tr><th>Feasibility (Map 2)</th><th class=n>ha</th><th class=n>%</th></tr>" + rows(FEAS, r.byFeas, [5, 4, 3, 2, 1, 6, 7]) + "</table><br>" +
+    "<table><tr><th>What FRPIM recommends</th><th class=n>ha</th></tr>" + Object.keys(RX).filter((k) => r.byRx[k] > 0).map((k) => "<tr><td>" + esc(RX[k]) + "</td><td class=n>" + r.byRx[k].toFixed(2) + "</td></tr>").join("") + (r.smcHa > 0 ? "<tr><td>of which SMC works required</td><td class=n>" + r.smcHa.toFixed(2) + "</td></tr>" : "") + "</table>" +
+    (c ? "<h2>RFO field certification (" + esc(dd(c.at)) + ")</h2><table>" + RFO_CHECKS.map((t, i) => ck(c.checks && c.checks[i], t)).join("") + "</table><br><table><tr><th>SMC suitability</th><td>" + esc(c.smcSuit) + "</td></tr><tr><th>SMC works proposed</th><td>" + esc((c.smcWorks || []).join(", ")) + "</td></tr><tr><th>Water</th><td>" + esc(c.water) + "</td></tr><tr><th>Field observations</th><td>" + esc(c.note) + "</td></tr></table>" : "") +
+    (a ? "<h2>ACF scrutiny (" + esc(dd(a.at)) + ")</h2><table>" + ACF_CHECKS.map((t, i) => ck(a.checks && a.checks[i], t)).join("") + (a.inspected ? ck(true, "Joint / sample site inspection by ACF" + (a.inspectedOn ? " on " + dd(a.inspectedOn) : "")) : "") + "</table><p><b>ACF remarks:</b> " + esc(a.remarks) + "</p>" : "") +
+    (w.dcf ? "<h2>DCF decision</h2><p><b>" + esc(w.dcf.decision) + "</b> (" + esc(dd(w.dcf.at)) + ")<br>" + esc(w.dcf.remarks) + "</p>" : "") +
+    "<h2>File movement</h2><table><tr><th>Date</th><th>Officer</th><th>Action</th><th>Remarks</th></tr>" + (w.trail || []).map((t) => "<tr><td>" + esc(dt(t.at)) + "</td><td>" + esc(ROLES[t.role].title + " (" + t.user + ")") + "</td><td>" + esc(t.action) + "</td><td>" + esc(t.note) + "</td></tr>").join("") + "</table>" +
+    "<p class=muted>FRPIM v2.2 is decision support. The final decision rests with the ACF and the DCF.</p></body></html>";
+  try { await dl.save({ filename: dispId(w.id).replace(/\//g, "-") + "_report.html", data: new Blob([html], { type: "text/html" }) }); toast("Report saved. Open it in a browser to print it."); } catch (e) { toast("The report was not saved"); }
+}
+
+/* ---------------- mock-drill examples ---------------- */
+async function loadDemo() {
+  if (Store.all().some((w) => w.demo)) { toast("The mock-drill examples are already loaded"); return; }
+  const year = fyNow(), now = Date.now(), day = 864e5;
+  const stages = [["APPROVED", "ACF"], ["DCF", "RET_RFO"], ["APPROVED", "DCF"], ["ACF", "APPROVED_DEV"]];
+  const schemes = ["CAMPA", "State plan", "MGNREGA", "Nagar Van"];
+  const smcSets = [["Suitable", ["Continuous contour trenches (CCT)", "Pits with saucers"], "Tank / check dam within 1 km"], ["Partly suitable", ["Staggered trenches", "Gully plugs / loose boulder checks"], "Well or borewell"],
+    ["Suitable", ["Pits with saucers"], "Tanker only"], ["Suitable", ["Continuous contour trenches (CCT)", "Gully plugs / loose boulder checks", "Percolation pits / farm ponds"], "Rain-fed only"]];
+  const iso = (d) => new Date(now - d * day).toISOString();
+  const count = [0, 0, 0, 0];
+  for (const s of SAMPLES) {
+    const k = count[s.r]++, stage = stages[s.r][k] || "ACF", rfo = RMETA[s.r].rfo, ago = [26 - s.r * 3 - k * 7, 22 - s.r * 3 - k * 7, 14 - s.r * 2 - k * 5, 8 - s.r - k * 3].map((x) => Math.max(1, x));
+    const mk = (role, action, note, d) => ({ at: iso(d), role, user: role === "RFO" ? rfo : ROLES[role].id, action, note });
+    const features = [{ type: "Feature", properties: { name: s.name }, geometry: { type: "Polygon", coordinates: [s.coords] } }];
+    const result = analyse(features), est = +(result.total * (k ? 0.97 : 1)).toFixed(2), vd = verdictOf(result, s.treat, est, s.r), smc = smcSets[(s.r + k) % 4];
+    const id = RMETA[s.r].code + "-" + year + "-" + String(901 + k);
+    const w = { id, demo: true, r: s.r, range: RMETA[s.r].name, name: s.name, beat: s.beat, scheme: schemes[(s.r + k) % 4], year, treat: s.treat, estArea: est, estCost: +(est * 0.52).toFixed(2), seedlings: s.treat === "SMC" ? null : Math.round(est * 1100),
+      remarks: "Mock-drill example.", fileName: "example_" + RMETA[s.r].code.toLowerCase() + "_" + (k + 1) + ".kml", geom: { type: "FeatureCollection", features }, result, verdict: vd.v, reasons: vd.reasons, s12: vd.s12, s45: vd.s45, sPE: vd.sPE, sOut: vd.sOut, sOther: vd.sOther, matchPct: vd.matchPct,
+      createdAt: iso(ago[0]), createdBy: rfo, model: APP.model, trail: [],
+      rfoCert: { checks: RFO_CHECKS.map(() => true), smcSuit: smc[0], smcWorks: smc[1], water: smc[2], note: stage === "APPROVED_DEV" ? "Gullies feed the village tank; SMC will cut the silt inflow." : "Boundary walked with GPS on the date of inspection.", at: iso(ago[1]), by: rfo } };
+    w.trail.push(mk("RFO", "Draft created", "KML " + w.fileName, ago[0]));
+    w.trail.push(mk("RFO", "Certified and submitted to ACF", "FRPIM " + VERDICT[vd.v][0] + ", " + fp(vd.s12) + " in Phase 1-2 · SMC: " + smc[0] + " (" + smc[1].join(", ") + ")", ago[1]));
+    const ok = ACF_CHECKS.map(() => true);
+    if (["APPROVED", "DCF", "APPROVED_DEV"].includes(stage)) {
+      w.acf = { checks: ok, inspected: k === 0, inspectedOn: k === 0 ? iso(ago[2] + 1) : null, remarks: stage === "APPROVED_DEV" ? "Low FRPIM priority, but SMC here protects the catchment of the village tank downstream. RFO's SMC assessment confirmed at site." : "RFO certification checked. Phase 1-2 land; SMC works and rates in order.", at: iso(ago[2]), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Recommended to DCF", w.acf.remarks, ago[2]));
+      if (stage === "APPROVED") { w.dcf = { decision: "Approved", remarks: "Approved. Take up SMC before the monsoon.", at: iso(ago[3]) }; w.trail.push(mk("DCF", "Approved by DCF", w.dcf.remarks, ago[3])); }
+      if (stage === "APPROVED_DEV") { w.dcf = { decision: "Approved with recorded deviation", remarks: "Approved as catchment treatment for the village tank; deviation from FRPIM priority recorded.", at: iso(ago[3]) }; w.trail.push(mk("DCF", "Approved by DCF with recorded deviation", w.dcf.remarks, ago[3])); }
+    }
+    if (stage === "RET_RFO") {
+      w.acf = { checks: [true, false, false], inspected: true, inspectedOn: iso(ago[2] + 1), remarks: "Most of this boundary is low-priority land. Shift it to the Phase 1-2 blocks of the same beat and resubmit.", at: iso(ago[2]), by: ROLES.ACF.id };
+      w.trail.push(mk("ACF", "Returned to RFO for further review", w.acf.remarks, ago[2]));
+    }
+    w.status = stage; w.updatedAt = w.trail[w.trail.length - 1].at;
+    await Store.put(w);
+  }
+  toast("Mock-drill examples loaded: two works in each range"); go({ v: VIEW.v === "help" ? "help" : "dash" });
+}
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  ROLE = ss.get("vd_sd2_role"); if (ROLE && !ROLES[ROLE]) ROLE = null;
+  const rr = ss.get("vd_sd2_r"); RIDX = rr == null || rr === "" ? null : parseInt(rr); if (ROLE === "RFO" && !(RIDX >= 0 && RIDX < 4)) ROLE = null;
+  try { await loadData(); } catch (e) { $("#app").replaceChildren(el("div", { class: "gut", style: "padding-block:40px" }, el("div", { class: "banner r", text: "The FRPIM blocks could not be loaded. Reload the page." }))); return; }
+  render();
+  Store.on(() => { if (!ROLE) return; const typing = document.activeElement && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName);
+    if (VIEW.v === "new" || VIEW.v === "map" || typing) return; render(); });
+  await Store.init();
+  render();
+}
+window.addEventListener("resize", () => placePill());
+if (window.L && window.turf) boot(); else window.addEventListener("load", () => { if (window.L && window.turf) boot(); else $("#app").textContent = "The map libraries could not be loaded. Check the internet connection and reload."; });
+</script>

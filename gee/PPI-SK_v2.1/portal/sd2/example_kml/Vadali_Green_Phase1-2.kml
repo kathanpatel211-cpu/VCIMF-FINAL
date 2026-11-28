@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Vadali example (Green)</name><Placemark><name>Vadali example (Green)</name><Polygon><outerBoundaryIs><LinearRing><coordinates>73.092298,23.701665,0 73.092282,23.702785,0 73.092767,23.703463,0 73.092987,23.704129,0 73.094733,23.704069,0 73.101164,23.704229,0 73.101199,23.701775,0 73.092298,23.701665,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>

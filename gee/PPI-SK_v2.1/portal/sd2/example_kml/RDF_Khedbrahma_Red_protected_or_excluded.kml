@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>RDF Khedbrahma example (Red)</name><Placemark><name>RDF Khedbrahma example (Red)</name><Polygon><outerBoundaryIs><LinearRing><coordinates>73.146361,24.047813,0 73.146254,24.050267,0 73.149097,24.050360,0 73.149354,24.050756,0 73.149322,24.053159,0 73.152031,24.053192,0 73.152107,24.047882,0 73.146361,24.047813,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>

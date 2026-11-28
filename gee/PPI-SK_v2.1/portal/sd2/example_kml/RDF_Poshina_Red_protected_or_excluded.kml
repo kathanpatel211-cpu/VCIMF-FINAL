@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>RDF Poshina example (Red)</name><Placemark><name>RDF Poshina example (Red)</name><Polygon><outerBoundaryIs><LinearRing><coordinates>73.108085,24.318570,0 73.108023,24.323718,0 73.108180,24.323895,0 73.110735,24.323927,0 73.110814,24.318618,0 73.108085,24.318570,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>
