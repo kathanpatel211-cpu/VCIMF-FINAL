@@ -571,11 +571,11 @@ function verdictOf(r, treat, claimed, rIdx) {
   const reasons = []; let v;
   if (sOut > 50) { v = "r"; reasons.push(fp(sOut) + " of the area lies outside the FRPIM blocks of Sub-division 2"); }
   else if (sOther > 50) { v = "r"; reasons.push(fp(sOther) + " of the area lies in another range, not " + RMETA[rIdx].name); }
-  else if (sPE > 20) { v = "r"; reasons.push(fp(sPE) + " falls on Protected dense forest or Excluded land"); }
+  else if (sPE > 40) { v = "r"; reasons.push(fp(sPE) + " falls on Protected dense forest or Excluded land (Red above 40 %)"); }
   else if (s45 > 50) { v = "r"; reasons.push(fp(s45) + " is in Phase 4-5 (low priority)"); }
-  else if (s12 >= 60 && sPE <= 5) { v = "g"; reasons.push(fp(s12) + " of the area is in Phase 1-2"); }
+  else if (s12 >= 50 && sPE <= 10) { v = "g"; reasons.push(fp(s12) + " of the area is in Phase 1-2"); }
   else { v = "a"; reasons.push(fp(s12) + " in Phase 1-2, " + fp(s45) + " in Phase 4-5"); }
-  if (v !== "r" && sPE > 0.5) reasons.push(fp(sPE) + " on Protected or Excluded land: keep it out of the estimate");
+  if (v !== "r" && sPE > 0.5) reasons.push(fp(sPE) + " on Protected or Excluded land: Protected land suits ANR only; keep Excluded land out of the estimate");
   if (v !== "r" && sOut > 2) reasons.push(fp(sOut) + " lies outside the FRPIM blocks");
   if (v !== "r" && sOther > 2) reasons.push(fp(sOther) + " lies in a neighbouring range");
   const m = TREAT_MATCH[treat]; let matchPct = null;
@@ -998,7 +998,7 @@ function checkMix(all) {
   const vb = el("div", { class: "hbars" }), maxV = Math.max(1, ...["g", "a", "r"].map((v) => sumHa(all.filter((w) => w.verdict === v))));
   [["g", "var(--ok)"], ["a", "var(--warn)"], ["r", "var(--bad)"]].forEach(([v, c], i) => { const l = all.filter((w) => w.verdict === v), h = sumHa(l);
     vb.append(el("div", { class: "hbar" }, el("span", { text: VERDICT[v][0] + " (" + l.length + ")" }), el("div", { class: "tr" }, el("div", { style: "width:" + pct(h, maxV) + "%;background:" + c + ";animation-delay:" + i * 0.1 + "s" })), el("span", { class: "v", text: ha(h) + " ha" }))); });
-  return el("div", { class: "card" }, el("h2", null, "Proposed area by FRPIM check", el("small", { text: "Green: ≥ 60 % in Phase 1-2" })), vb,
+  return el("div", { class: "card" }, el("h2", null, "Proposed area by FRPIM check", el("small", { text: "Green: ≥ 50 % in Phase 1-2" })), vb,
     el("div", { class: "hint", text: "Red: mostly low priority, protected or excluded land, or outside the range." }));
 }
 function emptyWorks() {
@@ -1491,9 +1491,9 @@ function helpView(main) {
     step("DCF", "3 · DCF approves", "The DCF takes the final decision: approve, approve with a recorded deviation from FRPIM, return to the ACF, or not approve. Every deviation is documented with the reason, so the record shows when and why the model was overridden.")));
   main.append(el("div", { class: "grid g2" },
     el("div", { class: "card" }, el("h2", { text: "The FRPIM check" }), el("div", { class: "list" },
-      el("div", null, el("span", { class: "chip c-g", text: "Green" }), " at least 60 % of the area in Phase 1-2 and no more than 5 % on protected or excluded land."),
+      el("div", null, el("span", { class: "chip c-g", text: "Green" }), " at least 50 % of the area in Phase 1-2 and no more than 10 % on protected or excluded land."),
       el("div", null, el("span", { class: "chip c-a", text: "Amber" }), " mixed priority: review in the field before approval."),
-      el("div", null, el("span", { class: "chip c-r", text: "Red" }), " more than 20 % protected or excluded land, more than half in Phase 4-5, or mostly outside the range.")),
+      el("div", null, el("span", { class: "chip c-r", text: "Red" }), " more than 40 % protected or excluded land (ANR in protected landscapes stays Amber below that), more than half in Phase 4-5, or mostly outside the range.")),
       el("div", { class: "hint", text: "Areas are measured on the " + SD.blocks.toLocaleString("en-IN") + " FRPIM blocks of 10 ha of Sub-division 2. The check also compares the proposed treatment with FRPIM's recommendation, the estimate area with the KML area, and the RFO's SMC assessment with FRPIM's SMC need." })),
     el("div", { class: "card" }, el("h2", { text: "Mock-drill accounts" }), el("div", { class: "tw" }, el("table", { class: "t" }, el("tbody", null,
       RMETA.map((m) => el("tr", null, el("td", null, avatar("RFO")), el("td", null, el("b", { text: "RFO · " + m.name }), el("div", { class: "hint", text: m.name + " Range" })), el("td", { class: "num", text: m.rfo }))),
