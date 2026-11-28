@@ -238,8 +238,13 @@ def make_cover(blocks, cfg, opt, stats, out):
         T(fig, 0.088, yy, l, 8.5, "white", va="center")
     T(fig, 0.07, 0.055, opt["tagline"], 15, gold, "semibold", family=S, va="center")
     T(fig, 0.07, 0.033, opt["subtitle"] + "  ·  " + opt["date"], 8.5, soft, va="center", alpha=0.8)
-    T(fig, 0.93, 0.033, "FRPIM v2.2  ·  Forest Restoration Priority and Intervention Model", 8.5, soft, ha="right",
-      va="center", alpha=0.8)
+    if opt.get("logo"):
+        FA.place_logo(fig, 0.875, 0.068, 1.55, opt["logo"], ring=cfg["glow"])
+        T(fig, 0.795, 0.080, "VanDrishti", 17, "white", "bold", family=S, ha="right", va="center")
+        T(fig, 0.795, 0.062, "FRPIM Works Portal", 9.5, gold, "semibold", ha="right", va="center")
+        T(fig, 0.795, 0.047, "every work checked against these maps", 8.5, soft, ha="right", va="center", alpha=0.85)
+    else:
+        T(fig, 0.93, 0.033, "FRPIM v2.2  ·  Forest Restoration Priority and Intervention Model", 8.5, soft, ha="right", va="center", alpha=0.8)
     fig.savefig(str(out), dpi=260)
     plt.close(fig)
 
@@ -247,8 +252,8 @@ def make_cover(blocks, cfg, opt, stats, out):
 def main():
     args = sys.argv[1:]
     opt = {"fonts": None, "name": "Forest", "kicker": "", "subtitle": "", "tagline": "", "date": "", "range_field": "range",
-           "only": ""}
-    for k in ("fonts", "name", "kicker", "subtitle", "tagline", "date", "range-field", "only"):
+           "only": "", "logo": ""}
+    for k in ("fonts", "name", "kicker", "subtitle", "tagline", "date", "range-field", "only", "logo"):
         if "--" + k in args:
             i = args.index("--" + k); opt[k.replace("-", "_")] = args[i + 1]; del args[i:i + 2]
     src, out = Path(args[0]), Path(args[1])

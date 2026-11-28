@@ -49,6 +49,32 @@ TO_UTM = Transformer.from_crs(4326, 32643, always_xy=True).transform
 TO_LL = Transformer.from_crs(32643, 4326, always_xy=True).transform
 
 
+_LOGO = {}
+
+
+def logo_image(path):
+    """Logo as an RGBA array (cached), downsampled for speed."""
+    if not path:
+        return None
+    if path not in _LOGO:
+        from PIL import Image
+        _LOGO[path] = np.asarray(Image.open(path).convert("RGBA").resize((420, 420), Image.LANCZOS))
+    return _LOGO[path]
+
+
+def place_logo(fig, cx, cy, d_in, path, ring=None):
+    """Logo on a white disc centred at (cx, cy) in figure fractions, diameter d_in inches."""
+    img = logo_image(path)
+    if img is None:
+        return
+    from matplotlib.patches import Ellipse
+    fig.patches.append(Ellipse((cx, cy), d_in / W, d_in / H, transform=fig.transFigure, facecolor="white",
+                               edgecolor=ring or "none", lw=1.6 if ring else 0, zorder=5))
+    s = d_in * 0.86
+    ax = fig.add_axes([cx - s / 2 / W, cy - s / 2 / H, s / W, s / H], zorder=6)
+    ax.imshow(img, interpolation="lanczos"); ax.set_axis_off()
+
+
 def setup_fonts(font_dir):
     global SERIF, SANS
     if font_dir and Path(font_dir).exists():
@@ -121,7 +147,11 @@ class Atlas:
     # -- header / footer
     def header(self, fig, section, code, title, sub, page):
         fig.patches.append(Rectangle((0, 1 - 0.34 / H), 1, 0.34 / H, transform=fig.transFigure, facecolor=FOREST, zorder=0))
-        T(fig, 0.50 / W, 1 - 0.17 / H, (self.opt["name"] + " Restoration Atlas  ·  " + self.opt["title"]).upper(), 8.5, "#d8e8dc", "semibold", va="center")
+        lx = 0.50 / W
+        if self.opt.get("logo"):
+            place_logo(fig, 0.66 / W, 1 - 0.17 / H, 0.30, self.opt["logo"])
+            lx = 0.92 / W
+        T(fig, lx, 1 - 0.17 / H, (self.opt["name"] + " Restoration Atlas  ·  " + self.opt["title"]).upper() + "   ·   LINKED WITH VANDRISHTI", 8.5, "#d8e8dc", "semibold", va="center")
         T(fig, 1 - 0.50 / W, 1 - 0.17 / H, "FRPIM v2.2  ·  " + self.opt["date"], 8.5, "#d8e8dc", ha="right", va="center")
         y = 1 - 0.68 / H
         if section:
@@ -789,8 +819,8 @@ def methods_page(A, pg, retained, weights):
 
 def main():
     args = sys.argv[1:]
-    opt = {"title": "Restoration area", "place": "", "prefix": "FRPIM", "range_field": None, "date": "", "fonts": None, "name": "Forest", "kicker": "", "subtitle": "", "tagline": "", "prepared": ""}
-    for k in ("title", "place", "prefix", "range-field", "date", "fonts", "name", "kicker", "subtitle", "tagline", "prepared"):
+    opt = {"title": "Restoration area", "place": "", "prefix": "FRPIM", "range_field": None, "date": "", "fonts": None, "name": "Forest", "kicker": "", "subtitle": "", "tagline": "", "prepared": "", "logo": ""}
+    for k in ("title", "place", "prefix", "range-field", "date", "fonts", "name", "kicker", "subtitle", "tagline", "prepared", "logo"):
         if "--" + k in args:
             i = args.index("--" + k); opt[k.replace("-", "_")] = args[i + 1]; del args[i:i + 2]
     src, out = Path(args[0]), Path(args[1])
